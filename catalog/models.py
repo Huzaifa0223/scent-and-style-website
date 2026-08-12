@@ -232,7 +232,25 @@ class Product(TimeStampedModel):
 class ProductImage(TimeStampedModel):
     """On save, generates three WebP+JPEG derivative pairs synchronously
     (§2.5) — see core/images.py for why synchronous is deliberate, not
-    an oversight."""
+    an oversight.
+
+    ``is_primary`` allows at most one ``True`` row per product, via a
+    deferred constraint trigger (catalog/migrations/0005) rather than a
+    partial unique index — the fourth invariant on this project to hit the
+    same wall (Postgres/Django forbid combining a unique constraint's
+    ``condition`` with ``deferrable``): an immediate partial index would
+    force every primary-image swap into a specific unset-then-set statement
+    order, which the portal's image-management form (reorder + re-primary +
+    delete, all in one submit — Stage 3) can't guarantee any more than the
+    variant formset could guarantee it for the default variant.
+
+    ``delete()`` below promotes the next image by position when the deleted
+    row was primary, mirroring ``ProductVariant.delete()`` — including the
+    same guard (only promote if no *other* image already holds
+    ``is_primary=True``), for the same reason: saving an explicit
+    reassignment before deleting the old primary must not race a second,
+    unwanted promotion onto a third, unrelated image.
+    """
 
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="images")
     image = models.ImageField(upload_to="products/originals/")
@@ -249,13 +267,9 @@ class ProductImage(TimeStampedModel):
 
     class Meta:
         ordering = ["position", "id"]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["product"],
-                condition=Q(is_primary=True),
-                name="productimage_one_primary_per_product",
-            ),
-        ]
+        # No Django-level uniqueness constraint on is_primary: see the
+        # class docstring above. Enforced by a deferred constraint trigger
+        # instead (catalog/migrations/0005).
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
@@ -298,7 +312,7 @@ class ProductImage(TimeStampedModel):
         product = self.product
         was_primary = self.is_primary
         result = super().delete(*args, **kwargs)
-        if was_primary:
+        if was_primary and not product.images.filter(is_primary=True).exists():
             next_image = product.images.order_by("position", "id").first()
             if next_image is not None:
                 next_image.is_primary = True

@@ -106,11 +106,91 @@ def test_deleting_an_image_referenced_by_a_variant_nulls_the_variant_fk() -> Non
 
 
 @pytest.mark.django_db
+def test_deleting_old_primary_after_explicit_reassignment_leaves_the_new_primary_alone() -> None:
+    """Proves the guard in ProductImage.delete() ("promote next by position"
+    only fires if no other image already holds is_primary=True). third has
+    a lower position than new_primary, so without the guard, deleting
+    old_primary would unconditionally promote third — leaving two rows
+    with is_primary=True even though the caller had already made an
+    explicit, different choice (mirrors the identical ProductVariant test)."""
+    product = ProductFactory()
+    old_primary = ProductImage.objects.create(
+        product=product, image=_make_upload("one.jpg"), position=0
+    )
+    assert old_primary.is_primary is True
+    new_primary = ProductImage.objects.create(
+        product=product, image=_make_upload("two.jpg"), position=5
+    )
+    third = ProductImage.objects.create(
+        product=product, image=_make_upload("three.jpg"), position=1
+    )
+
+    new_primary.is_primary = True
+    new_primary.save(update_fields=["is_primary", "updated_at"])
+    old_primary.delete()
+
+    assert product.images.filter(is_primary=True).count() == 1
+    new_primary.refresh_from_db()
+    third.refresh_from_db()
+    assert new_primary.is_primary is True
+    assert third.is_primary is False
+
+
+@pytest.mark.django_db(transaction=True)
 def test_only_one_primary_image_per_product_at_db_level() -> None:
+    """migration 0005 made this a deferred constraint trigger (same wall as
+    migrations 0003/0004: Postgres/Django forbid deferrable=True alongside
+    a UniqueConstraint condition) — needs a real commit to observe, like
+    the analogous ProductVariant test."""
     product = ProductFactory()
     ProductImage.objects.create(product=product, image=_make_upload("one.jpg"))
-    with pytest.raises(IntegrityError), transaction.atomic():
-        ProductImage.objects.create(product=product, image=_make_upload("two.jpg"), is_primary=True)
+    with pytest.raises(IntegrityError):
+        with transaction.atomic():
+            ProductImage.objects.create(
+                product=product, image=_make_upload("two.jpg"), is_primary=True
+            )
+
+
+@pytest.mark.django_db(transaction=True)
+def test_primary_image_swap_succeeds_even_when_set_before_unset() -> None:
+    """The whole reason this invariant is a deferred trigger rather than an
+    immediate unique index: the portal's image-management form can't
+    guarantee "unset the old primary before setting the new one" statement
+    order. Setting the new primary first — which would fail immediately
+    against a non-deferred constraint — must still succeed here because the
+    check only runs at COMMIT (mirrors the identical ProductVariant test)."""
+    product = ProductFactory()
+    old_primary = ProductImage.objects.create(product=product, image=_make_upload("one.jpg"))
+    new_primary = ProductImage.objects.create(
+        product=product, image=_make_upload("two.jpg"), is_primary=False
+    )
+
+    with transaction.atomic():
+        new_primary.is_primary = True
+        new_primary.save(update_fields=["is_primary", "updated_at"])
+        old_primary.is_primary = False
+        old_primary.save(update_fields=["is_primary", "updated_at"])
+
+    old_primary.refresh_from_db()
+    new_primary.refresh_from_db()
+    assert old_primary.is_primary is False
+    assert new_primary.is_primary is True
+
+
+@pytest.mark.django_db(transaction=True)
+def test_two_primary_images_left_uncorrected_still_fail_at_commit() -> None:
+    """Deferred doesn't mean unenforced — an invalid final state still
+    raises, just at COMMIT instead of at the offending statement."""
+    product = ProductFactory()
+    ProductImage.objects.create(product=product, image=_make_upload("one.jpg"))
+    new_primary = ProductImage.objects.create(
+        product=product, image=_make_upload("two.jpg"), is_primary=False
+    )
+
+    with pytest.raises(IntegrityError):
+        with transaction.atomic():
+            new_primary.is_primary = True
+            new_primary.save(update_fields=["is_primary", "updated_at"])
 
 
 @pytest.mark.django_db
