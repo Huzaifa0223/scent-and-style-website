@@ -74,14 +74,24 @@ in environment variables or code.
 
 ## Project layout
 
-See CLAUDE.md for the full app list and the standards every app follows. As of Stage 1:
+See CLAUDE.md for the full app list and the standards every app follows. As of Stage 2:
 
 ```
 config/     settings, urls, wsgi/asgi
-core/       TimeStampedModel, typed config, storage backends, the money template filter
+core/       TimeStampedModel, typed config, storage backends, slug/image helpers, money filter
 store/      StoreSettings singleton (identity, contact, currency, timezone)
+catalog/    Brand, Category, Tag, AttributeDefinition/Value, Product, ProductVariant,
+            ProductImage (+ derivative generation), and catalog.services.create_product —
+            models only; no portal UI or storefront views yet (Stage 3/6)
 templates/  base shell + separate storefront/ and portal/ shells, styled 404/500
 ```
+
+`catalog.services.create_product()` is the only sanctioned way to create a `Product` — it
+creates the product and its mandatory default variant in one transaction. A Postgres deferred
+constraint trigger (`catalog/migrations/0002`) is the backstop for anything that bypasses it
+(Django admin, a raw script); it only fires at transaction commit, which is why exercising it in
+tests needs `@pytest.mark.django_db(transaction=True)` rather than the default (rolled-back,
+never-committed) test transaction.
 
 Later stages add `catalog/`, `inventory/`, `search/`, `cart/`, `orders/`, and the rest — see
 `specs/roadmap.md`.

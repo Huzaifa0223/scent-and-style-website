@@ -77,6 +77,7 @@ jobs:
           pytest --cov --cov-report=term-missing
           coverage report --include="core/*" --fail-under=80
           coverage report --include="store/*" --fail-under=80
+          coverage report --include="catalog/*" --fail-under=85
 
       - name: manage.py check --deploy (production settings)
         env:
