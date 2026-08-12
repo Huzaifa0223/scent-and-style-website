@@ -9,6 +9,7 @@ $ErrorActionPreference = "Stop"
 $TailwindVersion = "3.4.19"
 $HtmxVersion = "2.0.10"
 $AlpineVersion = "3.14.9"
+$SortableVersion = "1.15.6"
 
 $RepoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $RepoRoot
@@ -67,8 +68,8 @@ if (-not (Test-Path "tools\tailwindcss.exe")) {
     Write-Host "  tools\tailwindcss.exe already present, skipping download"
 }
 
-# --- 6. Vendor HTMX / Alpine (no CDN at runtime) ----------------------------
-Write-Step "Vendoring HTMX $HtmxVersion / Alpine $AlpineVersion"
+# --- 6. Vendor HTMX / Alpine / SortableJS (no CDN at runtime) ---------------
+Write-Step "Vendoring HTMX $HtmxVersion / Alpine $AlpineVersion / SortableJS $SortableVersion"
 New-Item -ItemType Directory -Force -Path "static\vendor" | Out-Null
 if (-not (Test-Path "static\vendor\htmx.min.js")) {
     Invoke-WebRequest -Uri "https://unpkg.com/htmx.org@$HtmxVersion/dist/htmx.min.js" -OutFile "static\vendor\htmx.min.js"
@@ -79,6 +80,11 @@ if (-not (Test-Path "static\vendor\alpine.min.js")) {
     Invoke-WebRequest -Uri "https://unpkg.com/alpinejs@$AlpineVersion/dist/cdn.min.js" -OutFile "static\vendor\alpine.min.js"
 } else {
     Write-Host "  static\vendor\alpine.min.js already present, skipping download"
+}
+if (-not (Test-Path "static\vendor\sortable.min.js")) {
+    Invoke-WebRequest -Uri "https://unpkg.com/sortablejs@$SortableVersion/Sortable.min.js" -OutFile "static\vendor\sortable.min.js"
+} else {
+    Write-Host "  static\vendor\sortable.min.js already present, skipping download"
 }
 
 # --- 7. Build Tailwind CSS ---------------------------------------------------

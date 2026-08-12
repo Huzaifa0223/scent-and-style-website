@@ -47,11 +47,12 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements/dev.txt
 
-      - name: Vendor HTMX / Alpine (not CDN-loaded — see roadmap Stage 1)
+      - name: Vendor HTMX / Alpine / SortableJS (not CDN-loaded — see roadmap Stage 1/3)
         run: |
           mkdir -p static/vendor
           curl -sL -o static/vendor/htmx.min.js https://unpkg.com/htmx.org@2.0.10/dist/htmx.min.js
           curl -sL -o static/vendor/alpine.min.js https://unpkg.com/alpinejs@3.14.9/dist/cdn.min.js
+          curl -sL -o static/vendor/sortable.min.js https://unpkg.com/sortablejs@1.15.6/Sortable.min.js
 
       - name: Build Tailwind CSS (standalone CLI — no Node)
         run: |
@@ -78,6 +79,8 @@ jobs:
           coverage report --include="core/*" --fail-under=80
           coverage report --include="store/*" --fail-under=80
           coverage report --include="catalog/*" --fail-under=85
+          coverage report --include="accounts/*" --fail-under=80
+          coverage report --include="portal/*" --fail-under=80
 
       - name: manage.py check --deploy (production settings)
         env:

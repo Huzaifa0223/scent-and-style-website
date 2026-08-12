@@ -1,0 +1,52 @@
+{% extends "portal/base.html" %}
+
+{% block title %}Brands — {{ store_settings.name }} Portal{% endblock %}
+{% block portal_breadcrumbs %}Brands{% endblock %}
+
+{% block content %}
+  {% url 'portal:brand_create' as create_url %}
+  <div class="mb-4 flex items-center justify-between">
+    <h1 class="text-xl font-semibold text-ink">Brands</h1>
+    {% include "portal/_button_primary.html" with href=create_url label="New brand" %}
+  </div>
+
+  <div class="overflow-x-auto rounded-lg border border-border-subtle bg-surface shadow-card">
+    <table class="min-w-full divide-y divide-border-subtle text-sm">
+      <thead class="bg-paper text-left text-xs font-semibold uppercase tracking-wide text-text-muted">
+        <tr>
+          <th class="px-4 py-3">Name</th>
+          <th class="px-4 py-3">Status</th>
+          <th class="px-4 py-3"></th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-border-subtle">
+        {% for brand in brands %}
+          <tr>
+            <td class="px-4 py-3 font-medium text-ink">{{ brand.name }}</td>
+            <td class="px-4 py-3">
+              {% if brand.is_published %}
+                {% include "portal/_badge.html" with tone="success" label="Published" %}
+              {% else %}
+                {% include "portal/_badge.html" with tone="neutral" label="Draft" %}
+              {% endif %}
+            </td>
+            <td class="px-4 py-3 text-right">
+              <a
+                href="{% url 'portal:brand_edit' brand.pk %}"
+                class="inline-flex min-h-11 items-center rounded px-2 font-medium text-accent
+                       hover:text-accent-hover focus:outline-none focus-visible:ring-2
+                       focus-visible:ring-accent focus-visible:ring-offset-2"
+              >
+                Edit
+              </a>
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="3" class="px-4 py-6 text-center text-text-muted">No brands yet.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endblock %}

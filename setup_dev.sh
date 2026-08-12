@@ -5,6 +5,7 @@ set -euo pipefail
 TAILWIND_VERSION="3.4.19"
 HTMX_VERSION="2.0.10"
 ALPINE_VERSION="3.14.9"
+SORTABLE_VERSION="1.15.6"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$REPO_ROOT"
@@ -58,8 +59,8 @@ else
     echo "  tools/tailwindcss already present, skipping download"
 fi
 
-# --- 6. Vendor HTMX / Alpine (no CDN at runtime) ------------------------------------
-step "Vendoring HTMX $HTMX_VERSION / Alpine $ALPINE_VERSION"
+# --- 6. Vendor HTMX / Alpine / SortableJS (no CDN at runtime) -----------------------
+step "Vendoring HTMX $HTMX_VERSION / Alpine $ALPINE_VERSION / SortableJS $SORTABLE_VERSION"
 mkdir -p static/vendor
 if [ ! -f "static/vendor/htmx.min.js" ]; then
     curl -sL -o static/vendor/htmx.min.js "https://unpkg.com/htmx.org@${HTMX_VERSION}/dist/htmx.min.js"
@@ -70,6 +71,11 @@ if [ ! -f "static/vendor/alpine.min.js" ]; then
     curl -sL -o static/vendor/alpine.min.js "https://unpkg.com/alpinejs@${ALPINE_VERSION}/dist/cdn.min.js"
 else
     echo "  static/vendor/alpine.min.js already present, skipping download"
+fi
+if [ ! -f "static/vendor/sortable.min.js" ]; then
+    curl -sL -o static/vendor/sortable.min.js "https://unpkg.com/sortablejs@${SORTABLE_VERSION}/Sortable.min.js"
+else
+    echo "  static/vendor/sortable.min.js already present, skipping download"
 fi
 
 # --- 7. Build Tailwind CSS -----------------------------------------------------------

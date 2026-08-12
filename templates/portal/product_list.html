@@ -1,0 +1,155 @@
+{% extends "portal/base.html" %}
+{% load money %}
+
+{% block title %}Products — {{ store_settings.name }} Portal{% endblock %}
+
+{% block portal_breadcrumbs %}Products{% endblock %}
+
+{% block content %}
+  <div class="mb-4 flex items-center justify-between">
+    <h1 class="text-xl font-semibold text-ink">Products</h1>
+    {% comment %}
+    Create/edit links land with the product form + variant formset — not
+    part of this pass. Row text is plain, not a dead link, until then.
+    {% endcomment %}
+  </div>
+
+  <form method="get" class="mb-4 flex flex-wrap gap-3">
+    <input
+      type="text"
+      name="q"
+      value="{{ current_q }}"
+      placeholder="Search name or SKU"
+      class="min-h-11 rounded border border-border-interactive bg-surface px-3 text-sm text-ink
+             focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent"
+    />
+    <select
+      name="status"
+      class="min-h-11 rounded border border-border-interactive bg-surface px-3 text-sm text-ink
+             focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent"
+    >
+      <option value="">All statuses</option>
+      {% for value, label in status_choices %}
+        <option value="{{ value }}" {% if current_status == value %}selected{% endif %}>
+          {{ label }}
+        </option>
+      {% endfor %}
+    </select>
+    <select
+      name="category"
+      class="min-h-11 rounded border border-border-interactive bg-surface px-3 text-sm text-ink
+             focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent"
+    >
+      <option value="">All categories</option>
+      {% for category in categories %}
+        <option value="{{ category.slug }}" {% if current_category == category.slug %}selected{% endif %}>
+          {{ category.name }}
+        </option>
+      {% endfor %}
+    </select>
+    <select
+      name="brand"
+      class="min-h-11 rounded border border-border-interactive bg-surface px-3 text-sm text-ink
+             focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent"
+    >
+      <option value="">All brands</option>
+      {% for brand in brands %}
+        <option value="{{ brand.slug }}" {% if current_brand == brand.slug %}selected{% endif %}>
+          {{ brand.name }}
+        </option>
+      {% endfor %}
+    </select>
+    <button
+      type="submit"
+      class="inline-flex min-h-11 items-center justify-center rounded border
+             border-border-interactive px-4 text-sm font-medium text-ink hover:bg-paper
+             focus:outline-none focus-visible:ring-2 focus-visible:ring-accent
+             focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
+    >
+      Filter
+    </button>
+  </form>
+
+  <div class="overflow-x-auto rounded-lg border border-border-subtle bg-surface shadow-card">
+    <table class="min-w-full divide-y divide-border-subtle text-sm">
+      <thead class="bg-paper text-left text-xs font-semibold uppercase tracking-wide text-text-muted">
+        <tr>
+          <th class="px-4 py-3">Product</th>
+          <th class="px-4 py-3">Category</th>
+          <th class="px-4 py-3">Brand</th>
+          <th class="px-4 py-3">Price</th>
+          <th class="px-4 py-3">Status</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-border-subtle">
+        {% for product in products %}
+          <tr>
+            <td class="flex items-center gap-3 px-4 py-3">
+              {% with product.primary_image_list.0 as image %}
+                {% if image %}
+                  <img src="{{ image.thumb_webp.url }}" alt="" class="h-10 w-10 rounded object-cover" />
+                {% else %}
+                  <span class="h-10 w-10 rounded bg-paper"></span>
+                {% endif %}
+              {% endwith %}
+              <span class="font-medium text-ink">{{ product.name }}</span>
+              {% if product.is_featured %}
+                {% include "portal/_badge.html" with tone="accent" label="Featured" %}
+              {% endif %}
+            </td>
+            <td class="px-4 py-3 text-text-muted">{{ product.category.name }}</td>
+            <td class="px-4 py-3 text-text-muted">{{ product.brand.name|default:"—" }}</td>
+            <td class="px-4 py-3 font-mono text-ink">
+              {% if product.display_price is not None %}
+                {{ product.display_price|money }}{% if product.has_price_range %}+{% endif %}
+              {% else %}
+                —
+              {% endif %}
+            </td>
+            <td class="px-4 py-3">
+              {% if product.status == 'published' %}
+                {% include "portal/_badge.html" with tone="success" label=product.get_status_display %}
+              {% elif product.status == 'archived' %}
+                {% include "portal/_badge.html" with tone="neutral" label=product.get_status_display %}
+              {% else %}
+                {% include "portal/_badge.html" with tone="warning" label=product.get_status_display %}
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="5" class="px-4 py-6 text-center text-text-muted">No products match these filters.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if is_paginated %}
+    <nav class="mt-4 flex items-center justify-between text-sm text-text-muted">
+      <span>Page {{ page_obj.number }} of {{ paginator.num_pages }}</span>
+      <div class="flex gap-2">
+        {% if page_obj.has_previous %}
+          <a
+            href="?page={{ page_obj.previous_page_number }}"
+            class="inline-flex min-h-11 items-center rounded border border-border-interactive px-3
+                   hover:bg-paper focus:outline-none focus-visible:ring-2 focus-visible:ring-accent
+                   focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
+          >
+            Previous
+          </a>
+        {% endif %}
+        {% if page_obj.has_next %}
+          <a
+            href="?page={{ page_obj.next_page_number }}"
+            class="inline-flex min-h-11 items-center rounded border border-border-interactive px-3
+                   hover:bg-paper focus:outline-none focus-visible:ring-2 focus-visible:ring-accent
+                   focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
+          >
+            Next
+          </a>
+        {% endif %}
+      </div>
+    </nav>
+  {% endif %}
+{% endblock %}

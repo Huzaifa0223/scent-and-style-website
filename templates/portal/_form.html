@@ -1,0 +1,30 @@
+{% comment %}
+Generic form partial — every simple portal ModelForm (category, brand,
+attribute) renders through this rather than repeating field markup per
+page. The product form (with its variant formset) is substantial enough to
+have its own template.
+{% endcomment %}
+<form method="post" enctype="multipart/form-data" class="max-w-xl space-y-4">
+  {% csrf_token %}
+  {% if form.non_field_errors %}
+    <div class="rounded bg-danger-soft px-3 py-2 text-sm text-danger">
+      {{ form.non_field_errors }}
+    </div>
+  {% endif %}
+  {% for field in form.visible_fields %}
+    <div>
+      <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-ink">
+        {{ field.label }}
+      </label>
+      {{ field }}
+      {% if field.help_text %}
+        <p class="mt-1 text-xs text-text-muted">{{ field.help_text }}</p>
+      {% endif %}
+      {% if field.errors %}
+        <p class="mt-1 text-xs text-danger">{{ field.errors|striptags }}</p>
+      {% endif %}
+    </div>
+  {% endfor %}
+  {% for field in form.hidden_fields %}{{ field }}{% endfor %}
+  {% include "portal/_button_primary.html" with type="submit" label="Save" %}
+</form>

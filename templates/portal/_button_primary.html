@@ -1,0 +1,28 @@
+{% comment %}
+Primary action button/link — the one high-emphasis control per page ("New
+category", "Save"). Renders as <a> when href is given, otherwise as a
+<button> (defaulting to type="button"; pass type="submit" for forms).
+Usage: {% include "portal/_button_primary.html" with href=... label="New category" %}
+       {% include "portal/_button_primary.html" with type="submit" label="Save" %}
+{% endcomment %}
+{% if href %}
+  <a
+    href="{{ href }}"
+    class="inline-flex min-h-11 items-center justify-center rounded bg-accent px-4 text-sm
+           font-semibold text-white hover:bg-accent-hover focus:outline-none
+           focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2
+           focus-visible:ring-offset-paper"
+  >
+    {{ label }}
+  </a>
+{% else %}
+  <button
+    type="{{ type|default:'button' }}"
+    class="inline-flex min-h-11 items-center justify-center rounded bg-accent px-4 text-sm
+           font-semibold text-white hover:bg-accent-hover focus:outline-none
+           focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2
+           focus-visible:ring-offset-paper"
+  >
+    {{ label }}
+  </button>
+{% endif %}

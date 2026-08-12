@@ -1,0 +1,56 @@
+{% extends "portal/base.html" %}
+
+{% block title %}
+  {% if object %}Edit {{ object.name }}{% else %}New attribute{% endif %} — {{ store_settings.name }} Portal
+{% endblock %}
+{% block portal_breadcrumbs %}
+  <a href="{% url 'portal:attribute_list' %}" class="text-accent hover:text-accent-hover">Attributes</a>
+  <span class="text-text-faint">/</span> {% if object %}Edit{% else %}New{% endif %}
+{% endblock %}
+
+{% block content %}
+  <h1 class="mb-4 text-xl font-semibold text-ink">
+    {% if object %}Edit {{ object.name }}{% else %}New attribute{% endif %}
+  </h1>
+  {% include "portal/_form.html" %}
+
+  {% if object %}
+    <div class="mt-8 max-w-xl">
+      <h2 class="mb-2 text-sm font-semibold text-ink">Values</h2>
+      <ul class="mb-4 divide-y divide-border-subtle rounded-lg border border-border-subtle bg-surface">
+        {% for value in values %}
+          <li class="flex items-center justify-between px-4 py-2 text-sm text-ink">
+            <span class="font-mono">{{ value.value }}</span>
+            <form method="post" action="{% url 'portal:attribute_value_delete' object.pk value.pk %}">
+              {% csrf_token %}
+              <button
+                type="submit"
+                class="inline-flex min-h-11 items-center rounded px-2 text-text-muted
+                       hover:text-danger focus:outline-none focus-visible:ring-2
+                       focus-visible:ring-accent focus-visible:ring-offset-2"
+              >
+                Remove
+              </button>
+            </form>
+          </li>
+        {% empty %}
+          <li class="px-4 py-3 text-sm text-text-muted">No values yet.</li>
+        {% endfor %}
+      </ul>
+      <form method="post" action="{% url 'portal:attribute_value_create' object.pk %}" class="flex gap-2">
+        {% csrf_token %}
+        {{ value_form.value }}
+        {{ value_form.position }}
+        <button
+          type="submit"
+          class="inline-flex min-h-11 items-center justify-center rounded border
+                 border-border-interactive px-4 text-sm font-medium text-ink hover:bg-paper
+                 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent
+                 focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
+        >
+          Add value
+        </button>
+      </form>
+    </div>
+  {% endif %}
+{% endblock %}

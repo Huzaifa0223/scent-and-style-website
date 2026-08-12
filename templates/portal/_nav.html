@@ -1,0 +1,42 @@
+{% comment %}
+Shared portal sidebar links. Deliberately identical for every logged-in
+user regardless of permissions — access control lives entirely on the view
+(accounts.mixins.PortalPermissionRequiredMixin), never on hiding a link here
+(roadmap Stage 3 trap). A user without permission for a given page still
+sees the link and gets a 403 when they click it.
+
+Store settings and user management aren't here — the portal doesn't have
+those pages yet. /django-admin/ is that surface until Stage 17.
+{% endcomment %}
+<a
+  href="{% url 'portal:product_list' %}"
+  class="flex min-h-11 items-center rounded px-3 text-text-inverse-muted hover:bg-surface-sunken-hover
+         hover:text-text-inverse focus:outline-none focus-visible:ring-2 focus-visible:ring-text-inverse
+         focus-visible:ring-offset-2 focus-visible:ring-offset-surface-sunken"
+>
+  Products
+</a>
+<a
+  href="{% url 'portal:category_list' %}"
+  class="flex min-h-11 items-center rounded px-3 text-text-inverse-muted hover:bg-surface-sunken-hover
+         hover:text-text-inverse focus:outline-none focus-visible:ring-2 focus-visible:ring-text-inverse
+         focus-visible:ring-offset-2 focus-visible:ring-offset-surface-sunken"
+>
+  Categories
+</a>
+<a
+  href="{% url 'portal:brand_list' %}"
+  class="flex min-h-11 items-center rounded px-3 text-text-inverse-muted hover:bg-surface-sunken-hover
+         hover:text-text-inverse focus:outline-none focus-visible:ring-2 focus-visible:ring-text-inverse
+         focus-visible:ring-offset-2 focus-visible:ring-offset-surface-sunken"
+>
+  Brands
+</a>
+<a
+  href="{% url 'portal:attribute_list' %}"
+  class="flex min-h-11 items-center rounded px-3 text-text-inverse-muted hover:bg-surface-sunken-hover
+         hover:text-text-inverse focus:outline-none focus-visible:ring-2 focus-visible:ring-text-inverse
+         focus-visible:ring-offset-2 focus-visible:ring-offset-surface-sunken"
+>
+  Attributes
+</a>

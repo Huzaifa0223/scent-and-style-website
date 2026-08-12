@@ -16,6 +16,17 @@ select = ["E", "F", "I", "UP", "B", "ANN", "RUF"]
 # overrides of save()/delete() must match Django's own Any-typed signature —
 # both trip rules that assume plain application code, not framework overrides.
 "**/models.py" = ["RUF012", "ANN401"]
+"**/forms.py" = ["RUF012", "ANN401"]
+# Django CBV overrides (get_context_data(self, **kwargs), get_form_kwargs,
+# ...), a signal receiver's **kwargs, and a form's __init__(*args, **kwargs)
+# passthrough must all match Django's own Any-typed signatures — same
+# reasoning as the models.py override above, just for the view/app-config/
+# form-adjacent files in portal/ and accounts/ rather than models.py.
+# get_queryset/get_object are typed properly instead (QuerySet[Model]), not
+# covered by this ignore — only **kwargs-forwarding overrides are. If a
+# fifth pattern is ever needed, record why in specs/state.md rather than
+# just appending it here.
+"{portal,accounts}/{views,*_views,apps}.py" = ["ANN401"]
 "config/settings/*.py" = ["F403", "F405"]
 
 [tool.ruff.format]

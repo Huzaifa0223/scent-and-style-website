@@ -1,0 +1,16 @@
+{% extends "portal/base.html" %}
+
+{% block title %}
+  {% if object %}Edit {{ object.name }}{% else %}New category{% endif %} — {{ store_settings.name }} Portal
+{% endblock %}
+{% block portal_breadcrumbs %}
+  <a href="{% url 'portal:category_list' %}" class="text-accent hover:text-accent-hover">Categories</a>
+  <span class="text-text-faint">/</span> {% if object %}Edit{% else %}New{% endif %}
+{% endblock %}
+
+{% block content %}
+  <h1 class="mb-4 text-xl font-semibold text-ink">
+    {% if object %}Edit {{ object.name }}{% else %}New category{% endif %}
+  </h1>
+  {% include "portal/_form.html" %}
+{% endblock %}

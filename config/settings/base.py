@@ -40,6 +40,8 @@ INSTALLED_APPS = [
     "core",
     "store",
     "catalog",
+    "accounts",
+    "portal",
 ]
 
 MIDDLEWARE = [
@@ -87,6 +89,12 @@ CACHES = {
 
 SESSION_ENGINE = "django.contrib.sessions.backends.cached_db"
 SESSION_CACHE_ALIAS = "default"
+
+# The merchant portal is the only authenticated surface (requirements §1) —
+# every login/logout redirect funnels through it, never django-admin.
+LOGIN_URL = "accounts:login"
+LOGIN_REDIRECT_URL = "portal:product_list"
+LOGOUT_REDIRECT_URL = "accounts:login"
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},

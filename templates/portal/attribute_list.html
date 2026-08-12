@@ -1,0 +1,50 @@
+{% extends "portal/base.html" %}
+
+{% block title %}Attributes — {{ store_settings.name }} Portal{% endblock %}
+{% block portal_breadcrumbs %}Attributes{% endblock %}
+
+{% block content %}
+  {% url 'portal:attribute_create' as create_url %}
+  <div class="mb-4 flex items-center justify-between">
+    <h1 class="text-xl font-semibold text-ink">Attributes</h1>
+    {% include "portal/_button_primary.html" with href=create_url label="New attribute" %}
+  </div>
+
+  <div class="overflow-x-auto rounded-lg border border-border-subtle bg-surface shadow-card">
+    <table class="min-w-full divide-y divide-border-subtle text-sm">
+      <thead class="bg-paper text-left text-xs font-semibold uppercase tracking-wide text-text-muted">
+        <tr>
+          <th class="px-4 py-3">Name</th>
+          <th class="px-4 py-3">Values</th>
+          <th class="px-4 py-3">Filterable</th>
+          <th class="px-4 py-3">Variant option</th>
+          <th class="px-4 py-3"></th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-border-subtle">
+        {% for definition in attribute_definitions %}
+          <tr>
+            <td class="px-4 py-3 font-medium text-ink">{{ definition.name }}</td>
+            <td class="px-4 py-3 font-mono text-text-muted">{{ definition.values.count }}</td>
+            <td class="px-4 py-3 text-text-muted">{{ definition.is_filterable|yesno:"Yes,No" }}</td>
+            <td class="px-4 py-3 text-text-muted">{{ definition.is_variant_option|yesno:"Yes,No" }}</td>
+            <td class="px-4 py-3 text-right">
+              <a
+                href="{% url 'portal:attribute_edit' definition.pk %}"
+                class="inline-flex min-h-11 items-center rounded px-2 font-medium text-accent
+                       hover:text-accent-hover focus:outline-none focus-visible:ring-2
+                       focus-visible:ring-accent focus-visible:ring-offset-2"
+              >
+                Edit
+              </a>
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="5" class="px-4 py-6 text-center text-text-muted">No attributes yet.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endblock %}

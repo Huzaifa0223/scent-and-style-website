@@ -1,0 +1,17 @@
+{% comment %}
+Status pill — Draft/Published/Archived, Yes/No, any small status label.
+The calling template picks the semantic tone; this partial only owns the
+tone -> token mapping, so "what counts as a warning" stays in one place.
+Usage: {% include "portal/_badge.html" with tone="success" label="Published" %}
+Tones: success | warning | danger | accent | neutral (default)
+{% endcomment %}
+<span
+  class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium
+         {% if tone == 'success' %}bg-success-soft text-success
+         {% elif tone == 'warning' %}bg-warning-soft text-warning
+         {% elif tone == 'danger' %}bg-danger-soft text-danger
+         {% elif tone == 'accent' %}bg-accent-soft text-accent-hover
+         {% else %}bg-paper text-text-muted{% endif %}"
+>
+  {{ label }}
+</span>

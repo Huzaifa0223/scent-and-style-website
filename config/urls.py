@@ -11,13 +11,15 @@ from __future__ import annotations
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
-from django.urls import URLPattern, URLResolver, path
+from django.urls import URLPattern, URLResolver, include, path
 
 from core.views import healthz
 
 urlpatterns: list[URLPattern | URLResolver] = [
     path("django-admin/", admin.site.urls),
     path("healthz/", healthz, name="healthz"),
+    path("accounts/", include("accounts.urls")),
+    path("admin-portal/", include("portal.urls")),
 ]
 
 if settings.DEBUG:
