@@ -1,0 +1,14 @@
+# Runtime dependencies needed in every environment (dev, test, prod).
+# Every version is pinned exactly — no ranges, no compatible-release operators.
+Django==5.2.17
+psycopg[binary]==3.3.4
+django-environ==0.14.0
+Pillow==12.3.0
+argon2-cffi==25.1.0
+django-storages==1.14.6
+boto3==1.43.69
+
+# Runtime helper (not just a stub package) — monkeypatches Django's generic
+# classes so `ModelAdmin[Model]`-style annotations work at import time, not
+# only under mypy. Used in config/settings/base.py.
+django-stubs-ext==6.0.9

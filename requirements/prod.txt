@@ -1,0 +1,6 @@
+# Production-only additions, on top of the runtime dependencies.
+# Installed on the Linux production host behind Caddy — gunicorn is Unix-only
+# and is not installed on the Windows dev machine.
+-r base.txt
+
+gunicorn==26.0.0

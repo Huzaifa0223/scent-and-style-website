@@ -1,0 +1,12 @@
+# Development and test tooling, on top of the runtime dependencies.
+-r base.txt
+
+pytest==9.1.1
+pytest-django==4.14.0
+pytest-cov==7.1.0
+factory-boy==3.3.3
+coverage==7.15.4
+ruff==0.16.2
+mypy==2.3.0
+django-stubs==6.0.9
+types-Pillow==10.2.0.20240822

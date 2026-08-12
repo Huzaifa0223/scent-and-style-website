@@ -1,0 +1,51 @@
+# Environment / secrets
+.env
+*.env
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Django
+*.log
+media/
+staticfiles/
+db.sqlite3
+
+# Tooling downloads (fetched by setup_dev, not checked in)
+tools/
+
+# Vendored frontend libs (HTMX, Alpine) are fetched by setup_dev, not committed —
+# see specs/state.md Proposed spec amendments
+static/vendor/
+
+# Tailwind build output — generated from static/css/input.css by setup_dev /
+# the deploy pipeline, not committed (input.css, the source, is tracked)
+static/css/app.css
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Backups / dumps
+*.sql
+*.dump
+backups/

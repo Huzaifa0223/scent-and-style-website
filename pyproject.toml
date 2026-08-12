@@ -1,0 +1,75 @@
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["migrations", ".venv", "tools", "static/vendor"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ANN", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+"*/migrations/*.py" = ["ANN", "RUF012"]
+"**/tests/**.py" = ["ANN"]
+"**/test_*.py" = ["ANN"]
+"conftest.py" = ["ANN"]
+"**/factories.py" = ["ANN"]
+# Django Meta inner classes (constraints/indexes lists) and *args/**kwargs
+# overrides of save()/delete() must match Django's own Any-typed signature —
+# both trip rules that assume plain application code, not framework overrides.
+"**/models.py" = ["RUF012", "ANN401"]
+"config/settings/*.py" = ["F403", "F405"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+plugins = ["mypy_django_plugin.main"]
+mypy_path = "."
+exclude = ["migrations/", "tools/", "\\.venv/"]
+
+[[tool.mypy.overrides]]
+module = "*.migrations.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+# pytest-django's injected fixtures (client, rf, django_user_model, ...) have
+# no precise stubs; strict annotation requirements on test code add noise
+# without catching real bugs. Tests still must pass — this only relaxes
+# typing rigor, matching the same per-file-ignores choice in [tool.ruff].
+module = ["*.tests.*", "conftest"]
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = ["factory.*", "storages.*", "environ.*"]
+ignore_missing_imports = true
+
+[tool.django-stubs]
+django_settings_module = "config.settings.test"
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings.test"
+python_files = ["test_*.py"]
+addopts = "--reuse-db"
+norecursedirs = [".venv", "tools", "static", "node_modules", "migrations"]
+
+[tool.coverage.run]
+branch = true
+omit = [
+    "*/migrations/*",
+    "manage.py",
+    "config/*",
+    "*/tests/*",
+    "*/test_*.py",
+    "*/factories.py",
+    ".venv/*",
+    "tools/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "\\.\\.\\.",
+]
