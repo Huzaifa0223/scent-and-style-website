@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% comment %}
+Storefront shell. Deliberately does not share markup with portal/base.html —
+§11 wants the storefront to feel nothing like an admin tool, so the two
+diverge from the root shell independently rather than sharing a "site chrome"
+partial that would couple their designs together.
+{% endcomment %}
+
+{% block body %}
+  <div class="flex min-h-full flex-col">
+    <header class="border-b border-slate-200">
+      <div class="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3">
+        <a href="/" class="text-lg font-semibold tracking-tight">{{ store_settings.name }}</a>
+        {% block storefront_search %}{% endblock %}
+        <nav class="flex items-center gap-4 text-sm">
+          {% block storefront_nav %}{% endblock %}
+        </nav>
+      </div>
+    </header>
+
+    <main id="main-content" class="flex-1">
+      {% block content %}{% endblock %}
+    </main>
+
+    <footer class="border-t border-slate-200 bg-slate-50">
+      <div class="mx-auto max-w-7xl px-4 py-8 text-sm text-slate-600">
+        {% block storefront_footer %}&copy; {{ store_settings.name }}{% endblock %}
+      </div>
+    </footer>
+  </div>
+{% endblock %}

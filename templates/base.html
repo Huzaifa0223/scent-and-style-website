@@ -1,0 +1,41 @@
+{% load static %}<!doctype html>
+<html lang="en" class="h-full">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{% block title %}{{ store_settings.name }}{% endblock %}</title>
+    <meta name="description" content="{% block meta_description %}{% endblock %}" />
+    <link rel="stylesheet" href="{% static 'css/app.css' %}" />
+    {% block extra_head %}{% endblock %}
+  </head>
+  <body class="h-full bg-white text-slate-900 antialiased">
+    <a
+      href="#main-content"
+      class="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:m-2 focus:rounded
+             focus:bg-slate-900 focus:px-4 focus:py-2 focus:text-white"
+    >
+      Skip to content
+    </a>
+
+    {% if messages %}
+      <ul id="messages" class="fixed inset-x-0 top-0 z-50 space-y-2 p-4">
+        {% for message in messages %}
+          <li
+            class="rounded-md px-4 py-3 text-sm shadow-lg
+                   {% if message.tags == 'error' %}bg-red-600 text-white
+                   {% elif message.tags == 'success' %}bg-emerald-600 text-white
+                   {% else %}bg-slate-800 text-white{% endif %}"
+          >
+            {{ message }}
+          </li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+
+    {% block body %}{% endblock %}
+
+    <script src="{% static 'vendor/htmx.min.js' %}" defer></script>
+    <script src="{% static 'vendor/alpine.min.js' %}" defer></script>
+    {% block extra_body %}{% endblock %}
+  </body>
+</html>

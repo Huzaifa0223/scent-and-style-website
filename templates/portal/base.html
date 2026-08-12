@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% comment %}
+Portal shell. Kept independent of storefront/base.html on purpose — see the
+comment there. Sidebar nav and breadcrumb blocks are filled in by Stage 3.
+{% endcomment %}
+
+{% block body %}
+  <div class="flex min-h-full">
+    <aside
+      class="hidden w-64 shrink-0 border-r border-slate-200 bg-slate-900 text-slate-100 lg:block"
+    >
+      <div class="px-4 py-4 text-lg font-semibold">{{ store_settings.name }} — Portal</div>
+      <nav class="flex flex-col gap-1 px-2 text-sm">
+        {% block portal_nav %}{% endblock %}
+      </nav>
+    </aside>
+
+    <div class="flex flex-1 flex-col">
+      <header class="border-b border-slate-200 px-4 py-3 text-sm text-slate-600">
+        {% block portal_breadcrumbs %}{% endblock %}
+      </header>
+
+      <main id="main-content" class="flex-1 p-4">
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+  </div>
+{% endblock %}
