@@ -109,6 +109,7 @@ Commits: e07f249 feat(core): add slug generation and image-derivative helpers
          1ba9ebf feat(catalog): add create_product service and deferred invariant trigger
          7cd4873 test(catalog): add factories and full test suite
          15e4780 docs: update README/TODO for Stage 2, add catalog coverage floor to CI
+         3d59bd5 fix(catalog): make default-variant invariant a deferred trigger, close gaps
 Acceptance gates: all passed
   1. Every invariant has a test proving it's enforced, including the failure case — see
      catalog/tests/. Default-variant creation, Category two-level rejection, AttributeValue
@@ -166,6 +167,25 @@ Notes:
   - Every `ProductVariant.low_stock_threshold` starts at `core.config.DEFAULT_LOW_STOCK_THRESHOLD`
     (5) — a row default a merchant can change per variant immediately, not a StoreSettings field,
     since it isn't a single store-wide value.
+  - **Post-stage review pass (before Stage 3 started) found three more gaps; two fixed, one
+    recorded below as an open question.** First: `variant_one_default_per_product` was a partial
+    `UniqueConstraint` (`condition=Q(is_default=True))`. Postgres/Django forbid combining a unique
+    constraint's `condition` with `deferrable=True`, so it was immediate — meaning every
+    default-variant swap had to unset the old default *before* setting the new one, in that exact
+    statement order, to avoid a transient two-defaults state raising mid-transaction. Stage 3's
+    variant formset can't guarantee that order (form-save order isn't "old default first"), so
+    this is now a deferred `CONSTRAINT TRIGGER` (migration 0003), same mechanism and same reasoning
+    as the "at least one variant" trigger from migration 0002. Second and third: the invariant
+    coverage claimed complete under gate 1 had two real gaps — deleting a product's *only* image
+    was never tested (the promotion path's `.first()` returning `None` was correct but
+    unverified, and nothing would have caught a future refactor that assumed a next image always
+    exists), and `ProductVariant.image`'s `SET_NULL` behavior on the referenced `ProductImage`
+    being deleted was never exercised at all. Both now have tests
+    (`catalog/tests/test_product_image.py`). Lesson for later stages: a `manage.py shell` smoke
+    test runs in autocommit, where `on_commit` and deferred constraints both fire normally — it
+    will not reproduce pytest's default rolled-back-transaction semantics, so "I checked it in the
+    shell" is not evidence a commit-time mechanism works under the test suite. Stage 4's
+    reservation concurrency tests hit the same trap.
 
 ---
 
@@ -244,6 +264,21 @@ Questions that did not block progress but need an answer eventually.
   at `/django-admin/` to avoid any visual/URL confusion with the portal once Stage 3 builds it out.
   Assumed in the meantime: Django admin stays a thin StoreSettings-only surface (and whatever
   else warrants it) rather than becoming the merchant's primary interface — the portal is.
+- [Stage 2] `catalog.services.create_product()` calls `Product.save()`, which runs `self.clean()`
+  but never `validate_unique()` — a duplicate explicit `slug` (or any other `unique=True` field)
+  surfaces as a raw Postgres `IntegrityError`, not a Django `ValidationError`. Not a problem at the
+  model/service layer, but Stage 3's product-create form needs a `ValidationError` to render a
+  field-level error instead of a 500. Assumed in the meantime: Stage 3's form calls
+  `full_clean()`/`validate_unique()` itself before calling the service, or the service gains an
+  explicit uniqueness pre-check — decide when building that form, not before.
+- [Stage 2] `catalog.services._generate_unique_sku()` (and `core.slugs.unique_slugify()`) have a
+  check-then-create race: `filter(...).exists()` then `create()`, two statements, no locking
+  between them. Two concurrent product creations can pick the same candidate SKU/slug; the
+  `unique=True` constraint still catches it as an `IntegrityError` (no silent duplicate), so the
+  failure mode is safe, just not graceful. Assumed in the meantime: acceptable for a single-
+  merchant admin-driven catalog where concurrent creates are rare. Stage 4 establishes
+  `select_for_update()` discipline for real concurrency (stock reservations) — revisit whether
+  the same pattern is worth applying here at that point, rather than fixing it in isolation now.
 
 ---
 
