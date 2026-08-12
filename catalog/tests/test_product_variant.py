@@ -33,24 +33,36 @@ def test_discount_percent_computed_correctly() -> None:
 
 
 @pytest.mark.django_db
-def test_is_in_stock_and_is_low_stock() -> None:
+def test_is_in_stock_and_is_low_stock_annotations_with_no_reservations() -> None:
+    """is_in_stock and is_low_stock only exist as queryset annotations
+    (Stage 4) — never Python properties, since a property here would be
+    exactly the N+1 CLAUDE.md's Traps section warns against. With no
+    StockReservation rows at all, available_quantity == stock_quantity, so
+    this is also what proves the Coalesce(..., Value(0)) branch works: a
+    LEFT JOIN that matches nothing must read as 0, not NULL propagating
+    into "false for everything". inventory/tests/ covers the case where a
+    reservation actually reduces availability below stock_quantity."""
     out_of_stock = ProductVariantFactory(stock_quantity=0, low_stock_threshold=5)
-    assert out_of_stock.is_in_stock is False
-    assert out_of_stock.is_low_stock is False
-
     low = ProductVariantFactory(stock_quantity=3, low_stock_threshold=5)
-    assert low.is_in_stock is True
-    assert low.is_low_stock is True
-
     healthy = ProductVariantFactory(stock_quantity=50, low_stock_threshold=5)
-    assert healthy.is_in_stock is True
-    assert healthy.is_low_stock is False
+
+    annotated = {
+        variant.pk: variant
+        for variant in ProductVariant.objects.with_available_quantity().filter(
+            pk__in=[out_of_stock.pk, low.pk, healthy.pk]
+        )
+    }
+
+    assert annotated[out_of_stock.pk].is_in_stock is False
+    assert annotated[out_of_stock.pk].is_low_stock is False
+    assert annotated[low.pk].is_in_stock is True
+    assert annotated[low.pk].is_low_stock is True
+    assert annotated[healthy.pk].is_in_stock is True
+    assert annotated[healthy.pk].is_low_stock is False
 
 
 @pytest.mark.django_db
-def test_with_available_quantity_annotation_matches_stock_quantity() -> None:
-    """Stage 2: available_quantity == stock_quantity (Stage 4 changes the
-    expression, not the call site, once reservations exist)."""
+def test_with_available_quantity_annotation_matches_stock_quantity_with_no_reservations() -> None:
     variant = ProductVariantFactory(stock_quantity=42)
     annotated = ProductVariant.objects.with_available_quantity().get(pk=variant.pk)
     assert annotated.available_quantity == 42

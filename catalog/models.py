@@ -11,9 +11,24 @@ from __future__ import annotations
 
 from typing import Any
 
+from django.apps import apps
 from django.core.exceptions import ValidationError
 from django.db import models
-from django.db.models import BooleanField, Case, Count, F, Min, Q, Value, When
+from django.db.models import (
+    BooleanField,
+    Case,
+    Count,
+    F,
+    IntegerField,
+    Min,
+    OuterRef,
+    Q,
+    Subquery,
+    Sum,
+    Value,
+    When,
+)
+from django.db.models.functions import Coalesce, Now
 
 from core.config import DEFAULT_LOW_STOCK_THRESHOLD
 from core.models import TimeStampedModel
@@ -322,12 +337,94 @@ class ProductImage(TimeStampedModel):
 
 class ProductVariantQuerySet(models.QuerySet["ProductVariant"]):
     def with_available_quantity(self) -> ProductVariantQuerySet:
-        """Annotate ``available_quantity``. Stage 4 changes the expression
-        here (subtracting active reservations) — call sites don't change,
-        which is the point: nothing downstream ever branches on how
-        availability is computed, only on the annotated value.
+        """Annotate ``reserved_quantity``, ``available_quantity``,
+        ``is_in_stock``, and ``is_low_stock`` in one query — the same
+        bundling ``ProductQuerySet.with_pricing()`` uses for
+        ``has_price_range``, deliberately not a Python ``@property``: a
+        property here would be the exact N+1 CLAUDE.md's Traps section
+        warns against the moment anything iterates a queryset of variants
+        without this method.
+
+        ``available_quantity`` = ``stock_quantity`` minus
+        ``reserved_quantity`` (active, unexpired reservations — §10.1) —
+        the customer-facing "can this be bought right now" number, and
+        what ``is_in_stock`` derives from. ``is_low_stock`` derives from
+        ``stock_quantity`` instead, deliberately *not*
+        ``available_quantity`` — it's a merchant-facing reorder signal
+        ("I have 3 left on the shelf"), and §10.5 lists on-hand, reserved,
+        available, low-stock, and out-of-stock as five separate columns,
+        not four derived from one number. Basing it on availability would
+        make it flicker on and off as unrelated reservations are created
+        and expire against the same physical stock, telling a merchant to
+        reorder when they have plenty on the shelf and simply a lot of
+        pending WhatsApp orders.
+
+        ``reserved_quantity`` is a correlated ``Subquery``, not a
+        ``Sum(..., filter=)`` join-based aggregate. ``with_pricing()``
+        isn't precedent for the join form here: that method is on
+        ``Product`` with no second to-many relation routinely joined
+        alongside it, but this one is on ``ProductVariant``, which already
+        has another to-many reverse relation (``variant_attribute_values``)
+        that attribute filtering joins routinely, and Stage 6's listing
+        page is expected to combine variant availability with other
+        per-variant joins too. A join-based ``Sum`` here would silently
+        multiply the moment a caller's queryset joins that second
+        relation — two to-many tables joined into one query multiply rows
+        before ``GROUP BY`` collapses them back down, so the sum overcounts
+        by a factor of however many rows the other join matched. A
+        ``Subquery`` is evaluated independently per outer row and cannot
+        be affected by whatever else the caller's queryset joins.
+        Verified empirically:
+        ``test_with_available_quantity_does_not_fan_out_with_a_variant_attribute_join``
+        fails under the join-based form and passes under this one.
+
+        Resolves ``StockReservation`` via ``django.apps.apps.get_model()``
+        rather than a top-level ``from inventory.models import
+        StockReservation`` — catalog must not import from an app that
+        depends on it (the same direction CLAUDE.md states for
+        catalog/orders), and this keeps that true at the Python import
+        graph level while still building a real queryset for the
+        ``Subquery``.
+
+        Compares against the database's clock (``Now()``), not Python's
+        ``timezone.now()`` — the same predicate this annotation uses to
+        decide "active" is what ``inventory.services.reserve()`` uses
+        under its row lock and what the sweeper's bulk delete uses; three
+        call sites deciding the same question from two different clocks
+        is a real inconsistency, not a theoretical one.
         """
-        return self.annotate(available_quantity=F("stock_quantity"))
+        stock_reservation = apps.get_model("inventory", "StockReservation")
+        reserved_subquery = (
+            stock_reservation.objects.filter(variant=OuterRef("pk"), expires_at__gt=Now())
+            .order_by()
+            .values("variant")
+            .annotate(total=Sum("quantity"))
+            .values("total")
+        )
+        reserved_quantity = Coalesce(
+            Subquery(reserved_subquery, output_field=IntegerField()), Value(0)
+        )
+        return (
+            self.annotate(reserved_quantity=reserved_quantity)
+            .annotate(
+                available_quantity=F("stock_quantity") - F("reserved_quantity"),
+            )
+            .annotate(
+                is_in_stock=Case(
+                    When(available_quantity__gt=0, then=Value(True)),
+                    default=Value(False),
+                    output_field=BooleanField(),
+                ),
+                is_low_stock=Case(
+                    When(
+                        Q(stock_quantity__gt=0) & Q(stock_quantity__lte=F("low_stock_threshold")),
+                        then=Value(True),
+                    ),
+                    default=Value(False),
+                    output_field=BooleanField(),
+                ),
+            )
+        )
 
 
 class ProductVariant(TimeStampedModel):
@@ -428,17 +525,6 @@ class ProductVariant(TimeStampedModel):
         if self.compare_at_price is None or self.compare_at_price <= self.price:
             return None
         return round((self.compare_at_price - self.price) / self.compare_at_price * 100)
-
-    @property
-    def is_in_stock(self) -> bool:
-        """Reads ``stock_quantity`` directly, not the annotated
-        ``available_quantity`` — Stage 4 revisits this once reservations
-        exist and availability can differ from on-hand stock."""
-        return self.stock_quantity > 0
-
-    @property
-    def is_low_stock(self) -> bool:
-        return 0 < self.stock_quantity <= self.low_stock_threshold
 
     def compute_attribute_signature(self) -> str:
         # sorted() on a list of int value_ids is a numeric sort — sorting
