@@ -10,9 +10,9 @@ disagree, the code is right and this file is stale — fix it.
 
 ## Current position
 
-**Stage:** 5 — Search (not started)
-**Status:** Stage 4 is complete — see the Stage 4 log entry below for the full design review,
-acceptance-gate, and quality-gate record. Stage 5 has not been started.
+**Stage:** 6 — Storefront: browse, filter, sort (not started)
+**Status:** Stage 5 is complete — see the Stage 5 log entry below for the full acceptance-gate and
+quality-gate record. Stage 6 has not been started.
 **Last updated:** 2026-08-13
 **CI:** workflow committed (`.github/workflows/ci.yml`), never executed — no push has been made
 to any remote (the human pushes, per CLAUDE.md). Everything it runs has been run locally instead;
@@ -24,9 +24,13 @@ see the Stage 1 log entry for that output.
 inline formset + product image management (upload, drag-reorder, primary selection, delete,
 replace) + publish/unpublish/feature/unfeature/archive quick actions + a merchant inventory page,
 `inventory/` (`StockReservation`, `InventoryAdjustment`, the reservation service layer, the
-`release_expired_reservations` sweeper), a project-wide design system (`docs/design.md`,
-`tailwind.config.js` tokens, self-hosted IBM Plex). Stages 1-4 are fully built; Stage 5 (search) is
-next and not started.
+`release_expired_reservations` sweeper), `search/` (`Product.search_text` denormalisation +
+rebuild signals, `PostgresSearchBackend` blending `ts_rank` with trigram word-similarity, the
+`rebuild_search_index` command, an HTMX type-ahead endpoint), a project-wide design system
+(`docs/design.md`, `tailwind.config.js` tokens, self-hosted IBM Plex). Stages 1-5 are fully built;
+Stage 6 (storefront browse/filter/sort) is next and not started. No `storefront` app exists yet —
+Stage 5's type-ahead endpoint lives in `search/` instead, since it didn't need one to exist (see
+Stage 5 notes).
 
 ---
 
@@ -695,6 +699,162 @@ a different queryset.
   message and recalculated available quantity, and confirmed the low-stock filter correctly
   excludes a variant once its stock is raised above the threshold. Temporary superuser and fixture
   product removed afterward; nothing from this check is in the dev database or repo.
+
+### Stage 5 — Search
+Completed: 2026-08-13
+Commits: b392d6f feat(catalog) search_text denormalisation and rebuild signals
+         ba017f9 feat(search) PostgresSearchBackend covering all six §15.1 cases
+         6d1bb86 feat(search) rebuild_search_index command and type-ahead endpoint
+         8375053 fix(catalog) disable GIN fastupdate on search indexes
+         0ed4469 fix(search) use contains not icontains for suggest()'s trigram match
+Acceptance gates: all passed
+  1. **§15.1 table written as tests first, watched fail, then implemented.** All six cases —
+     `search/tests/test_backend.py`, one fixture per case (`afnan 9pm`, `9pm`, `AFNAN`, `afnn`,
+     `9PM afnan`, partial SKU `EDP-9PM-100` against a longer stored SKU), plus decoys that must
+     *not* match and an unpublished-product exclusion check. The test file was written and run
+     against a nonexistent `search.backends` module first — confirmed
+     `ModuleNotFoundError: No module named 'search.backends'` — before `PostgresSearchBackend` was
+     written.
+  2. Renaming a product updates `search_text` without a manual command —
+     `catalog/tests/test_search_indexing.py::test_renaming_a_product_updates_search_text_without_a_manual_command`.
+  3. `rebuild_search_index` is idempotent and reports a count —
+     `search/tests/test_rebuild_search_index_command.py` (reports total and recomputed-count
+     separately since a fresh product's `search_text` is already correct via the live signal, so
+     "recomputed" is legitimately 0 right after creation; a raw-`.update()`-bypassed-the-signal
+     scenario proves the count is real, not always zero; a second consecutive run recomputes
+     nothing).
+  4. **1,000-product fixture, timed, EXPLAIN-verified index usage** —
+     `search/tests/test_performance.py`. This gate surfaced a real bug; see Notes below — it does
+     not pass by asserting a weaker claim than the roadmap asks for.
+  5. No view imports `PostgresSearchBackend` directly — `search/tests/test_views.py::
+     test_no_view_module_imports_postgressearchbackend_directly`, an AST-parsed check (not a
+     substring grep — a substring check false-positived on `backends.py`'s own docstring
+     mentioning the class by name) across every `*views.py` file in the repo.
+  6. Quality gate green. Coverage floor 90% on `search` — see numbers below.
+
+Quality gate, final numbers: `ruff check` — all checks passed. `ruff format --check` — all files
+formatted (121 files). `mypy .` (whole tree, unscoped) — no issues in 113 source files.
+`makemigrations --check --dry-run` — no changes detected. `pytest --create-db` — 256 passed.
+Coverage: `search` 100% (all files), `catalog/search_indexing.py` 100%, `catalog/signals.py` 100%.
+`manage.py check --deploy` clean under `config.settings.prod` (DEBUG=False, ALLOWED_HOSTS set, a
+real random `SECRET_KEY`, placeholder R2 credentials). `manage.py check` clean under
+`config.settings.dev`.
+Notes:
+
+**Gate 4 (EXPLAIN proves index usage) failed for a real reason three times before it passed for
+the right one — GIN's `fastupdate` pending list, not row count.** First attempt used a 1,000-row
+fixture and got a plain `Seq Scan`; assumed the table was just too physically small (21 pages) for
+the GIN index to look cheaper than a sequential scan regardless of selectivity, and grew the
+fixture to 3,000, then 5,000, then 10,000 rows — all still `Seq Scan`, cost scaling linearly with
+row count the whole time, which is itself evidence the *index* side of the cost comparison wasn't
+moving, only the table side was. Advisor caught the actual mechanism on the first pass: GIN indexes
+default to `fastupdate=on`, so entries from a bulk insert land in an unordered "pending list" that
+only `VACUUM` flushes — not `ANALYZE`. Until flushed, `gincostestimate` prices every index scan for
+scanning that whole pending list, so the planner correctly (from its own, stale, perspective)
+prefers the sequential scan. **This is a fourth "looks verified but isn't" trap in the family
+CLAUDE.md already documents three of** (the three deferred-constraint-trigger cases, and
+`manage.py shell`'s autocommit): a direct diagnostic — `SELECT reltuples, relpages FROM pg_class`
+right after `ANALYZE` — showed perfectly accurate table statistics (1000.0 / 21, matching the real
+count exactly) while the query plan stayed wrong, because `ANALYZE` updates table-level statistics,
+not the GIN index's own internal pending-list state. Checking the table's stats proved nothing
+about the index's.
+
+Confirmed the mechanism directly rather than trusting the diagnosis: `VACUUM ANALYZE` (not
+`ANALYZE`) flipped the plan to `BitmapOr` across both GIN indexes at the same 1,000-row fixture.
+Rather than accept a test that depends on autovacuum's timing (which would also mean *production*
+search silently degrades to a sequential scan after every catalog import, with no error, until
+autovacuum happens to run — a real risk for a single merchant whose edits are infrequent bursts
+against constant search read traffic), both GIN indexes are now declared with `fastupdate=False`
+(`catalog/models.py`, migration `catalog/0007_search_indexes_fastupdate_off`). Confirmed this
+removes the dependency on `VACUUM` entirely: a plain `ANALYZE` after a fresh bulk insert is now
+enough for the planner to choose `BitmapOr` correctly, and the gate 4 test runs as a normal
+`@pytest.mark.django_db` fixture (rolled back, not committed) rather than needing
+`transaction=True` plus a manual teardown. **Migration 0007 drops and recreates both GIN indexes on
+`catalog_product` — relevant to whoever runs the deploy; on a table with real production data this
+is a rebuild, not a free schema change.** `GATE_4_FIXTURE_SIZE` is 1,000, matching the roadmap
+literally — the earlier 3,000+ fixture sizes were a documented-then-discarded wrong turn, not a
+real deviation, and nothing about that path survived into the committed test.
+
+**A second, separate index-usability bug, advisor-caught in a post-implementation review (not
+caught by the six-case tests, since none of them go through `suggest()`):** `suggest()`'s original
+`search_text__icontains=normalized` compiles to `UPPER(search_text) LIKE UPPER('%...%')` on
+Postgres — the `UPPER()` wrapper on the indexed column makes `product_search_trgm_gin`
+structurally unusable, confirmed with `SET enable_seqscan = off`: `icontains` still couldn't reach
+the index at all (fell back to the `status` index plus a residual per-row filter), while `contains`
+used `product_search_trgm_gin` via a `Bitmap Index Scan`. Fixed by switching to `search_text__contains`
+— since `search_text` is stored pre-lowercased and the query is `.lower()`'d before use, this is
+semantically identical, not a correctness-for-speed trade-off; it also makes true a claim
+`compute_search_text()`'s own docstring was already making about why pre-lowering matters. Not a
+separate gate 4 requirement (gate 4 covers `search()`, not `suggest()`), so no dedicated EXPLAIN
+test exists for this path — recorded here instead.
+
+**Query shape matters for gate 4, and was verified against real Postgres before being written into
+`search/backends.py`, not assumed from the ORM API:** filtering on a `SearchRank` annotation
+(`.filter(rank__gt=0)`) forces `ts_rank` evaluation into the WHERE clause, which the planner cannot
+satisfy from the GIN index — confirmed via `.explain()` that this form is *always* a `Seq Scan`,
+independent of the pending-list issue above. The index-usable form annotates the vector and filters
+`.filter(search=ts_query)` (Django's `@@` translation); `SearchRank` is used for `order_by` only.
+`GinIndex(SearchVector(...), ...)` itself (the tsvector index's expression) was also verified before
+use: Django generates the two-argument `to_tsvector('simple'::regconfig, COALESCE(search_text, ''))`
+form with an explicit `::regconfig` cast, which is genuinely immutable and Postgres accepts directly
+— no raw-SQL `RunSQL` fallback was needed, unlike what the pre-implementation design review flagged
+as a real possibility.
+
+**A real, unrelated migration-dependency bug found while verifying the above, fixed before it ever
+reached a fresh `--create-db` run:** the autogenerated `catalog/migrations/0006_search_indexes.py`
+only declared a dependency on `catalog/0005`, not on `core/0001_enable_pg_trgm` — Django has no way
+to infer that dependency from a `GinIndex(..., opclasses=["gin_trgm_ops"])` declaration, since it's
+an opclass reference, not an FK. Without it, migration order between the two apps is unconstrained,
+and a fresh `migrate` failed with `operator class "gin_trgm_ops" does not exist for access method
+"gin"` the first time this was tested end-to-end (it had been silently working locally only because
+`core/0001` happened to already be applied from Stage 1, long before this session). Fixed by adding
+the dependency explicitly, with a comment explaining why `makemigrations` can't generate it itself.
+
+**Test-database staleness across separate `pytest` invocations, not a Stage 5 regression, but
+repeatedly hit while iterating on this stage and worth recording precisely so the next session
+doesn't lose an hour to it too.** Running `pytest -q` (no `--create-db`) partway through this stage
+produced `store.models.StoreSettings.DoesNotExist` failures in tests that have nothing to do with
+search — reproduced even running `pytest store/` in complete isolation. Cause: Stage 4's
+`inventory/tests/test_concurrency.py` uses `@pytest.mark.django_db(transaction=True)`, which commits
+for real rather than rolling back; those commits persist in the physical `test_ecommerce` database
+across separate `pytest` process invocations (each a new process, same on-disk test database) unless
+`--create-db` rebuilds it fresh. Confirmed directly: `pytest store/ -q` failed, `pytest store/ -q
+--create-db` passed cleanly. **Every quality-gate number recorded in this file's Stage 4 and Stage 5
+entries was captured with `--create-db`** — CI always builds a genuinely fresh Postgres service
+container per run, so this can't occur there, but a local session reusing the test database across
+many separate `pytest` calls (as happens naturally over a long session) will eventually hit it
+again. Not fixed — recorded as the correct way to get a trustworthy number, not a bug to patch.
+
+- Sixth `[tool.ruff.lint.per-file-ignores]` `ANN401` pattern added: `"**/signals.py"` — a signal
+  receiver's `**kwargs`, and the sender-instance argument on an `m2m_changed` receiver specifically
+  (untyped since the same receiver fires for either side of the relation), must match Django's own
+  dispatch signature, same reasoning as the existing CBV/form/command-override patterns. First (and,
+  per CLAUDE.md, only sanctioned) use is `catalog/signals.py`. The section's own comment says a new
+  pattern must be recorded here rather than just appended silently — this is that record.
+- **No `storefront` app exists yet, and Stage 5's HTMX type-ahead endpoint needed a URL/view home
+  now, not later — unlike Stage 4's `order` FK, this wasn't a hard Django blocker, so nothing was
+  deferred.** `search/views.py` + `search/urls.py`, mounted directly at `/search/` in
+  `config/urls.py` (same pattern as `/healthz/`), rather than waiting for Stage 6 to stand up
+  `storefront/`. `templates/search/_search_input.html` (the `hx-trigger="keyup changed
+  delay:200ms, search"` debounced box) exists and is tested indirectly (its target URL round-trips
+  through `{% url 'search:suggest' %}`), but isn't `{% include %}`'d into
+  `templates/storefront/base.html`'s pre-existing `storefront_search` block yet — there is no
+  storefront page to host it in until Stage 6 builds one. Revisit then, not before.
+- `catalog/signals.py`'s `_on_product_tags_changed` receiver only handles `Product.tags`'s two real
+  call directions (`product.tags.add(...)`, `reverse=False`, `instance` is the `Product`; and
+  `tag.products.add(...)`, `reverse=True`, `instance` is the `Tag`, `pk_set` holds affected product
+  ids) — both are tested directly, including the less-common reverse direction
+  (`test_adding_a_tag_from_the_reverse_side_updates_search_text`).
+- `search_text` is pre-lowercased at write time (`compute_search_text()`), deliberately, so neither
+  GIN index expression nor any query needs its own `lower()`/`UPPER()` wrapping — the `icontains`
+  bug above is exactly what happens when that discipline slips at one call site.
+- `pg_trgm.word_similarity_threshold` is set to `0.6` via `core/migrations/0003` — the same value
+  as Postgres's own compiled-in default, locked in explicitly per CLAUDE.md's trap note rather than
+  left implicit. Not a guess: verified the `ALTER DATABASE ... SET` mechanism itself actually takes
+  effect on new connections (not just coincidentally already matching the default) by round-tripping
+  it to `0.45` and back on a live connection before trusting it; verified `0.6` is sufficient for the
+  binding cases (`afnn`/`Afnan` typo, `EDP-9PM-100` as a genuine substring of a longer stored SKU)
+  against real Postgres data before writing it into `core/config.py`.
 
 ---
 
