@@ -10,7 +10,7 @@ disagree, the code is right and this file is stale — fix it.
 
 ## Current position
 
-**Stage:** 2 — Catalog domain model
+**Stage:** 3 — Merchant portal: catalog management
 **Status:** not started
 **Last updated:** 2026-08-12
 **CI:** workflow committed (`.github/workflows/ci.yml`), never executed — no push has been made
@@ -102,6 +102,71 @@ Notes:
     hasher), per CLAUDE.md's literal "Argon2 first in PASSWORD_HASHERS" with no test carve-out.
     Revisit if the test suite's runtime becomes a real problem later.
 
+### Stage 2 — Catalog domain model
+Completed: 2026-08-12
+Commits: e07f249 feat(core): add slug generation and image-derivative helpers
+         9b058b0 feat(catalog): add domain model (requirements §2)
+         1ba9ebf feat(catalog): add create_product service and deferred invariant trigger
+         7cd4873 test(catalog): add factories and full test suite
+         15e4780 docs: update README/TODO for Stage 2, add catalog coverage floor to CI
+Acceptance gates: all passed
+  1. Every invariant has a test proving it's enforced, including the failure case — see
+     catalog/tests/. Default-variant creation, Category two-level rejection, AttributeValue
+     (definition, slug) uniqueness, duplicate variant attribute-set rejection, one-primary-image
+     and one-default-variant constraints (with promotion-on-delete for the former) all covered.
+  2. Saving a product with no variants produces exactly one default variant — via
+     catalog.services.create_product(), not a Product.save() override (see Notes — the original
+     on_commit-based design was replaced mid-stage; a caller that bypasses the service still gets
+     exactly one violation at commit, from the deferred DB trigger, not a second default variant).
+  3. Three-level category save raises ValidationError — catalog/tests/test_category.py.
+  4. Two variants of one product with identical attribute sets raise IntegrityError —
+     catalog/tests/test_product_variant.py, plus a dedicated numeric-vs-lexical sort regression
+     test (AttributeValue pks 2 and 10 attached in high-then-low order; signature must be "2,10").
+  5. display_price returns the minimum across active variants, ignoring inactive ones — as an
+     annotated ProductQuerySet.with_pricing() method, not a @property (see Notes).
+  6. Image upload produces three derivatives (200/600/1400px, WebP+JPEG) with correct dimensions —
+     verified against a 2000x1000 Pillow-generated runtime image (2:1 aspect ratio preserved:
+     200x100/600x300/1400x700). No binary fixtures committed.
+  7. `grep -rn "FloatField" .` returns nothing outside migrations — automated as
+     tests/test_no_float_fields.py rather than a one-off manual check.
+  8. Quality gate green: ruff check clean, ruff format clean, mypy --strict clean (53 source
+     files), makemigrations --check --dry-run clean, 94 tests passed. Coverage: catalog 95%
+     (models.py 96%, services.py 86%; floor 85%), core 100% (floor 80%), store 100% (floor 80%).
+     manage.py check --deploy clean under both config.settings.dev and config.settings.prod.
+Coverage: catalog 95%, core 100%, store 100% (floors 85%/80%/80%)
+Notes:
+  - **Mid-stage design correction, recorded because it's the most consequential thing that
+    happened this stage.** The first implementation enforced "every product has >=1 variant" via
+    `transaction.on_commit()` scheduled from `Product.save()`. This is broken for testing:
+    `on_commit` callbacks only fire on a real COMMIT, and pytest-django's default `django_db`
+    fixture wraps each test in a transaction that's rolled back, never committed — so the entire
+    safety net was silently inert under the test suite the whole time it existed, and every test
+    that appeared to exercise it was actually passing for the wrong reason (nothing had run at
+    all). Caught before any test suite was written against it, not after. Replaced with
+    `catalog.services.create_product()` (product + default variant, one transaction, synchronous —
+    no commit-hook indirection) as the sanctioned creation path, plus a Postgres
+    `CONSTRAINT TRIGGER ... DEFERRABLE INITIALLY DEFERRED` pair (migration 0002) as the backstop
+    for anything that bypasses the service. Deferred triggers have the same testability trap in
+    reverse — they only fire at commit too — so the three tests that exercise the backstop
+    directly use `@pytest.mark.django_db(transaction=True)` to force a real commit.
+  - `display_price`/`has_price_range` (Product) and `available_quantity` (ProductVariant) were
+    originally `@property`. Changed to annotated QuerySet methods
+    (`Product.objects.with_pricing()`, `ProductVariant.objects.with_available_quantity()`) before
+    any view code could depend on the property form — a property re-queries per instance, which
+    would have failed Stage 6's `assertNumQueries` gate on the first list view that used it.
+    `is_in_stock`/`is_low_stock` stayed as properties reading `stock_quantity` directly; Stage 4
+    revisits them once reservations make availability differ from on-hand stock.
+  - `attribute_signature` sorts via Python `sorted()` on the actual int `value_id`s (not SQL
+    `order_by`, which — while already numeric on an integer column — made the guarantee implicit
+    rather than obvious at the call site). Test proves it with ids 2 and 10 attached in an order
+    that would expose a lexical-sort bug.
+  - `catalog/admin.py` deliberately does not exist yet — roadmap Stage 2 says "models only, no
+    portal UI." Stage 3 builds the real merchant-facing interface; Django admin was never intended
+    to be that.
+  - Every `ProductVariant.low_stock_threshold` starts at `core.config.DEFAULT_LOW_STOCK_THRESHOLD`
+    (5) — a row default a merchant can change per variant immediately, not a StoreSettings field,
+    since it isn't a single store-wide value.
+
 ---
 
 ## Deviations from spec
@@ -156,6 +221,13 @@ says, and continue. The human resolves these.
   HTMX/Alpine with zero network access; setup_dev.ps1/.sh still contain the download step (now
   effectively a no-op "already present" skip) so a version bump only requires deleting the file
   and re-running setup_dev. No longer flagging this as open; noting the reasoning for the record.
+- [Stage 2] §2.1 — `Product.tags` is specified as an M2M field, but no `Tag` model appears in
+  roadmap Stage 2's explicit model list ("Brand, Category, AttributeDefinition, AttributeValue,
+  Product, ProductVariant, ProductAttributeValue, VariantAttributeValue, ProductImage"). An M2M
+  field needs a target model, so I added a minimal `Tag(name, slug)` — not treating this as a real
+  deviation since it's a necessary structural implication of a field the spec already asks for,
+  but flagging in case a fuller Tag model (e.g. `is_published`, per-tag SEO fields) was intended
+  and just not spelled out.
 
 ---
 
