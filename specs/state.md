@@ -233,13 +233,15 @@ All of Stage 3's acceptance gates are now provable except publish/unpublish/feat
 isn't built yet — that's the entire remaining gap in the stage.
 
 Quality gate, actual numbers this pass: `ruff check` — all checks passed. `ruff format --check` —
-all files formatted. `mypy portal/ catalog/` — no issues (31 source files, mypy scoped to the two
-apps this pass touched rather than the whole tree — matches the flow used for the variant-formset
-pass). `makemigrations --check --dry-run` — no changes detected. `pytest --create-db` — 167
-passed. Coverage: `portal` 96% (floor 80%), `catalog` 96% (floor 85%). `manage.py check --deploy`
-clean under `config.settings.prod` (DEBUG=False, ALLOWED_HOSTS set, a real random `SECRET_KEY`
-via `get_random_secret_key()`, placeholder R2 credentials). `manage.py check` clean under
-`config.settings.dev`.
+all files formatted. `mypy .` (whole tree, as CLAUDE.md's definition of done and CI both run it —
+an earlier draft of this entry reported a `mypy portal/ catalog/` scoped run instead; that framing
+is wrong and is corrected here rather than carried forward, since scoping mypy to only the apps a
+pass touched is exactly how an error in an untouched file would reach CI unnoticed) — no issues in
+80 source files. `makemigrations --check --dry-run` — no changes detected. `pytest --create-db` —
+167 passed. Coverage: `portal` 96% (floor 80%), `catalog` 96% (floor 85%). `manage.py check
+--deploy` clean under `config.settings.prod` (DEBUG=False, ALLOWED_HOSTS set, a real random
+`SECRET_KEY` via `get_random_secret_key()` — see Notes below, placeholder R2 credentials).
+`manage.py check` clean under `config.settings.dev`.
 
 **The Staff-group flush bug — a three-layer diagnosis, worth the full chain for Stage 4 and
 Stage 17, both of which will hit adjacent traps:**
@@ -460,6 +462,24 @@ status above.
   `{% static %}` in `templates/portal/base.html`, not a CDN; `extra_body` is a real block on that
   template, so `templates/portal/product_form.html`'s `{{ block.super }}` renders the vendored
   `<script>` tag before its own inline `Sortable(...)` init runs.
+- `test_upload_with_an_invalid_file_shows_an_error_and_adds_nothing` originally asserted the
+  HTML-escaped literal `Couldn&#x27;t add that image` in the response body — brittle against any
+  rewording or punctuation change to the message text. Fixed to assert on
+  `django.contrib.messages.get_messages(response.wsgi_request)`'s `level_tag == "error"` instead,
+  which survives a reword entirely.
+- **`manage.py check --deploy` under `config.settings.prod` needs a genuinely random
+  `SECRET_KEY`, not just any 50+-character string.** Django's `security.W009` check
+  (`django.core.checks.security.base`) rejects a key that has fewer than 5 unique characters or is
+  prefixed `django-insecure-`, in addition to the length floor — a hand-typed placeholder like
+  `"deploy-check-<timestamp>-random-secret-key-value"` passes the length check but still fails
+  `W009` on the uniqueness heuristic. The working invocation generates one properly:
+  `SECRET=$(python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())")`,
+  then passes it via the environment alongside `DEBUG=False`, `ALLOWED_HOSTS`, and placeholder
+  `AWS_*` values (`.env`'s own `DEBUG=True` is picked up by `environ.Env.read_env()` on import and
+  is *not* overridden by a same-named shell environment variable set after the fact in the same
+  command line — the override must be set before Django's settings module is imported, which an
+  inline `VAR=value command` prefix satisfies and a `.env` edit does not). Recording this so the
+  next session that needs to re-run this check doesn't rediscover it by trial.
 
 ---
 
