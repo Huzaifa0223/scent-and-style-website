@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     "store",
     "catalog",
     "accounts",
+    "inventory",
     "portal",
 ]
 

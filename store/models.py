@@ -27,6 +27,10 @@ class StoreSettings(TimeStampedModel):
     whatsapp_number = models.CharField(max_length=20, blank=True, default="")
     currency = models.CharField(max_length=3, default="PKR")
     timezone = models.CharField(max_length=64, default="Asia/Karachi")
+    # Hours a StockReservation lives before the sweeper releases it back to
+    # available stock (§10.1). Merchant-configurable — how long a customer
+    # gets before an uncontacted WhatsApp order stops locking inventory.
+    reservation_ttl_hours = models.PositiveIntegerField(default=24)
 
     class Meta:
         verbose_name = "Store Settings"
