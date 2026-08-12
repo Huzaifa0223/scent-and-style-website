@@ -27,13 +27,29 @@ assumed from the ORM API alone):
   to the planner at moderate row counts — the ``LIMIT`` clause is what
   tips the combined query back to the indexed plan, matching how
   ``search()`` is actually called.
+- Ranking blends both signals (roadmap deliverable, not optional):
+  ``-rank`` (``ts_rank``) first, ``-word_similarity``
+  (``TrigramWordSimilarity``) second, ``-created_at`` only as a final,
+  arbitrary tiebreaker. Without the ``word_similarity`` term, every
+  typo-only or partial-SKU-only match ties at ``rank=0`` (no lexeme
+  overlap) and the ordering silently collapses to ``-created_at`` —
+  confirmed directly: with the ``word_similarity`` term removed, the
+  oldest of three "afnn"-similar products (the one with the least
+  relevant name) sorted *last*, not first, purely because it was created
+  first. ``gate 1``'s membership assertions (``product in results``) do
+  not catch this — ordering is checked separately.
 """
 
 from __future__ import annotations
 
 from typing import Protocol
 
-from django.contrib.postgres.search import SearchQuery, SearchRank, SearchVector
+from django.contrib.postgres.search import (
+    SearchQuery,
+    SearchRank,
+    SearchVector,
+    TrigramWordSimilarity,
+)
 from django.db.models import Prefetch, Q, QuerySet
 from django.utils.module_loading import import_string
 
@@ -70,9 +86,13 @@ class PostgresSearchBackend:
         ts_query = SearchQuery(normalized, config=SEARCH_TSVECTOR_CONFIG)
         return (
             Product.objects.filter(status=Product.Status.PUBLISHED)
-            .annotate(search=vector, rank=SearchRank(vector, ts_query))
+            .annotate(
+                search=vector,
+                rank=SearchRank(vector, ts_query),
+                word_similarity=TrigramWordSimilarity(normalized, "search_text"),
+            )
             .filter(Q(search=ts_query) | Q(search_text__trigram_word_similar=normalized))
-            .order_by("-rank", "-created_at")[:limit]
+            .order_by("-rank", "-word_similarity", "-created_at")[:limit]
         )
 
     def suggest(self, query: str, *, limit: int = SEARCH_SUGGESTIONS_LIMIT) -> QuerySet[Product]:

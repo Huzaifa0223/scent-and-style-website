@@ -91,3 +91,20 @@ def test_unpublished_products_are_excluded_even_on_an_exact_match() -> None:
 @pytest.mark.django_db
 def test_search_with_a_blank_query_returns_nothing_without_erroring(target_product) -> None:  # type: ignore[no-untyped-def]
     assert list(PostgresSearchBackend().search("   ")) == []
+
+
+@pytest.mark.django_db
+def test_results_are_ordered_by_relevance_not_just_creation_order() -> None:
+    """Three typo-only matches (all tie at rank=0 — none has a tsvector
+    lexeme match), created in the *opposite* of quality order, so a
+    -created_at-only fallback would return them worst-first. Guards
+    against TrigramWordSimilarity silently dropping out of order_by()."""
+    worst = ProductFactory(name="Afnaan Perfume Store Product", status=Product.Status.PUBLISHED)
+    mid = ProductFactory(name="Afnann Perfume Store Product", status=Product.Status.PUBLISHED)
+    best = ProductFactory(name="Afnan Perfume Store Product", status=Product.Status.PUBLISHED)
+
+    results = [
+        p for p in PostgresSearchBackend().search("afnan") if p.pk in (worst.pk, mid.pk, best.pk)
+    ]
+
+    assert results == [best, mid, worst]
