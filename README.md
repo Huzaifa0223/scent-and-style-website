@@ -81,8 +81,12 @@ config/     settings, urls, wsgi/asgi
 core/       TimeStampedModel, typed config, storage backends, slug/image helpers, money filter
 store/      StoreSettings singleton (identity, contact, currency, timezone)
 catalog/    Brand, Category, Tag, AttributeDefinition/Value, Product, ProductVariant,
-            ProductImage (+ derivative generation), and catalog.services.create_product —
-            models only; no portal UI or storefront views yet (Stage 3/6)
+            ProductImage (+ derivative generation), and catalog.services.create_product
+accounts/   auth, portal permission mixin, seeded "Staff" Django Group
+portal/     merchant-facing views: catalog CRUD, product images, publish/feature/archive,
+            inventory (Stage 4)
+inventory/  StockReservation, InventoryAdjustment, inventory.services (reserve, release,
+            commit_reservation, restore, adjust), the release_expired_reservations sweeper
 templates/  base shell + separate storefront/ and portal/ shells, styled 404/500
 ```
 
@@ -93,13 +97,22 @@ constraint trigger (`catalog/migrations/0002`) is the backstop for anything that
 tests needs `@pytest.mark.django_db(transaction=True)` rather than the default (rolled-back,
 never-committed) test transaction.
 
-Later stages add `catalog/`, `inventory/`, `search/`, `cart/`, `orders/`, and the rest — see
-`specs/roadmap.md`.
+Later stages add `search/`, `cart/`, `orders/`, and the rest — see `specs/roadmap.md`.
 
 ## Background jobs
 
-None yet. Stage 4 adds `release_expired_reservations` (cron, every 10 minutes) and Stage 13
-adds the nightly backup job; both will be documented here once they exist.
+`release_expired_reservations` (§10.4) — deletes `StockReservation` rows past their TTL, so
+abandoned WhatsApp orders stop locking stock after `StoreSettings.reservation_ttl_hours`
+(default 24) instead of permanently. Idempotent and safe to run concurrently with itself (a bulk
+`DELETE ... WHERE expires_at <= now()` needs no locking — see
+`inventory/services.py::release_expired_reservations` and
+`inventory/tests/test_concurrency.py::test_gate6_...`). Crontab entry, every 10 minutes:
+
+```
+*/10 * * * * cd /path/to/ecommerce-store && .venv/bin/python manage.py release_expired_reservations >> /var/log/ecommerce/sweeper.log 2>&1
+```
+
+Stage 13 adds the nightly backup job; will be documented here once it exists.
 
 ## CI
 
