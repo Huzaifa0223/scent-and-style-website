@@ -15,6 +15,7 @@ from io import BytesIO
 
 import pytest
 from django.contrib.auth.models import Group
+from django.contrib.messages import get_messages
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
@@ -231,6 +232,8 @@ def test_replace_swaps_the_file_and_keeps_position_and_primary(client, django_us
 def test_upload_with_an_invalid_file_shows_an_error_and_adds_nothing(
     client, django_user_model
 ) -> None:  # type: ignore[no-untyped-def]
+    """Asserts on the messages framework's level, not the message's exact
+    wording — the wording is free to change without breaking this test."""
     _login_owner(client, django_user_model)
     product = ProductFactory()
 
@@ -242,7 +245,8 @@ def test_upload_with_an_invalid_file_shows_an_error_and_adds_nothing(
 
     assert response.status_code == 200
     assert product.images.count() == 0
-    assert b"Couldn&#x27;t add that image" in response.content
+    levels = [message.level_tag for message in get_messages(response.wsgi_request)]
+    assert levels == ["error"]
 
 
 @pytest.mark.django_db
