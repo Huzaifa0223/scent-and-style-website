@@ -56,11 +56,50 @@ def test_with_available_quantity_annotation_matches_stock_quantity() -> None:
     assert annotated.available_quantity == 42
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 def test_only_one_default_variant_per_product() -> None:
+    """at-most-one-default is a deferred constraint trigger (migration
+    0003), not a plain unique index — needs a real commit to observe."""
     product = ProductFactory()  # default variant already is_default=True
-    with pytest.raises(IntegrityError), transaction.atomic():
+    with pytest.raises(IntegrityError):
         ProductVariantFactory(product=product, is_default=True)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_default_variant_swap_succeeds_even_when_set_before_unset() -> None:
+    """The whole reason this invariant is a deferred trigger rather than an
+    immediate unique index: Stage 3's variant formset can't guarantee
+    "unset the old default before setting the new one" statement order.
+    Setting the new default first — which would fail immediately against a
+    non-deferred constraint, since two rows are briefly both True — must
+    still succeed here because the check only runs at COMMIT."""
+    product = ProductFactory()
+    old_default = product.variants.get(is_default=True)
+    new_default = ProductVariantFactory(product=product, is_default=False)
+
+    with transaction.atomic():
+        new_default.is_default = True
+        new_default.save(update_fields=["is_default", "updated_at"])
+        old_default.is_default = False
+        old_default.save(update_fields=["is_default", "updated_at"])
+
+    old_default.refresh_from_db()
+    new_default.refresh_from_db()
+    assert old_default.is_default is False
+    assert new_default.is_default is True
+
+
+@pytest.mark.django_db(transaction=True)
+def test_two_defaults_left_uncorrected_still_fail_at_commit() -> None:
+    """Deferred doesn't mean unenforced — an invalid final state still
+    raises, just at COMMIT instead of at the offending statement."""
+    product = ProductFactory()
+    new_default = ProductVariantFactory(product=product, is_default=False)
+
+    with pytest.raises(IntegrityError):
+        with transaction.atomic():
+            new_default.is_default = True
+            new_default.save(update_fields=["is_default", "updated_at"])
 
 
 @pytest.mark.django_db

@@ -320,7 +320,18 @@ class ProductVariant(TimeStampedModel):
     """The purchasable unit — what goes in a cart, what has stock. Every
     product has at least one — enforced by ``catalog.services.create_product``
     plus a deferred database constraint trigger as the backstop for any path
-    that doesn't go through it (see catalog/migrations/0002)."""
+    that doesn't go through it (see catalog/migrations/0002).
+
+    ``is_default`` allows at most one ``True`` row per product, also via a
+    deferred constraint trigger (catalog/migrations/0003) rather than a
+    partial unique index — Postgres/Django forbid combining a unique
+    constraint's ``condition`` with ``deferrable``, and a plain immediate
+    partial index would force every default-variant swap (Stage 3's formset:
+    unset the old default, set a new one) to happen in a specific
+    unset-then-set statement order to avoid a transient two-defaults state.
+    Deferring the check to COMMIT makes the invariant order-independent,
+    same reasoning as the "at least one variant" trigger above.
+    """
 
     objects = ProductVariantQuerySet.as_manager()
 
@@ -359,11 +370,6 @@ class ProductVariant(TimeStampedModel):
                 fields=["product", "attribute_signature"],
                 condition=~Q(attribute_signature=""),
                 name="variant_unique_attribute_set_per_product",
-            ),
-            models.UniqueConstraint(
-                fields=["product"],
-                condition=Q(is_default=True),
-                name="variant_one_default_per_product",
             ),
         ]
 

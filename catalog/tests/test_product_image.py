@@ -7,7 +7,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError, transaction
 from PIL import Image as PILImage
 
-from catalog.factories import ProductFactory, ProductImageFactory
+from catalog.factories import ProductFactory, ProductImageFactory, ProductVariantFactory
 from catalog.models import ProductImage
 
 
@@ -75,6 +75,34 @@ def test_deleting_a_non_primary_image_does_not_touch_the_primary() -> None:
     second.delete()
     first.refresh_from_db()
     assert first.is_primary is True
+
+
+@pytest.mark.django_db
+def test_deleting_the_only_image_leaves_zero_images_without_error() -> None:
+    """The promotion path's product.images.order_by(...).first() is None
+    when the deleted image was the only one — must not crash, and must not
+    leave anything behind to promote."""
+    product = ProductFactory()
+    only = ProductImage.objects.create(product=product, image=_make_upload())
+    assert only.is_primary is True
+
+    only.delete()
+
+    assert product.images.count() == 0
+
+
+@pytest.mark.django_db
+def test_deleting_an_image_referenced_by_a_variant_nulls_the_variant_fk() -> None:
+    """ProductVariant.image is SET_NULL — deleting the image a variant
+    points at (its gallery hero) must null the FK, not leave it dangling."""
+    product = ProductFactory()
+    image = ProductImage.objects.create(product=product, image=_make_upload())
+    variant = ProductVariantFactory(product=product, image=image)
+
+    image.delete()
+
+    variant.refresh_from_db()
+    assert variant.image_id is None
 
 
 @pytest.mark.django_db

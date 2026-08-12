@@ -44,8 +44,12 @@ def create_product(
     factories and the portal's simple-product path use it. A product with
     several explicit variants (Stage 3's formset) still needs a variant
     created before the product's own INSERT commits; that flow calls this
-    same function and then edits or replaces the default variant, rather
-    than duplicating the "must have at least one variant at commit" logic.
+    same function, then adds the real variants, then — if a different
+    variant should be the default — unsets ``is_default`` on this one and
+    sets it on another, in any order, inside one transaction. That swap is
+    safe in any statement order because ``variant_at_most_one_default``
+    (catalog/migrations/0003) is a deferred constraint trigger: it only
+    checks at COMMIT, not after each individual UPDATE.
     """
     product = Product(**product_fields)
     product.save()
