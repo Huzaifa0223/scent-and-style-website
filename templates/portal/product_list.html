@@ -6,12 +6,10 @@
 {% block portal_breadcrumbs %}Products{% endblock %}
 
 {% block content %}
+  {% url 'portal:product_create' as create_url %}
   <div class="mb-4 flex items-center justify-between">
     <h1 class="text-xl font-semibold text-ink">Products</h1>
-    {% comment %}
-    Create/edit links land with the product form + variant formset — not
-    part of this pass. Row text is plain, not a dead link, until then.
-    {% endcomment %}
+    {% include "portal/_button_primary.html" with href=create_url label="New product" %}
   </div>
 
   <form method="get" class="mb-4 flex flex-wrap gap-3">
@@ -79,6 +77,7 @@
           <th class="px-4 py-3">Brand</th>
           <th class="px-4 py-3">Price</th>
           <th class="px-4 py-3">Status</th>
+          <th class="px-4 py-3"></th>
         </tr>
       </thead>
       <tbody class="divide-y divide-border-subtle">
@@ -115,10 +114,20 @@
                 {% include "portal/_badge.html" with tone="warning" label=product.get_status_display %}
               {% endif %}
             </td>
+            <td class="px-4 py-3 text-right">
+              <a
+                href="{% url 'portal:product_edit' product.pk %}"
+                class="inline-flex min-h-11 items-center rounded px-2 font-medium text-accent
+                       hover:text-accent-hover focus:outline-none focus-visible:ring-2
+                       focus-visible:ring-accent focus-visible:ring-offset-2"
+              >
+                Edit
+              </a>
+            </td>
           </tr>
         {% empty %}
           <tr>
-            <td colspan="5" class="px-4 py-6 text-center text-text-muted">No products match these filters.</td>
+            <td colspan="6" class="px-4 py-6 text-center text-text-muted">No products match these filters.</td>
           </tr>
         {% endfor %}
       </tbody>

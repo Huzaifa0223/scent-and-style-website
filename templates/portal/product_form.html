@@ -1,0 +1,91 @@
+{% extends "portal/base.html" %}
+
+{% block title %}
+  {% if object %}Edit {{ object.name }}{% else %}New product{% endif %} — {{ store_settings.name }} Portal
+{% endblock %}
+{% block portal_breadcrumbs %}
+  <a href="{% url 'portal:product_list' %}" class="text-accent hover:text-accent-hover">Products</a>
+  <span class="text-text-faint">/</span> {% if object %}Edit{% else %}New{% endif %}
+{% endblock %}
+
+{% block content %}
+  <h1 class="mb-4 text-xl font-semibold text-ink">
+    {% if object %}Edit {{ object.name }}{% else %}New product{% endif %}
+  </h1>
+
+  <form method="post" enctype="multipart/form-data" class="max-w-4xl space-y-8">
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+      <div class="rounded bg-danger-soft px-3 py-2 text-sm text-danger">
+        {{ form.non_field_errors }}
+      </div>
+    {% endif %}
+
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      {% for field in form.visible_fields %}
+        <div class="{% if field.name == 'description' or field.name == 'short_description' %}sm:col-span-2{% endif %}">
+          <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-ink">
+            {{ field.label }}
+          </label>
+          {{ field }}
+          {% if field.help_text %}
+            <p class="mt-1 text-xs text-text-muted">{{ field.help_text }}</p>
+          {% endif %}
+          {% if field.errors %}
+            <p class="mt-1 text-xs text-danger">{{ field.errors|striptags }}</p>
+          {% endif %}
+        </div>
+      {% endfor %}
+      {% for field in form.hidden_fields %}{{ field }}{% endfor %}
+    </div>
+
+    <div>
+      <h2 class="mb-2 text-lg font-semibold text-ink">Variants</h2>
+      <p class="mb-4 text-sm text-text-muted">
+        Every product needs at least one. Exactly one is the default — leave
+        every "Default" box unchecked and the first variant becomes it
+        automatically.
+      </p>
+
+      {{ formset.management_form }}
+
+      {% if formset.non_form_errors %}
+        <div class="mb-4 rounded bg-danger-soft px-3 py-2 text-sm text-danger">
+          {{ formset.non_form_errors }}
+        </div>
+      {% endif %}
+
+      <div class="space-y-4">
+        {% for variant_form in formset %}
+          <fieldset class="rounded-lg border border-border-subtle bg-surface p-4 shadow-card">
+            <legend class="px-1 text-sm font-semibold text-ink">
+              Variant {{ forloop.counter }}
+            </legend>
+
+            {% if variant_form.non_field_errors %}
+              <div class="mb-3 rounded bg-danger-soft px-3 py-2 text-sm text-danger">
+                {{ variant_form.non_field_errors }}
+              </div>
+            {% endif %}
+
+            {% for field in variant_form.visible_fields %}
+              <div class="mb-3 {% if field.name == 'attribute_values' %}sm:col-span-2{% endif %}">
+                <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-ink">
+                  {{ field.label }}
+                </label>
+                {{ field }}
+                {% if field.errors %}
+                  <p class="mt-1 text-xs text-danger">{{ field.errors|striptags }}</p>
+                {% endif %}
+              </div>
+            {% endfor %}
+            {% for field in variant_form.hidden_fields %}{{ field }}{% endfor %}
+          </fieldset>
+        {% endfor %}
+      </div>
+    </div>
+
+    {% include "portal/_button_primary.html" with type="submit" label="Save" %}
+  </form>
+{% endblock %}
