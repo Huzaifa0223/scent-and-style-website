@@ -31,6 +31,12 @@ select = ["E", "F", "I", "UP", "B", "ANN", "RUF"]
 # fifth pattern is ever needed, record why in specs/state.md rather than
 # just appending it here.
 "{portal,accounts}/{views,*_views,apps}.py" = ["ANN401"]
+# Fifth pattern (see the note above): a management command's handle(*args,
+# **options) must match Django's own BaseCommand signature, same reasoning
+# as the CBV/form overrides above. Generic across apps (not just inventory)
+# since Stage 13's backup job will be another one. Recorded in
+# specs/state.md's Stage 4 notes per this section's own instruction.
+"**/management/commands/*.py" = ["ANN401"]
 "config/settings/*.py" = ["F403", "F405"]
 
 [tool.ruff.format]
