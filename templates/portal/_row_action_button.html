@@ -1,0 +1,18 @@
+{% comment %}
+Single-purpose POST-only row action: one <form>, one submit button. Used
+for the product list's publish/unpublish/feature/unfeature/archive/edit
+row actions — one partial because the same button shape repeats up to
+four times per row, and the row itself repeats per product.
+Usage: {% include "portal/_row_action_button.html" with action_url=publish_url label="Publish" %}
+{% endcomment %}
+<form method="post" action="{{ action_url }}">
+  {% csrf_token %}
+  <button
+    type="submit"
+    class="inline-flex min-h-11 items-center rounded px-2 text-xs font-medium text-accent
+           hover:text-accent-hover focus:outline-none focus-visible:ring-2
+           focus-visible:ring-accent focus-visible:ring-offset-2"
+  >
+    {{ label }}
+  </button>
+</form>

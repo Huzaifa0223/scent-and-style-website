@@ -114,15 +114,36 @@
                 {% include "portal/_badge.html" with tone="warning" label=product.get_status_display %}
               {% endif %}
             </td>
-            <td class="px-4 py-3 text-right">
-              <a
-                href="{% url 'portal:product_edit' product.pk %}"
-                class="inline-flex min-h-11 items-center rounded px-2 font-medium text-accent
-                       hover:text-accent-hover focus:outline-none focus-visible:ring-2
-                       focus-visible:ring-accent focus-visible:ring-offset-2"
-              >
-                Edit
-              </a>
+            <td class="px-4 py-3">
+              {% url 'portal:product_publish' product.pk as publish_url %}
+              {% url 'portal:product_unpublish' product.pk as unpublish_url %}
+              {% url 'portal:product_archive' product.pk as archive_url %}
+              {% url 'portal:product_feature' product.pk as feature_url %}
+              {% url 'portal:product_unfeature' product.pk as unfeature_url %}
+              <div class="flex flex-wrap items-center justify-end gap-1">
+                {% if product.status == 'archived' %}
+                  {% include "portal/_row_action_button.html" with action_url=publish_url label="Publish" %}
+                {% elif product.status == 'published' %}
+                  {% include "portal/_row_action_button.html" with action_url=unpublish_url label="Unpublish" %}
+                  {% include "portal/_row_action_button.html" with action_url=archive_url label="Archive" %}
+                {% else %}
+                  {% include "portal/_row_action_button.html" with action_url=publish_url label="Publish" %}
+                  {% include "portal/_row_action_button.html" with action_url=archive_url label="Archive" %}
+                {% endif %}
+                {% if product.is_featured %}
+                  {% include "portal/_row_action_button.html" with action_url=unfeature_url label="Unfeature" %}
+                {% else %}
+                  {% include "portal/_row_action_button.html" with action_url=feature_url label="Feature" %}
+                {% endif %}
+                <a
+                  href="{% url 'portal:product_edit' product.pk %}"
+                  class="inline-flex min-h-11 items-center rounded px-2 text-xs font-medium
+                         text-accent hover:text-accent-hover focus:outline-none
+                         focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+                >
+                  Edit
+                </a>
+              </div>
             </td>
           </tr>
         {% empty %}
