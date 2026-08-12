@@ -227,9 +227,25 @@ class Product(TimeStampedModel):
         ordering = ["-created_at"]
         indexes = [
             models.Index(fields=["status"]),
-            GinIndex(SearchVector("search_text", config="simple"), name="product_search_tsv_gin"),
+            # fastupdate=False: GIN's default defers new entries to an
+            # unordered "pending list", flushed only by VACUUM — until
+            # that runs, the planner's cost estimate for this index is
+            # wrong (it prices in scanning the whole pending list) and it
+            # silently falls back to a sequential scan, with no error.
+            # For a single merchant whose catalog edits are infrequent and
+            # manual but whose search reads are constant, that's a real
+            # production risk, not just a test-authoring inconvenience —
+            # see specs/state.md's Stage 5 notes.
             GinIndex(
-                fields=["search_text"], name="product_search_trgm_gin", opclasses=["gin_trgm_ops"]
+                SearchVector("search_text", config="simple"),
+                name="product_search_tsv_gin",
+                fastupdate=False,
+            ),
+            GinIndex(
+                fields=["search_text"],
+                name="product_search_trgm_gin",
+                opclasses=["gin_trgm_ops"],
+                fastupdate=False,
             ),
         ]
 
