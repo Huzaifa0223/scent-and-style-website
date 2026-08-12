@@ -31,9 +31,6 @@ db.sqlite3
 # Tooling downloads (fetched by setup_dev, not checked in)
 tools/
 
-# Vendored frontend libs (HTMX, Alpine) are fetched by setup_dev, not committed —
-# see specs/state.md Proposed spec amendments
-static/vendor/
 
 # Tailwind build output — generated from static/css/input.css by setup_dev /
 # the deploy pipeline, not committed (input.css, the source, is tracked)
