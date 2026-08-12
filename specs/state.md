@@ -10,14 +10,10 @@ disagree, the code is right and this file is stale — fix it.
 
 ## Current position
 
-**Stage:** 3 — Merchant portal: catalog management
-**Status:** in progress, paused for human review. Product create/edit, the variant formset, and
-image management (upload, drag-reorder, primary selection, delete, replace) are now built and
-gate-verified; publish/unpublish/feature/archive actions remain unbuilt — the human re-authorized
-image management specifically, not the rest of the stage, so stopping here again rather than
-continuing into those. See the checkpoint report at `specs/report.md` for the state *before* the
-variant-formset pass (still accurate for everything except the "Not started" list below, which
-each pass has shortened).
+**Stage:** 4 — Inventory and stock reservation (not started)
+**Status:** Stage 3 is complete — see the Stage 3 log entry below for the full acceptance-gate and
+quality-gate record. Stage 4 has not been started; stopping here per explicit instruction to finish
+Stage 3's log entry and stop before beginning it.
 **Last updated:** 2026-08-12
 **CI:** workflow committed (`.github/workflows/ci.yml`), never executed — no push has been made
 to any remote (the human pushes, per CLAUDE.md). Everything it runs has been run locally instead;
@@ -27,8 +23,9 @@ see the Stage 1 log entry for that output.
 `accounts/` (login/logout, `PortalPermissionRequiredMixin`, seeded "Staff" Django Group),
 `portal/` product list + Category/Brand/Attribute CRUD + product create/edit with the variant
 inline formset + product image management (upload, drag-reorder, primary selection, delete,
-replace), a project-wide design system (`docs/design.md`, `tailwind.config.js` tokens,
-self-hosted IBM Plex). **Not started:** publish/unpublish/feature/archive actions.
+replace) + publish/unpublish/feature/unfeature/archive quick actions, a project-wide design system
+(`docs/design.md`, `tailwind.config.js` tokens, self-hosted IBM Plex). Stage 3 is fully built;
+Stage 4 (inventory and stock reservation) is next and not started.
 
 ---
 
@@ -200,48 +197,62 @@ Notes:
     shell" is not evidence a commit-time mechanism works under the test suite. Stage 4's
     reservation concurrency tests hit the same trap.
 
-### Stage 3 — Merchant portal: catalog management (in progress, paused for review)
-Not yet a completed-stage entry — see `specs/report.md` for the checkpoint from before this pass,
-and the top of this file's "Current position" for what's landed vs. outstanding now. Notes below
-are worth keeping regardless of how the paused work resolves.
+### Stage 3 — Merchant portal: catalog management
+Completed: 2026-08-12
+Commits: 029f20b fix(catalog) default-variant promotion
+         e419e76 feat(accounts,portal) auth + portal shell + catalog CRUD
+         9a5a15e feat(design) design system
+         57407b9 fix(catalog) deferred attribute-signature constraint + default-promotion guard
+         56ce9d1 feat(portal) product create/edit views and variant formset
+         ae024fc docs: record product formset lessons in CLAUDE.md and state.md
+         e8ea571 fix(catalog) deferred one-primary-image constraint + promotion guard
+         091ee05 feat(portal) product image management
+         d8f2081 docs: record image management gate 3 and fixes in state.md
+         4dffa39 test(portal) assert on message level, not escaped wording
+         475fddd docs: correct mypy scope claim, record SECRET_KEY deploy-check trap
+         c28114a feat(portal) add product publish/unpublish/feature/unfeature/archive
+Acceptance gates: all passed
+  1. A merchant can create a product with three variants across two attributes and publish it,
+     without touching Django admin — `portal/tests/test_product_form.py::test_gate1_...`. Two
+     publish paths exist and both satisfy this gate: `ProductForm`'s own `status` field (used by
+     the gate-1 test, set directly on create) and the dedicated `ProductPublishView` quick action
+     added this pass (`portal/tests/test_product_actions.py`), which is what a merchant actually
+     clicks from the product list row. The form field is canonical for "set status while editing
+     everything else"; the action view is canonical for the one-click case the roadmap lists
+     separately. Recording which is which so a future session doesn't have to guess.
+  2. Deleting a variant that is the last remaining variant is refused with a clear message —
+     `test_gate2_...`; the formset's own `clean()`, not the DB trigger, is what the merchant sees.
+  3. Reordering images persists and survives a reload —
+     `portal/tests/test_image_management.py::test_gate3_reordering_persists_and_survives_a_reload`.
+  4. A staff user is blocked (403, not a hidden link) from store settings and user management —
+     `portal/tests/test_permissions.py`, tested against `/django-admin/` (the portal has no
+     store-settings/user-management page of its own yet — Stage 17's job).
+  5. `assertNumQueries` stays flat as the fixture count grows from 5 to 50 on the product list —
+     `test_query_count_stays_flat_as_fixture_count_grows_from_5_to_50`. Re-verified after this
+     pass added four `{% include %}`s and five `{% url %}` resolutions per row for the new quick
+     actions: flat at **8 queries at both 5 and 50 products** — URL reversal and template includes
+     cost no queries, so the row actions didn't move this number.
+  5b. Same technique, for the variant formset's own N+1 (roadmap's named trap for this deliverable,
+      not the acceptance-gate list, but tested the same way) —
+      `test_edit_page_query_count_stays_flat_as_variant_count_grows`, flat at 12 queries from 1 to
+      5 variants.
+  5c. Same technique, for the image formset's N+1 (same named trap) —
+      `test_edit_page_query_count_stays_flat_as_image_count_grows`, flat at 14 queries from 1 to 5
+      images.
+  6. Quality gate green, coverage floor 80% on `portal` — see numbers below.
 
-Commits through the first pause: `029f20b` fix(catalog) default-variant promotion, `e419e76`
-feat(accounts,portal) auth + portal shell + catalog CRUD, `9a5a15e` feat(design) design system.
-
-Commits, product create/edit + variant formset pass (resumed after advisor design review
-per the human's explicit instruction): `57407b9` fix(catalog) deferred attribute-signature
-constraint + default-promotion guard, `56ce9d1` feat(portal) product create/edit views and
-variant formset.
-
-Commits, image management pass (this pass): `e8ea571` fix(catalog) deferred one-primary-image
-constraint + promotion guard, `091ee05` feat(portal) product image management.
-
-**Gate status, updated this pass:**
-
-| Gate | Status |
-|---|---|
-| 1. 3-variant/2-attribute product, publish | Provable — `portal/tests/test_product_form.py::test_gate1_...` |
-| 2. Last-variant-delete refused with a message | Provable — `test_gate2_...`, formset `clean()`, not the DB trigger, is what the merchant sees |
-| 3. Image reorder persists | **Provable now** — `portal/tests/test_image_management.py::test_gate3_reordering_persists_and_survives_a_reload` |
-| 4. Staff blocked (403) from store settings/user management | Provable — unchanged |
-| 5. `assertNumQueries` flat 5→50 (product list) | Provable — unchanged |
-| 5b. Same, for the variant formset's own N+1 (named trap, not the acceptance-gate list, but tested the same way) | Provable — `test_edit_page_query_count_stays_flat_as_variant_count_grows`, flat at 12 queries from 1 to 5 variants |
-| 5c. Same, for the image formset's N+1 (same named trap, same technique) | **Provable now** — `test_edit_page_query_count_stays_flat_as_image_count_grows`, flat at 14 queries from 1 to 5 images |
-| 6. Quality gate green, 80% coverage on `portal` | **Provable now** — see numbers below |
-
-All of Stage 3's acceptance gates are now provable except publish/unpublish/feature/archive, which
-isn't built yet — that's the entire remaining gap in the stage.
-
-Quality gate, actual numbers this pass: `ruff check` — all checks passed. `ruff format --check` —
-all files formatted. `mypy .` (whole tree, as CLAUDE.md's definition of done and CI both run it —
-an earlier draft of this entry reported a `mypy portal/ catalog/` scoped run instead; that framing
-is wrong and is corrected here rather than carried forward, since scoping mypy to only the apps a
-pass touched is exactly how an error in an untouched file would reach CI unnoticed) — no issues in
-80 source files. `makemigrations --check --dry-run` — no changes detected. `pytest --create-db` —
-167 passed. Coverage: `portal` 96% (floor 80%), `catalog` 96% (floor 85%). `manage.py check
---deploy` clean under `config.settings.prod` (DEBUG=False, ALLOWED_HOSTS set, a real random
-`SECRET_KEY` via `get_random_secret_key()` — see Notes below, placeholder R2 credentials).
-`manage.py check` clean under `config.settings.dev`.
+Quality gate, final numbers: `ruff check` — all checks passed. `ruff format --check` — all files
+formatted (90 files). `mypy .` (whole tree — CLAUDE.md's definition of done and CI both run it
+unscoped; an earlier draft of this entry reported a `mypy portal/ catalog/` scoped run instead,
+which was wrong and is corrected here rather than carried forward, since scoping mypy to only the
+apps a pass touched is exactly how an error in an untouched file would reach CI unnoticed) — no
+issues in 82 source files. `makemigrations --check --dry-run` — no changes detected. `pytest
+--create-db` — 187 passed. Coverage: `portal` 97% (floor 80%), `catalog` 96% (floor 85%).
+`manage.py check --deploy` clean under `config.settings.prod` (DEBUG=False, ALLOWED_HOSTS set, a
+real random `SECRET_KEY` via `get_random_secret_key()` — see Notes below, placeholder R2
+credentials). `manage.py check` clean under `config.settings.dev`.
+Coverage: portal 97%, catalog 96% (floors 80%/85%)
+Notes:
 
 **The Staff-group flush bug — a three-layer diagnosis, worth the full chain for Stage 4 and
 Stage 17, both of which will hit adjacent traps:**
@@ -480,6 +491,53 @@ status above.
   command line — the override must be set before Django's settings module is imported, which an
   inline `VAR=value command` prefix satisfies and a `.env` edit does not). Recording this so the
   next session that needs to re-run this check doesn't rediscover it by trial.
+
+**Publish/unpublish/feature/unfeature/archive (final pass, closing out Stage 3).**
+`portal/product_actions.py` (`ProductPublishView`, `ProductUnpublishView`, `ProductArchiveView`,
+`ProductFeatureView`, `ProductUnfeatureView`), row action buttons on
+`templates/portal/product_list.html` via a new shared partial
+(`templates/portal/_row_action_button.html` — the button shape repeats up to four times per row,
+so it's a partial rather than four copies of the same inline Tailwind class string, per CLAUDE.md's
+"one partial per reusable unit"). This closes the last gap in Stage 3 — every acceptance gate is
+now provable; see Acceptance gates above.
+- **Same endpoint-per-action shape as the image management split, and the same reasoning
+  restated for a case where it produces a *different* answer.** Each action is its own view,
+  POST-only (no `get()` defined, so Django's `View.dispatch()` 405s anything else), each declaring
+  its own `permission_required`. Unlike the image split, all five resolve to the *same* Django
+  permission (`catalog.change_product`) rather than different ones — Django's built-in codenames
+  don't distinguish "publish" from "archive"; both are a change to an existing `Product` row, not a
+  create or delete. The seeded Staff group already holds `change_product`, so Staff can use all
+  five actions, same as it can already edit a product through the full form.
+- **No transition is blocked by current status, deliberately.** Publish works from any status,
+  including reversing an archive — there is no separate "unarchive" action because the roadmap's
+  five-action list doesn't include one and publish already covers that transition. Requirements
+  specifies an explicit allowed-transition map for *orders* (§25) but says nothing of the kind for
+  product status, so adding one here would be an invented constraint, not a spec requirement.
+  Archiving a featured product leaves `is_featured` untouched — unfeaturing is a separate,
+  deliberate action a merchant fires on its own, not an implicit side effect of archiving.
+- **The archive decision, checked before writing any code and recorded here (not only in
+  `product_actions.py`'s module docstring) since this is what Stage 6 will need to read.** Grepped
+  the whole repo for anything that references a product by status before deciding what archive
+  should do: only `portal.views.ProductListView` (the status filter) and
+  `portal.product_forms.ProductForm` (the status field) do, and neither is affected by what archive
+  itself does — no `cart`, `orders`, `inventory`, `search`, or `storefront` app exists yet
+  (roadmap Stages 4/6/7/8), so nothing in this codebase today holds a reference to a product by
+  status that archiving could break. Decision, for those stages to honor once built: **archive is
+  a pure status transition** — `Product.status = ARCHIVED` and nothing else, no variant
+  deactivated, no image touched, nothing deleted. Two obligations this creates downstream:
+  (1) Stage 6's storefront browse/search/PDP must filter on `status=PUBLISHED` (the same field the
+  portal list already filters on) to hide archived and draft products from customers; (2) archiving
+  must stay non-destructive specifically because a future `OrderItem` is already specified as an
+  immutable snapshot that never reads back through the variant FK for display (CLAUDE.md's locked
+  decision) — that snapshot's FK must keep resolving even after the product it snapshotted is later
+  archived. A variant's own `is_active` flag stays a separate, independent lever a merchant can
+  still set regardless of the product's status; archive does not touch it.
+- Advisor review before this pass was reported done caught two things, both fixed: a test
+  (`test_archive_...does_not_touch_variants`) asserted `variant.stock_quantity == product.variants.
+  get().stock_quantity` — both sides re-read the same freshly-saved row, so the comparison was
+  tautological and would have passed regardless of what archive did to stock. Fixed to capture the
+  value before the POST and compare against that. Also flagged that gate 5 hadn't been re-run since
+  the template it measures changed; re-run explicitly and reported above (flat at 8, unchanged).
 
 ---
 
