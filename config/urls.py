@@ -19,6 +19,7 @@ urlpatterns: list[URLPattern | URLResolver] = [
     path("django-admin/", admin.site.urls),
     path("healthz/", healthz, name="healthz"),
     path("accounts/", include("accounts.urls")),
+    path("search/", include("search.urls")),
     path("admin-portal/", include("portal.urls")),
 ]
 

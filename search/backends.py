@@ -34,10 +34,10 @@ from __future__ import annotations
 from typing import Protocol
 
 from django.contrib.postgres.search import SearchQuery, SearchRank, SearchVector
-from django.db.models import Q, QuerySet
+from django.db.models import Prefetch, Q, QuerySet
 from django.utils.module_loading import import_string
 
-from catalog.models import Product
+from catalog.models import Product, ProductImage
 from core.config import SEARCH_RESULTS_LIMIT, SEARCH_SUGGESTIONS_LIMIT, SEARCH_TSVECTOR_CONFIG
 
 
@@ -80,9 +80,20 @@ class PostgresSearchBackend:
         if not normalized:
             return Product.objects.none()
 
-        return Product.objects.filter(
-            status=Product.Status.PUBLISHED, search_text__icontains=normalized
-        ).order_by("name")[:limit]
+        return (
+            Product.objects.filter(
+                status=Product.Status.PUBLISHED, search_text__icontains=normalized
+            )
+            .with_pricing()
+            .prefetch_related(
+                Prefetch(
+                    "images",
+                    queryset=ProductImage.objects.filter(is_primary=True),
+                    to_attr="primary_image_list",
+                )
+            )
+            .order_by("name")[:limit]
+        )
 
 
 def get_search_backend() -> SearchBackend:

@@ -86,3 +86,8 @@ def test_unpublished_products_are_excluded_even_on_an_exact_match() -> None:
     results = PostgresSearchBackend().search("afnan 9pm")
 
     assert draft not in results
+
+
+@pytest.mark.django_db
+def test_search_with_a_blank_query_returns_nothing_without_erroring(target_product) -> None:  # type: ignore[no-untyped-def]
+    assert list(PostgresSearchBackend().search("   ")) == []
