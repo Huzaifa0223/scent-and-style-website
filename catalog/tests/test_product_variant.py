@@ -103,6 +103,21 @@ def test_two_defaults_left_uncorrected_still_fail_at_commit() -> None:
 
 
 @pytest.mark.django_db
+def test_deleting_the_default_variant_promotes_the_next_by_position() -> None:
+    """migration 0003's trigger only covers INSERT/UPDATE — a DELETE of the
+    default row needs its own promotion, mirroring
+    ProductImage.delete()'s primary-image promotion."""
+    product = ProductFactory()  # default variant already is_default=True
+    second = ProductVariantFactory(product=product, sku="SECOND", position=1)
+    default = product.variants.get(is_default=True)
+
+    default.delete()
+
+    second.refresh_from_db()
+    assert second.is_default is True
+
+
+@pytest.mark.django_db
 def test_two_variants_with_identical_attribute_set_raise_integrity_error() -> None:
     """Acceptance gate 4."""
     product = ProductFactory()

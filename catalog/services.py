@@ -39,17 +39,25 @@ def create_product(
     default_variant_price: Decimal = Decimal("0.00"),
     **product_fields: Any,  # noqa: ANN401 — forwarded verbatim to Product(**kwargs)
 ) -> Product:
-    """Create a ``Product`` together with its mandatory default variant, in
-    one transaction. This is the sanctioned way to create a product —
-    factories and the portal's simple-product path use it. A product with
-    several explicit variants (Stage 3's formset) still needs a variant
-    created before the product's own INSERT commits; that flow calls this
-    same function, then adds the real variants, then — if a different
-    variant should be the default — unsets ``is_default`` on this one and
-    sets it on another, in any order, inside one transaction. That swap is
-    safe in any statement order because ``variant_at_most_one_default``
-    (catalog/migrations/0003) is a deferred constraint trigger: it only
-    checks at COMMIT, not after each individual UPDATE.
+    """Create a ``Product`` together with a single auto-generated default
+    variant, in one transaction. This is the sanctioned path *only* for
+    callers that don't yet know their variants — factories, and any future
+    single-variant "quick add" flow.
+
+    It is deliberately **not** used by flows that already have several
+    explicit variants in hand — the portal's variant formset (Stage 3) and
+    Stage 16's CSV import both create the ``Product`` row and their own
+    ``ProductVariant`` rows together in one ``transaction.atomic()`` block
+    directly, rather than creating this function's throwaway default variant
+    and then editing or deleting it. Those flows still get the "at least one
+    variant" guarantee — either from their own pre-save validation (the
+    formset's ``clean()`` rejects zero surviving variant forms) or, as a
+    backstop for anything that skips validation, from the same deferred
+    constraint trigger this function also relies on (catalog/migrations/0002).
+    If a caller does end up swapping which variant is default across more
+    than one statement, that's safe in any order because
+    ``variant_at_most_one_default`` (catalog/migrations/0003) only checks at
+    COMMIT, not after each individual UPDATE.
     """
     product = Product(**product_fields)
     product.save()

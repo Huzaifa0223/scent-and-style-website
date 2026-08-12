@@ -331,6 +331,13 @@ class ProductVariant(TimeStampedModel):
     unset-then-set statement order to avoid a transient two-defaults state.
     Deferring the check to COMMIT makes the invariant order-independent,
     same reasoning as the "at least one variant" trigger above.
+
+    The trigger only covers INSERT/UPDATE, not DELETE — deleting the row
+    that happens to be the default doesn't fire it, and would silently
+    leave the product with zero defaults. ``delete()`` below promotes the
+    next variant by position, mirroring ``ProductImage.delete()``'s
+    primary-image promotion, so "every product has a default variant" holds
+    for as long as it has any variant at all, not just at creation time.
     """
 
     objects = ProductVariantQuerySet.as_manager()
@@ -375,6 +382,17 @@ class ProductVariant(TimeStampedModel):
 
     def __str__(self) -> str:
         return self.sku
+
+    def delete(self, *args: Any, **kwargs: Any) -> tuple[int, dict[str, int]]:
+        product = self.product
+        was_default = self.is_default
+        result = super().delete(*args, **kwargs)
+        if was_default:
+            next_variant = product.variants.order_by("position", "id").first()
+            if next_variant is not None:
+                next_variant.is_default = True
+                next_variant.save(update_fields=["is_default", "updated_at"])
+        return result
 
     @property
     def discount_percent(self) -> int | None:
