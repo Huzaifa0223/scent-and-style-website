@@ -227,10 +227,10 @@ class Product(TimeStampedModel):
         ordering = ["-created_at"]
         indexes = [
             models.Index(fields=["status"]),
+            GinIndex(SearchVector("search_text", config="simple"), name="product_search_tsv_gin"),
             GinIndex(
-                SearchVector("search_text", config="simple"), name="product_search_tsv_gin"
+                fields=["search_text"], name="product_search_trgm_gin", opclasses=["gin_trgm_ops"]
             ),
-            GinIndex(fields=["search_text"], name="product_search_trgm_gin", opclasses=["gin_trgm_ops"]),
         ]
 
     def __str__(self) -> str:

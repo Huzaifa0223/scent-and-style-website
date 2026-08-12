@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     "catalog",
     "accounts",
     "inventory",
+    "search",
     "portal",
 ]
 
@@ -135,6 +136,13 @@ STORAGES = {
 }
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# Dotted path to the SearchBackend implementation (search/backends.py's
+# protocol) — the same "one concrete implementation, selected by settings"
+# pattern as DeliveryCalculator/NotificationChannel/PaymentProvider
+# elsewhere in this project, so a future non-Postgres backend drops in here
+# without touching view code.
+SEARCH_BACKEND = "search.backends.PostgresSearchBackend"
 
 LOGGING: dict[str, Any] = {
     "version": 1,

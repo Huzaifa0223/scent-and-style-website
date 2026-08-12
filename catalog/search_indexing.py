@@ -49,9 +49,9 @@ def compute_search_text(product: Product) -> str:
     than the full internal attribute set.
     """
     parts: list[str] = [product.name, product.category.name]
-    if product.brand_id is not None:
+    if product.brand is not None:
         parts.append(product.brand.name)
-    if product.subcategory_id is not None:
+    if product.subcategory is not None:
         parts.append(product.subcategory.name)
     parts.extend(product.variants.values_list("sku", flat=True))
     parts.extend(product.tags.values_list("name", flat=True))

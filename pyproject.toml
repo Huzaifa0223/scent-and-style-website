@@ -37,6 +37,15 @@ select = ["E", "F", "I", "UP", "B", "ANN", "RUF"]
 # since Stage 13's backup job will be another one. Recorded in
 # specs/state.md's Stage 4 notes per this section's own instruction.
 "**/management/commands/*.py" = ["ANN401"]
+# Sixth pattern (see the note on the fourth pattern above): a signal
+# receiver's **kwargs, and the sender-instance argument on an m2m_changed
+# receiver specifically (Django passes it untyped since the same receiver
+# fires for either side of the relation), must match Django's own
+# Any-typed dispatch signature — same reasoning as the CBV/form/command
+# overrides above. First (and, per CLAUDE.md, only sanctioned) use is
+# catalog/signals.py (Stage 5, §15's search-index rebuild). Recorded in
+# specs/state.md's Stage 5 notes per this section's own instruction.
+"**/signals.py" = ["ANN401"]
 "config/settings/*.py" = ["F403", "F405"]
 
 [tool.ruff.format]
