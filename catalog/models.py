@@ -12,6 +12,8 @@ from __future__ import annotations
 from typing import Any
 
 from django.apps import apps
+from django.contrib.postgres.indexes import GinIndex
+from django.contrib.postgres.search import SearchVector
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import (
@@ -223,7 +225,13 @@ class Product(TimeStampedModel):
 
     class Meta:
         ordering = ["-created_at"]
-        indexes = [models.Index(fields=["status"])]
+        indexes = [
+            models.Index(fields=["status"]),
+            GinIndex(
+                SearchVector("search_text", config="simple"), name="product_search_tsv_gin"
+            ),
+            GinIndex(fields=["search_text"], name="product_search_trgm_gin", opclasses=["gin_trgm_ops"]),
+        ]
 
     def __str__(self) -> str:
         return self.name
