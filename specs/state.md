@@ -11,21 +11,23 @@ disagree, the code is right and this file is stale — fix it.
 ## Current position
 
 **Stage:** 3 — Merchant portal: catalog management
-**Status:** in progress, paused for human review — see the checkpoint report at `specs/report.md`
-for exactly what's done vs. outstanding. Not yet a completed-stage log entry below; this note is a
-placeholder until the human resumes and the stage actually finishes.
+**Status:** in progress, paused for human review. Product create/edit and the variant formset are
+now built and gate-verified (this pass); image management and publish/unpublish/feature/archive
+actions remain unbuilt — the human re-authorized the formset work specifically, not the rest of
+the stage, so stopping here again rather than continuing into those. See the checkpoint report at
+`specs/report.md` for the state *before* this pass (still accurate for everything except the "Not
+started" list below, which this pass shortens).
 **Last updated:** 2026-08-12
 **CI:** workflow committed (`.github/workflows/ci.yml`), never executed — no push has been made
 to any remote (the human pushes, per CLAUDE.md). Everything it runs has been run locally instead;
 see the Stage 1 log entry for that output.
 
-**What's landed so far (all committed, quality gate green, see `specs/report.md` for detail):**
+**What's landed so far (all committed, quality gate green):**
 `accounts/` (login/logout, `PortalPermissionRequiredMixin`, seeded "Staff" Django Group),
-`portal/` product list + Category/Brand/Attribute CRUD, and a project-wide design system
-(`docs/design.md`, `tailwind.config.js` tokens, self-hosted IBM Plex). **Not started:** product
-create/edit, the variant formset, image management, publish/unpublish/feature/archive actions —
-deliberately paused here at the human's request, pending review of the design and the corrections
-made along the way.
+`portal/` product list + Category/Brand/Attribute CRUD + product create/edit with the variant
+inline formset, a project-wide design system (`docs/design.md`, `tailwind.config.js` tokens,
+self-hosted IBM Plex). **Not started:** image management (upload, drag-reorder, primary selection,
+delete/replace), publish/unpublish/feature/archive actions.
 
 ---
 
@@ -198,12 +200,35 @@ Notes:
     reservation concurrency tests hit the same trap.
 
 ### Stage 3 — Merchant portal: catalog management (in progress, paused for review)
-Not yet a completed-stage entry — see `specs/report.md` for the checkpoint the human is
-reviewing, and the top of this file's "Current position" for what's landed vs. outstanding. Notes
-below are worth keeping regardless of how the paused work resolves.
+Not yet a completed-stage entry — see `specs/report.md` for the checkpoint from before this pass,
+and the top of this file's "Current position" for what's landed vs. outstanding now. Notes below
+are worth keeping regardless of how the paused work resolves.
 
-Commits so far: `029f20b` fix(catalog) default-variant promotion, `e419e76` feat(accounts,portal)
-auth + portal shell + catalog CRUD, `9a5a15e` feat(design) design system.
+Commits through the first pause: `029f20b` fix(catalog) default-variant promotion, `e419e76`
+feat(accounts,portal) auth + portal shell + catalog CRUD, `9a5a15e` feat(design) design system.
+
+Commits this pass (product create/edit + variant formset, resumed after advisor design review
+per the human's explicit instruction): `57407b9` fix(catalog) deferred attribute-signature
+constraint + default-promotion guard, `56ce9d1` feat(portal) product create/edit views and
+variant formset.
+
+**Gate status, updated this pass:**
+
+| Gate | Status |
+|---|---|
+| 1. 3-variant/2-attribute product, publish | **Provable now** — `portal/tests/test_product_form.py::test_gate1_...` |
+| 2. Last-variant-delete refused with a message | **Provable now** — `test_gate2_...`, formset `clean()`, not the DB trigger, is what the merchant sees |
+| 3. Image reorder persists | Not provable — image management not built this pass |
+| 4. Staff blocked (403) from store settings/user management | Provable — unchanged from the first pause |
+| 5. `assertNumQueries` flat 5→50 (product list) | Provable — unchanged from the first pause |
+| 5b. Same, for the variant formset's own N+1 (roadmap's named trap for this deliverable, not the acceptance-gate list, but tested the same way) | **Provable now** — `test_edit_page_query_count_stays_flat_as_variant_count_grows`, flat at 12 queries from 1 to 5 variants |
+| 6. Quality gate green, 80% coverage on `portal` | **Provable now** — see numbers below |
+
+Quality gate, actual numbers this pass: `ruff check` — all checks passed. `ruff format --check` —
+all files formatted. `mypy .` — no issues in 77 source files. `makemigrations --check --dry-run` —
+no changes detected. `pytest` — 150 passed. Coverage: `portal` 96% (floor 80%), `catalog` 96%
+(floor 85%), `core`/`store`/`accounts` 100% (floor 80% each). `manage.py check --deploy` clean
+under prod settings.
 
 **The Staff-group flush bug — a three-layer diagnosis, worth the full chain for Stage 4 and
 Stage 17, both of which will hit adjacent traps:**
@@ -258,13 +283,85 @@ Stage 17, both of which will hit adjacent traps:**
 - Design system (`docs/design.md`) established project-wide, not portal-only — Stage 6's
   storefront inherits the same Tailwind tokens and self-hosted IBM Plex Sans/Mono, diverging in
   layout and voice only, per requirements §1's two-interface split.
-- No standalone variant-delete endpoint exists yet — this pass didn't build the product
-  create/edit view or the variant formset at all (paused before starting them, per the human's
-  scope correction). When that work resumes: the formset's own `clean()` must be the thing that
-  rejects deleting the last variant with a clear message (catalog's deferred trigger is the
-  backstop, not the primary UX path — same reasoning as gate 2 in the original Stage 3 design
-  print). Any *other* delete path (a per-row "quick delete" button, say) would need that same
-  ≥1-variant check threaded through it explicitly — don't add one without it.
+- No standalone variant-delete endpoint exists. `portal/product_views.py` is the only place a
+  `ProductVariant` is created, edited, or deleted from the portal; deletion happens exclusively
+  through the formset's own submission (`formset.deleted_forms`, gated by
+  `BaseProductVariantFormSet.clean()`), so it can't bypass that validation. If a future stage ever
+  adds a per-row "quick delete" button outside the full form, it needs that same ≥1-variant check
+  threaded through explicitly — don't add one without it.
+
+**Product create/edit + variant formset (this pass) — built after an advisor design review per
+the human's explicit instruction, which caught two real gaps before any code was written:**
+`portal/product_forms.py` (`ProductForm`, `ProductVariantForm`, `BaseProductVariantFormSet`),
+`portal/product_views.py` (`ProductCreateView`/`ProductUpdateView`, sharing `_ProductFormsetView`),
+`templates/portal/product_form.html`. Gates 1 and 2 now provable; see Gate status below.
+- **A third invariant hit the same deferrable-with-condition wall as migration 0003's default
+  variant, so it got the same fix.** `variant_unique_attribute_set_per_product` was a partial
+  `UniqueConstraint` (`condition=~Q(attribute_signature="")`) — immediate, since Postgres/Django
+  forbid combining a unique constraint's `condition` with `deferrable=True`. That breaks two edits
+  the formset must support in one transaction: swapping two variants' attribute sets, and deleting
+  one variant while reassigning its attributes to a survivor — both legitimately hold a transient
+  duplicate signature mid-transaction. Migration 0004 replaces it with a deferred `CONSTRAINT
+  TRIGGER`, same mechanism as 0002/0003. Two new tests
+  (`catalog/tests/test_product_variant.py`) prove both previously-impossible edits now succeed.
+- **`ProductVariant.delete()`'s promotion-on-delete had a real, previously undetected bug: the
+  guard condition described in the class docstring was never actually written into the method
+  body.** `test_deleting_old_default_after_explicit_reassignment_leaves_the_new_default_alone`
+  (written before the fix, per CLAUDE.md's "tests alongside the code") failed against the
+  unguarded version, confirming the bug empirically rather than by inspection. Fixed:
+  `if was_default and not product.variants.filter(is_default=True).exists():`. This is what makes
+  the formset's "save survivors, then delete removed variants" order safe — an explicitly
+  reassigned default is already in place by the time the old default is deleted, so the guard
+  correctly no-ops instead of racing a second promotion onto a third, unrelated variant.
+- **The formset never calls `.save()`.** `BaseModelFormSet.save_existing_objects()` only saves a
+  form when `form.has_changed()` — computed from raw submitted data vs. initial, not
+  `cleaned_data` — so a default that `clean()` auto-promotes on an otherwise-untouched form would
+  be silently skipped by Django's own save path. The view iterates every surviving form and saves
+  it unconditionally instead, and reads deletions from `formset.deleted_forms` (available without
+  calling `save()`) rather than `formset.deleted_objects` (only populated by `save()` — using it
+  here would have silently deleted nothing).
+- **`ProductVariantForm.attribute_values`'s `initial` must come from `VariantAttributeValue` rows,
+  or editing a product would silently clear every unmodified variant's attributes** — its value
+  isn't a model field (the relation is a through table), so `ModelForm` never populates it
+  automatically. Verified two ways: a direct unit test on the form's `initial`, and an HTTP-level
+  test where an "untouched" variant's row is resubmitted exactly as the browser would echo it back
+  (existing `attribute_values`, unchanged) while a second variant is edited to collide with it —
+  proving the collision is caught by `clean()` rather than surfacing as an `IntegrityError` from
+  `sync_attribute_signature()` once one variant's row is genuinely untouched by the merchant.
+- **N+1 in the edit page's variant formset — roadmap Stage 3's own named trap, caught by a
+  `CaptureQueriesContext` test before commit, not after.** Two independent sources, both fixed:
+  (1) `ProductVariantForm.__init__` read each existing variant's attributes via
+  `.values_list("value_id", flat=True)` — always issues its own fresh query regardless of
+  prefetching, since only `.all()` with no further queryset method reads a prefetch cache. Fixed
+  by prefetching `variant_attribute_values` on the formset's queryset (passed in from the view)
+  and reading via `.all()` instead. (2) Every form's `attribute_values` field carries its own
+  deep-copied `ModelMultipleChoiceField.queryset` (`BaseForm.__init__` deep-copies every field per
+  form instance), and `ModelChoiceIterator.__iter__` re-iterates that queryset on every render —
+  one query per variant just to build the `<option>` list, independent of (1). Sharing the same
+  queryset *object* across forms doesn't fix this: `_set_queryset` clones via `.all()` on every
+  assignment, and `ModelChoiceIterator` calls `.iterator()` (which never touches `_result_cache`)
+  unless the queryset carries a `prefetch_related` lookup — confirmed against Django's own source
+  comment on that branch. The actual fix: evaluate the choices queryset once in
+  `BaseProductVariantFormSet.add_fields()` and assign a materialised `list[(pk, label)]` to
+  `field.choices` directly, bypassing `ModelChoiceIterator` for rendering entirely (`field.queryset`
+  is untouched and still does its own, unavoidable, POST-only validation query). Measured before
+  and after with the same `CaptureQueriesContext` technique gate 5 already uses: 13→21 queries
+  (1→5 variants) before either fix, 13→17 after prefetching alone, 12→12 after the materialised-
+  choices fix — flat, and the *absolute* count dropped rather than just flattened.
+  `portal/tests/test_product_form.py::test_edit_page_query_count_stays_flat_as_variant_count_grows`
+  is the permanent regression test.
+- `pyproject.toml`'s `[tool.ruff.lint.per-file-ignores]` `"**/forms.py"` pattern (RUF012/ANN401 —
+  Django `Meta.fields` lists and `__init__(*args, **kwargs)` passthrough) widened to
+  `"**/*forms.py"` to also cover `portal/product_forms.py`, which exists as its own module rather
+  than living in `portal/forms.py` only because the formset logic is substantial. Recorded here
+  per the comment already in that file demanding it.
+- The Stage 2 open question about `catalog.services.create_product()` not calling
+  `validate_unique()` (a duplicate `slug` would surface as a raw `IntegrityError`) turns out not to
+  apply to this form: `slug` is excluded from `ProductForm.Meta.fields` entirely (auto-generated in
+  `Product.save()`), and `core/slugs.py`'s `unique_slugify()` already appends `-2`, `-3`, ... on
+  collision rather than raising — verified by reading it, not assumed. Marked resolved *for this
+  specific caller* in Open questions below; the underlying question still applies to any future
+  caller that passes an explicit `slug`.
 
 ---
 
@@ -343,13 +440,16 @@ Questions that did not block progress but need an answer eventually.
   at `/django-admin/` to avoid any visual/URL confusion with the portal once Stage 3 builds it out.
   Assumed in the meantime: Django admin stays a thin StoreSettings-only surface (and whatever
   else warrants it) rather than becoming the merchant's primary interface — the portal is.
-- [Stage 2] `catalog.services.create_product()` calls `Product.save()`, which runs `self.clean()`
-  but never `validate_unique()` — a duplicate explicit `slug` (or any other `unique=True` field)
-  surfaces as a raw Postgres `IntegrityError`, not a Django `ValidationError`. Not a problem at the
-  model/service layer, but Stage 3's product-create form needs a `ValidationError` to render a
-  field-level error instead of a 500. Assumed in the meantime: Stage 3's form calls
-  `full_clean()`/`validate_unique()` itself before calling the service, or the service gains an
-  explicit uniqueness pre-check — decide when building that form, not before.
+- [Stage 2] **Resolved for `portal.product_forms.ProductForm` specifically (Stage 3, this pass) —
+  still open for any other caller.** `catalog.services.create_product()` calls `Product.save()`,
+  which runs `self.clean()` but never `validate_unique()` — a duplicate explicit `slug` (or any
+  other `unique=True` field) surfaces as a raw Postgres `IntegrityError`, not a Django
+  `ValidationError`. This doesn't affect `ProductForm`: `slug` is excluded from
+  `ProductForm.Meta.fields` entirely (it's auto-generated in `Product.save()`), and
+  `core/slugs.py`'s `unique_slugify()` already appends `-2`, `-3`, ... on collision rather than
+  raising — read directly, not assumed. Still applies to any future caller that passes an explicit
+  `slug` value (a management command, a CSV import row with a pre-set slug) — that caller would
+  still need its own `validate_unique()`/uniqueness pre-check.
 - [Stage 3] `accounts.apps._sync_staff_group` reasserts the exact same fixed permission set on
   every `post_migrate` (a real `migrate` *and* a `flush`), which means it also reverts any manual
   permission edit made through `/django-admin/auth/group/` on the Staff group. Full diagnosis and

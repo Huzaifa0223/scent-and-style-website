@@ -173,3 +173,19 @@ clean · every roadmap acceptance gate executed and shown · `specs/state.md` up
   payload and test the truncation path.
 - **Default-variant invariant.** Enforce it on the model, not in the admin form. Every later stage
   depends on it holding.
+- **Deferred constraints vs. partial unique constraints.** Postgres/Django forbid `deferrable=True`
+  on a `UniqueConstraint` that also has a `condition`. Any invariant that must legally hold false
+  for part of a transaction (a formset saving several rows in an order it doesn't control) needs a
+  deferred `CONSTRAINT TRIGGER` instead — see catalog/migrations 0002–0004. Three instances so far;
+  if a fourth partial-uniqueness invariant shows up, assume it needs the same treatment.
+- **`manage.py shell` runs in autocommit.** `on_commit()` hooks and deferred constraint triggers
+  both fire normally there, which makes a shell smoke test look like it proves a commit-time
+  mechanism works. It doesn't prove anything about test behavior: pytest-django's default
+  `@pytest.mark.django_db` wraps each test in a transaction that's rolled back, not committed, so
+  the same code silently never fires there. Anything that depends on a real commit needs
+  `@pytest.mark.django_db(transaction=True)` in its test, not a shell check.
+- **`post_migrate` needs a real `models.py`.** Django's `emit_post_migrate_signal` skips any app
+  whose `AppConfig.models_module` is `None` — an app with no models defined never receives
+  `post_migrate`, silently, with no error. If an app needs a `post_migrate` receiver (a seeded
+  Group, a default row) and has no models of its own yet, give it an empty `models.py` as a
+  sentinel rather than debugging why the signal never arrives.

@@ -283,9 +283,7 @@ def test_edit_rejects_a_new_collision_even_when_the_other_variant_is_unmodified(
 
 
 @pytest.mark.django_db
-def test_edit_page_query_count_stays_flat_as_variant_count_grows(
-    client, django_user_model
-) -> None:  # type: ignore[no-untyped-def]
+def test_edit_page_query_count_stays_flat_as_variant_count_grows(client, django_user_model) -> None:  # type: ignore[no-untyped-def]
     """Roadmap Stage 3's own named trap: "the variant formset is where N+1
     queries enter the codebase." Same technique as the product list's gate
     5 (portal/tests/test_product_list.py) — compare captured query counts
