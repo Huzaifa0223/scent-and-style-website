@@ -10,11 +10,10 @@ disagree, the code is right and this file is stale — fix it.
 
 ## Current position
 
-**Stage:** 4 — Inventory and stock reservation (not started)
-**Status:** Stage 3 is complete — see the Stage 3 log entry below for the full acceptance-gate and
-quality-gate record. Stage 4 has not been started; stopping here per explicit instruction to finish
-Stage 3's log entry and stop before beginning it.
-**Last updated:** 2026-08-12
+**Stage:** 5 — Search (not started)
+**Status:** Stage 4 is complete — see the Stage 4 log entry below for the full design review,
+acceptance-gate, and quality-gate record. Stage 5 has not been started.
+**Last updated:** 2026-08-13
 **CI:** workflow committed (`.github/workflows/ci.yml`), never executed — no push has been made
 to any remote (the human pushes, per CLAUDE.md). Everything it runs has been run locally instead;
 see the Stage 1 log entry for that output.
@@ -23,9 +22,11 @@ see the Stage 1 log entry for that output.
 `accounts/` (login/logout, `PortalPermissionRequiredMixin`, seeded "Staff" Django Group),
 `portal/` product list + Category/Brand/Attribute CRUD + product create/edit with the variant
 inline formset + product image management (upload, drag-reorder, primary selection, delete,
-replace) + publish/unpublish/feature/unfeature/archive quick actions, a project-wide design system
-(`docs/design.md`, `tailwind.config.js` tokens, self-hosted IBM Plex). Stage 3 is fully built;
-Stage 4 (inventory and stock reservation) is next and not started.
+replace) + publish/unpublish/feature/unfeature/archive quick actions + a merchant inventory page,
+`inventory/` (`StockReservation`, `InventoryAdjustment`, the reservation service layer, the
+`release_expired_reservations` sweeper), a project-wide design system (`docs/design.md`,
+`tailwind.config.js` tokens, self-hosted IBM Plex). Stages 1-4 are fully built; Stage 5 (search) is
+next and not started.
 
 ---
 
@@ -539,6 +540,162 @@ now provable; see Acceptance gates above.
   value before the POST and compare against that. Also flagged that gate 5 hadn't been re-run since
   the template it measures changed; re-run explicitly and reported above (flat at 8, unchanged).
 
+### Stage 4 — Inventory and stock reservation
+Completed: 2026-08-13
+Commits: a275730 feat(inventory,store) StockReservation/InventoryAdjustment models
+         27d89fc fix(catalog) available_quantity as a Subquery annotation
+         93c1a76 feat(inventory) reservation service layer + concurrency tests
+         79c841f feat(inventory) release_expired_reservations sweeper command
+         0a6cafc feat(portal) merchant inventory page
+         091cce8 chore: inventory coverage floor in CI, fifth ANN401 pattern
+Acceptance gates: all passed
+  1. Reserve then confirm decrements on-hand and clears the reservation —
+     `inventory/tests/test_services.py::test_gate1_reserve_then_confirm_decrements_stock_and_clears_reservation`.
+  2. Reserve then expire releases the reservation and leaves on-hand untouched —
+     `test_gate2_reserve_then_expire_releases_and_leaves_stock_untouched`.
+  3. Reserve then cancel releases without touching on-hand —
+     `test_gate3_reserve_then_cancel_releases_without_touching_stock`.
+  4. Restore after a post-confirmation cancellation increments on-hand —
+     `test_gate4_restore_after_post_confirmation_cancellation_increments_stock`.
+  5. **Concurrency test** — two simultaneous reservations for the last unit, exactly one succeeds,
+     the other fails with `InsufficientStockError`. Real threads, real separate database
+     connections, `transaction=True` (`inventory/tests/test_concurrency.py::
+     test_two_concurrent_reservations_for_the_last_unit_exactly_one_succeeds`). Verified, not
+     assumed, to have teeth: run once against a build of `reserve()` with `select_for_update()`
+     removed, 104/200 iterations (52%) oversold; restored, 0/200. That verification script is not
+     committed (it required editing `services.py` to prove a negative); the permanent, deterministic
+     guard is `test_reserve_locks_the_variant_row_with_select_for_update`, which asserts `FOR UPDATE`
+     actually appears in the captured SQL rather than relying on timing.
+  6. The sweeper is safe to run twice concurrently — `test_gate6_sweeper_is_safe_to_run_twice_concurrently`
+     (two real threads, both call `release_expired_reservations()`, total released across both
+     equals the fixture count exactly once). True by construction, not just by test: a bulk
+     `DELETE ... WHERE expires_at <= now()` needs no lock at all — see Notes.
+  7. Every adjustment writes an `InventoryAdjustment` row —
+     `test_gate7_manual_adjustment_writes_an_inventory_adjustment_row`, plus `commit_reservation`
+     and `restore` each have their own dedicated assertion on the audit row they write.
+  8. Quality gate green. Coverage floor 90% on `inventory` — see numbers below.
+
+Quality gate, final numbers: `ruff check` — all checks passed. `ruff format --check` — all files
+formatted (105 files). `mypy .` (whole tree, unscoped) — no issues in 97 source files.
+`makemigrations --check --dry-run` — no changes detected. `pytest --create-db` — 224 passed.
+Coverage: `inventory` 98% (`services.py` 100%, `models.py` 90% — only two untested `__str__`
+methods; floor 90%). `manage.py check --deploy` clean under `config.settings.prod` (DEBUG=False,
+ALLOWED_HOSTS set, a real random `SECRET_KEY` via `get_random_secret_key()`, placeholder R2
+credentials). `manage.py check` clean under `config.settings.dev`.
+Coverage: inventory 98% (floor 90%)
+Notes:
+
+**Design was printed and reviewed by advisor before any code was written, per the human's explicit
+instruction — the review caught three real issues, all fixed before implementation:**
+1. `is_low_stock` was originally going to derive from `available_quantity`, same as `is_in_stock`.
+   Advisor caught that this conflates two different questions: `is_in_stock` is customer-facing
+   ("can this be bought right now" → availability), `is_low_stock` is merchant-facing ("I have 3
+   left on the shelf, reorder" → on-hand). Basing low-stock on availability would make it flicker
+   on and off as unrelated reservations are created and expire against the same physical stock,
+   telling a merchant to reorder when they have plenty on the shelf. Fixed: `is_low_stock` derives
+   from `stock_quantity`, `is_in_stock` from `available_quantity` — different expressions,
+   documented in `with_available_quantity()`'s own docstring so a future reader doesn't "fix" the
+   inconsistency back.
+2. The three places that decide "is this reservation still active" (`reserve()`'s own check, the
+   `with_available_quantity()` annotation, the sweeper's bulk delete) originally mixed Python's
+   `timezone.now()` and the database's `Now()`. Advisor flagged this as a real inconsistency, not
+   theoretical — three call sites deciding the same predicate from two different clocks. Fixed: all
+   three compare against `Now()` (`django.db.models.functions`), never `timezone.now()`, except for
+   the one place that must produce an actual Python value to store (`expires_at`'s own write).
+3. The original concurrency test (barrier-synchronised threads only) could pass even with
+   `select_for_update()` removed — the oversell window is microseconds wide and a barrier alone
+   doesn't force it. Verified empirically before trusting gate 5 (see gate 5 above for the numbers)
+   and added a second, deterministic test that asserts the lock is actually issued
+   (`test_reserve_locks_the_variant_row_with_select_for_update`), rather than relying on timing
+   alone to occasionally expose its absence.
+4. (Naming, not a design issue) `adjust()`'s quantity parameter was originally `new_quantity`;
+   advisor flagged that `restore(quantity=...)` is a delta and `adjust(new_quantity=...)` is
+   absolute — same-looking argument, two different meanings, one call away from silently corrupting
+   stock. Renamed to `absolute_quantity`.
+
+**A second, independent review — the user's own, mid-implementation, before the portal page was
+built — caught a real fan-out bug that both the design print and the advisor review missed:**
+`with_available_quantity()`'s first implementation used `Sum("reservations__quantity", filter=
+Q(reservations__expires_at__gt=Now()))` — a join-based aggregate, the same idiom
+`ProductQuerySet.with_pricing()` already uses safely for `display_price`. The difference: that
+method is on `Product`, which has no *second* to-many relation routinely joined alongside its own
+aggregate. This one is on `ProductVariant`, which already has `variant_attribute_values` (another
+to-many reverse relation) — and the moment a caller's queryset joins *that* relation too (Stage 3's
+attribute filtering does this routinely; Stage 6's listing page is expected to combine variant
+availability with other per-variant joins), two to-many tables joined into one query multiply rows
+before `GROUP BY` collapses them back down, so the sum silently overcounts by whatever multiplier
+the other join contributed. Verified, not assumed: temporarily reverted to the join-based form and
+ran `inventory/tests/test_available_quantity_fan_out.py` — both tests failed exactly as the
+mechanism predicts (2 reservations × 2 attribute values read as `reserved_quantity=10`, not 5; a
+second scenario with 3×3 read as 9, not 3). Restored a `Subquery`/`OuterRef` form (evaluated
+independently per outer row, immune to whatever else the caller's queryset joins) and reran — both
+tests pass. `reserved_quantity` is now its own named annotation (not just embedded inside
+`available_quantity`'s expression) so the portal inventory page can display it directly, and so
+`is_in_stock`/`is_low_stock` reference it/`stock_quantity` rather than re-deriving it. A third test
+(`test_the_safe_pattern_for_combining_with_pricing_and_with_available_quantity`) documents the
+actually-safe way to combine `with_pricing()` and `with_available_quantity()` for Stage 6:
+`Prefetch()`, which runs as its own query and can never fan out against a JOIN-based annotation on
+a different queryset.
+- `with_available_quantity()` resolves `StockReservation` via `django.apps.apps.get_model(
+  "inventory", "StockReservation")` rather than a top-level `from inventory.models import
+  StockReservation` — catalog must not import from an app that depends on it (the same direction
+  CLAUDE.md states for catalog/orders). This is the Django-idiomatic way to build a real `Subquery`
+  queryset from app B inside app A's queryset method without a static import creating that
+  dependency at the Python import-graph level.
+- **`StockReservation` has no `order` FK yet — a real technical blocker, not a style choice,
+  resolved before writing any code.** The roadmap's Stage 4 deliverable line says "order FK nullable
+  until stage 8," but `orders.Order` doesn't exist until Stage 8 builds it, and Django cannot define
+  a `ForeignKey` to a model in an app that isn't installed (`manage.py check` would fail with E300).
+  Read "nullable until stage 8" as describing the field's eventual shape, not something Stage 4
+  could literally build now; the field will be added via `AddField` when Stage 8 creates
+  `orders.Order`. Recorded under Proposed spec amendments below.
+- **`InventoryAdjustment.reason` is always caller-determined or hardcoded, never a free-choice
+  parameter for the merchant.** `adjust()` (manual) always writes `Reason.MANUAL` — no ambiguity,
+  that path is only ever taken for manual counts. `commit_reservation()` always writes
+  `Reason.ORDER_CONFIRMED` — same reasoning. `restore()` takes `reason` as a required parameter
+  because the caller (Stage 8/10's order workflow) is the one who knows whether this is a
+  cancellation or a return; that distinction doesn't belong to the inventory service layer.
+- **The portal inventory page is Owner-only, not Staff — a permission decision already made by a
+  prior stage, not a fresh one.** `accounts/permissions.py`'s `_STAFF_PERMISSION_APP_LABELS =
+  ("catalog",)` docstring already says "requirements §32's fuller orders/inventory/customers scope
+  arrives in roadmap Stage 17, which extends `_STAFF_PERMISSION_APP_LABELS`" — Staff is deliberately
+  meant to have zero `inventory` app permissions until then. `InventoryListView`/`InventoryAdjustView`
+  are gated on `inventory.view_stockreservation`/`inventory.add_inventoryadjustment` rather than any
+  `catalog.*` permission specifically so this holds without special-casing — Staff has no grant on
+  those codenames, so `PortalPermissionRequiredMixin` blocks them (403) automatically. Tested
+  directly (`portal/tests/test_inventory.py::test_staff_cannot_view_the_inventory_page`,
+  `test_staff_cannot_post_an_adjustment`).
+- **Open question, not fixed this stage.** Stage 3's `ProductVariantForm` (the product edit page's
+  variant formset) still includes `stock_quantity` as a directly-editable field — set on the roadmap
+  itself ("variant inline formset (SKU, price, compare-at, stock, ...)"), and edits through it write
+  straight to the row via `variant.save()`, bypassing `inventory.services.adjust()` entirely and
+  writing no `InventoryAdjustment` row. This is a real gap in the audit-completeness gate 7 claims
+  to guarantee, but removing the field would contradict Stage 3's own explicit, already-shipped
+  roadmap deliverable and break its existing gate-1 test. Left as-is, consistent with how this
+  codebase already treats Django admin bypassing service-layer validation (`catalog/services.py`'s
+  own docstring: "the deferred constraint trigger... is the backstop for anything that bypasses it
+  \[the service\] (Django admin, a raw script)") — a DB-level backstop rather than a hard guarantee
+  every write path is audited. Revisit if audit completeness ever needs to be airtight (the future
+  `audit.AuditLog` app, or Stage 17's fuller inventory permissions).
+- Fifth `[tool.ruff.lint.per-file-ignores]` `ANN401` pattern added:
+  `"**/management/commands/*.py"` — a management command's `handle(*args, **options)` must match
+  Django's own `BaseCommand` signature, same reasoning as the existing CBV/form overrides. Generic
+  across apps (not `inventory`-specific) since Stage 13's backup job will be another one. The
+  section's own comment says a fifth pattern must be recorded here rather than just appended silently
+  — this is that record.
+- `release_expired_reservations`'s idempotency and concurrency-safety are true by construction, not
+  just by test: a bulk `DELETE ... WHERE expires_at <= now()` needs no `select_for_update()` at all
+  — two sweepers racing each other simply both issue the same statement; whichever commits first
+  deletes the matching rows, the other matches zero of them and returns 0. No lock contention beyond
+  what Postgres already does for any `DELETE`, no double-processing, no error path. Cron entry (every
+  10 minutes) documented in `README.md`.
+- Portal inventory page verified live in a browser (not just the Django test client): logged in,
+  confirmed on-hand/reserved/available/status render correctly for a variant with an active
+  reservation, set a new stock count via the inline adjustment form and confirmed the success
+  message and recalculated available quantity, and confirmed the low-stock filter correctly
+  excludes a variant once its stock is raised above the threshold. Temporary superuser and fixture
+  product removed afterward; nothing from this check is in the dev database or repo.
+
 ---
 
 ## Deviations from spec
@@ -600,6 +757,13 @@ says, and continue. The human resolves these.
   deviation since it's a necessary structural implication of a field the spec already asks for,
   but flagging in case a fuller Tag model (e.g. `is_published`, per-tag SEO fields) was intended
   and just not spelled out.
+- [Stage 4] Roadmap's Stage 4 deliverable line — `StockReservation (variant, order FK nullable
+  until stage 8, quantity, expires_at indexed)` — describes a field Stage 4 cannot literally build:
+  `orders.Order` doesn't exist until Stage 8 creates it, and Django cannot define a `ForeignKey` to
+  a model in an uninstalled app (`manage.py check` would fail with E300, a real, checked error, not
+  a style concern). Read as describing the field's eventual shape rather than a literal Stage 4
+  instruction. Proposed change: `StockReservation` ships without `order` in Stage 4; Stage 8 adds it
+  via `AddField` once `orders.Order` exists, starting nullable as the roadmap already says.
 
 ---
 
@@ -639,6 +803,12 @@ Questions that did not block progress but need an answer eventually.
   merchant admin-driven catalog where concurrent creates are rare. Stage 4 establishes
   `select_for_update()` discipline for real concurrency (stock reservations) — revisit whether
   the same pattern is worth applying here at that point, rather than fixing it in isolation now.
+- [Stage 4] Stage 3's `ProductVariantForm` still edits `stock_quantity` directly (a roadmap-mandated
+  field on that formset), bypassing `inventory.services.adjust()` and writing no
+  `InventoryAdjustment` audit row. Full reasoning in this file's Stage 4 notes, above. Assumed in
+  the meantime: acceptable, matching how this codebase already treats Django admin bypassing
+  service-layer validation elsewhere (a documented gap, not a silent one). Revisit when audit
+  completeness needs to be airtight (the future `audit.AuditLog` app, or Stage 17).
 
 ---
 
