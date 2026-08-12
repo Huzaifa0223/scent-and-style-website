@@ -11,11 +11,21 @@ disagree, the code is right and this file is stale — fix it.
 ## Current position
 
 **Stage:** 3 — Merchant portal: catalog management
-**Status:** not started
+**Status:** in progress, paused for human review — see the checkpoint report at `specs/report.md`
+for exactly what's done vs. outstanding. Not yet a completed-stage log entry below; this note is a
+placeholder until the human resumes and the stage actually finishes.
 **Last updated:** 2026-08-12
 **CI:** workflow committed (`.github/workflows/ci.yml`), never executed — no push has been made
 to any remote (the human pushes, per CLAUDE.md). Everything it runs has been run locally instead;
 see the Stage 1 log entry for that output.
+
+**What's landed so far (all committed, quality gate green, see `specs/report.md` for detail):**
+`accounts/` (login/logout, `PortalPermissionRequiredMixin`, seeded "Staff" Django Group),
+`portal/` product list + Category/Brand/Attribute CRUD, and a project-wide design system
+(`docs/design.md`, `tailwind.config.js` tokens, self-hosted IBM Plex). **Not started:** product
+create/edit, the variant formset, image management, publish/unpublish/feature/archive actions —
+deliberately paused here at the human's request, pending review of the design and the corrections
+made along the way.
 
 ---
 
@@ -187,6 +197,75 @@ Notes:
     shell" is not evidence a commit-time mechanism works under the test suite. Stage 4's
     reservation concurrency tests hit the same trap.
 
+### Stage 3 — Merchant portal: catalog management (in progress, paused for review)
+Not yet a completed-stage entry — see `specs/report.md` for the checkpoint the human is
+reviewing, and the top of this file's "Current position" for what's landed vs. outstanding. Notes
+below are worth keeping regardless of how the paused work resolves.
+
+Commits so far: `029f20b` fix(catalog) default-variant promotion, `e419e76` feat(accounts,portal)
+auth + portal shell + catalog CRUD, `9a5a15e` feat(design) design system.
+
+**The Staff-group flush bug — a three-layer diagnosis, worth the full chain for Stage 4 and
+Stage 17, both of which will hit adjacent traps:**
+1. *Migration-timing layer.* A data migration that queries `Permission.objects.filter(
+   content_type__app_label="catalog")` can run **before** those Permission rows exist. Django
+   creates each app's default permissions via `post_migrate`, which fires once, only after *every*
+   migration in the current run has already applied — a `RunPython` operation runs *during* that
+   sequence. On a database that's been migrated incrementally over many separate `migrate` calls
+   (this project's dev DB, built up stage by stage) the permissions already exist from earlier
+   runs, masking the bug; on a database migrated fresh in one shot (CI, a new clone, pytest's
+   `--create-db`) they don't yet exist at that point, and the migration silently creates a group
+   with zero permissions. Fixed by calling Django's own `create_permissions()` against the real
+   (non-historical) app registry before querying, inside the migration.
+2. *Flush layer.* Even with (1) fixed, a `@pytest.mark.django_db(transaction=True)` test's
+   teardown calls Django's `flush` command, which truncates every table (including `auth_group`)
+   and then re-fires `post_migrate` to restore baseline data — restoring Django's own default
+   Permissions (`create_permissions` is itself a `post_migrate` receiver) but *not* anything a
+   migration's `RunPython` did, since that's not signal-driven. Confirmed empirically: one
+   `transaction=True` test running anywhere in the suite permanently wiped the Staff group for the
+   rest of that physical database's life (verified by querying the test DB directly via `psql`
+   after a fully-green pytest run). Fixed by adding a `post_migrate` receiver in
+   `accounts/apps.py` that reasserts group membership every time migrations settle — `post_migrate`
+   fires after both a normal `migrate` *and* a `flush`, which is exactly the coverage the one-time
+   migration was missing.
+3. *Silent-skip layer — the one that actually explains why (2)'s fix didn't work on the first
+   try.* Django's `emit_post_migrate_signal` skips any app whose `AppConfig.models_module` is
+   `None` — which is exactly what happens when an app has no `models.py` at all. `accounts` had no
+   models (no models needed — it only adds Group/Permission wiring to Django's own `auth`
+   models), so its `post_migrate` signal was **never being sent**, meaning the layer-2 receiver
+   silently never fired, for either a fresh `migrate` or a `flush`. The fix was adding an empty
+   `accounts/models.py` purely so Django's app-loading sets `models_module` to a truthy value.
+   This is a real trap, not an edge case: **any future app built without a `models.py` — a
+   pure-service app, a pure-views app — that ever needs a `post_migrate` receiver will hit the
+   exact same silent failure**, and it will look like the receiver's logic is wrong when the
+   receiver is actually just never being called at all. Stage 4's inventory sweeper and Stage 17's
+   granular-permissions work are the most likely places this recurs.
+- **Open question.** `accounts.apps._sync_staff_group` reasserts the *exact* same permission set
+  on every `post_migrate` (both a real `migrate` and a `flush`). That means it also **reverts any
+  manual permission change** made through `/django-admin/auth/group/` — if the Owner hand-edits
+  the Staff group's permissions outside this code, the next migrate or flush silently takes the
+  edit back. Acceptable for Stage 3 (nobody has a reason to hand-edit this group yet, since it's
+  catalog-only and freshly seeded). Stage 17 ("staff role and granular permissions") replaces this
+  blunt sync-to-a-fixed-set behavior with real permission management and needs to account for this
+  — either by making the sync additive-only (never revoke), or by dropping the post_migrate
+  resync entirely once there's a portal UI that's the actual source of truth for group membership.
+- Gate 4's "store settings and user management" is tested against `/django-admin/`, not a new
+  portal view — confirmed empirically that a plain `is_staff=False` user gets redirected (302) by
+  django-admin's own login gate rather than denied (403), so the gate-4 test fixture is
+  `is_staff=True` (can reach the django-admin login) with Staff-group catalog permissions only (no
+  `store`/`auth` permissions) — matching what a real deploy would look like for a trusted employee
+  who's never been granted those two permissions specifically.
+- Design system (`docs/design.md`) established project-wide, not portal-only — Stage 6's
+  storefront inherits the same Tailwind tokens and self-hosted IBM Plex Sans/Mono, diverging in
+  layout and voice only, per requirements §1's two-interface split.
+- No standalone variant-delete endpoint exists yet — this pass didn't build the product
+  create/edit view or the variant formset at all (paused before starting them, per the human's
+  scope correction). When that work resumes: the formset's own `clean()` must be the thing that
+  rejects deleting the last variant with a clear message (catalog's deferred trigger is the
+  backstop, not the primary UX path — same reasoning as gate 2 in the original Stage 3 design
+  print). Any *other* delete path (a per-row "quick delete" button, say) would need that same
+  ≥1-variant check threaded through it explicitly — don't add one without it.
+
 ---
 
 ## Deviations from spec
@@ -271,6 +350,11 @@ Questions that did not block progress but need an answer eventually.
   field-level error instead of a 500. Assumed in the meantime: Stage 3's form calls
   `full_clean()`/`validate_unique()` itself before calling the service, or the service gains an
   explicit uniqueness pre-check — decide when building that form, not before.
+- [Stage 3] `accounts.apps._sync_staff_group` reasserts the exact same fixed permission set on
+  every `post_migrate` (a real `migrate` *and* a `flush`), which means it also reverts any manual
+  permission edit made through `/django-admin/auth/group/` on the Staff group. Full diagnosis and
+  the Stage 17 implication are in this file's Stage 3 notes, above. Assumed in the meantime:
+  nobody hand-edits this group before Stage 17 replaces the sync mechanism.
 - [Stage 2] `catalog.services._generate_unique_sku()` (and `core.slugs.unique_slugify()`) have a
   check-then-create race: `filter(...).exists()` then `create()`, two statements, no locking
   between them. Two concurrent product creations can pick the same candidate SKU/slug; the
