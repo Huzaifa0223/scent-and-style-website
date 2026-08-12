@@ -1,0 +1,167 @@
+{% extends "portal/base.html" %}
+
+{% block title %}Inventory — {{ store_settings.name }} Portal{% endblock %}
+
+{% block portal_breadcrumbs %}Inventory{% endblock %}
+
+{% block content %}
+  <h1 class="mb-4 text-xl font-semibold text-ink">Inventory</h1>
+
+  <form method="get" class="mb-4 flex flex-wrap gap-3">
+    <input
+      type="text"
+      name="q"
+      value="{{ current_q }}"
+      placeholder="Search product or SKU"
+      class="min-h-11 rounded border border-border-interactive bg-surface px-3 text-sm text-ink
+             focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent"
+    />
+    <select
+      name="stock"
+      class="min-h-11 rounded border border-border-interactive bg-surface px-3 text-sm text-ink
+             focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent"
+    >
+      <option value="">All stock levels</option>
+      <option value="low" {% if current_stock == "low" %}selected{% endif %}>Low stock</option>
+      <option value="out" {% if current_stock == "out" %}selected{% endif %}>Out of stock</option>
+    </select>
+    <select
+      name="category"
+      class="min-h-11 rounded border border-border-interactive bg-surface px-3 text-sm text-ink
+             focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent"
+    >
+      <option value="">All categories</option>
+      {% for category in categories %}
+        <option value="{{ category.slug }}" {% if current_category == category.slug %}selected{% endif %}>
+          {{ category.name }}
+        </option>
+      {% endfor %}
+    </select>
+    <select
+      name="brand"
+      class="min-h-11 rounded border border-border-interactive bg-surface px-3 text-sm text-ink
+             focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent"
+    >
+      <option value="">All brands</option>
+      {% for brand in brands %}
+        <option value="{{ brand.slug }}" {% if current_brand == brand.slug %}selected{% endif %}>
+          {{ brand.name }}
+        </option>
+      {% endfor %}
+    </select>
+    <button
+      type="submit"
+      class="inline-flex min-h-11 items-center justify-center rounded border
+             border-border-interactive px-4 text-sm font-medium text-ink hover:bg-paper
+             focus:outline-none focus-visible:ring-2 focus-visible:ring-accent
+             focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
+    >
+      Filter
+    </button>
+  </form>
+
+  <div class="overflow-x-auto rounded-lg border border-border-subtle bg-surface shadow-card">
+    <table class="min-w-full divide-y divide-border-subtle text-sm">
+      <thead class="bg-paper text-left text-xs font-semibold uppercase tracking-wide text-text-muted">
+        <tr>
+          <th class="px-4 py-3">Product</th>
+          <th class="px-4 py-3">Variant</th>
+          <th class="px-4 py-3">SKU</th>
+          <th class="px-4 py-3">On hand</th>
+          <th class="px-4 py-3">Reserved</th>
+          <th class="px-4 py-3">Available</th>
+          <th class="px-4 py-3">Status</th>
+          <th class="px-4 py-3">Adjust</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-border-subtle">
+        {% for variant in variants %}
+          <tr>
+            <td class="px-4 py-3 text-ink">{{ variant.product.name }}</td>
+            <td class="px-4 py-3 text-text-muted">
+              {% for vav in variant.variant_attribute_values.all %}
+                {{ vav.value }}{% if not forloop.last %}, {% endif %}
+              {% empty %}
+                —
+              {% endfor %}
+            </td>
+            <td class="px-4 py-3 font-mono text-text-muted">{{ variant.sku }}</td>
+            <td class="px-4 py-3 font-mono text-ink">{{ variant.stock_quantity }}</td>
+            <td class="px-4 py-3 font-mono text-text-muted">{{ variant.reserved_quantity }}</td>
+            <td class="px-4 py-3 font-mono text-ink">{{ variant.available_quantity }}</td>
+            <td class="px-4 py-3">
+              {% if not variant.is_in_stock %}
+                {% include "portal/_badge.html" with tone="danger" label="Out of stock" %}
+              {% elif variant.is_low_stock %}
+                {% include "portal/_badge.html" with tone="warning" label="Low stock" %}
+              {% else %}
+                {% include "portal/_badge.html" with tone="success" label="In stock" %}
+              {% endif %}
+            </td>
+            <td class="px-4 py-3">
+              <form
+                method="post"
+                action="{% url 'portal:inventory_adjust' variant.pk %}"
+                class="flex items-center gap-2"
+              >
+                {% csrf_token %}
+                <input
+                  type="number"
+                  name="absolute_quantity"
+                  min="0"
+                  value="{{ variant.stock_quantity }}"
+                  aria-label="New stock count for {{ variant.sku }}"
+                  class="min-h-11 w-20 rounded border border-border-interactive bg-surface px-2
+                         text-sm text-ink focus:border-accent focus:outline-none focus:ring-2
+                         focus:ring-accent"
+                />
+                <button
+                  type="submit"
+                  class="inline-flex min-h-11 items-center rounded px-2 text-xs font-medium
+                         text-accent hover:text-accent-hover focus:outline-none
+                         focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+                >
+                  Set
+                </button>
+              </form>
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="8" class="px-4 py-6 text-center text-text-muted">
+              No variants match these filters.
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if is_paginated %}
+    <nav class="mt-4 flex items-center justify-between text-sm text-text-muted">
+      <span>Page {{ page_obj.number }} of {{ paginator.num_pages }}</span>
+      <div class="flex gap-2">
+        {% if page_obj.has_previous %}
+          <a
+            href="?page={{ page_obj.previous_page_number }}"
+            class="inline-flex min-h-11 items-center rounded border border-border-interactive px-3
+                   hover:bg-paper focus:outline-none focus-visible:ring-2 focus-visible:ring-accent
+                   focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
+          >
+            Previous
+          </a>
+        {% endif %}
+        {% if page_obj.has_next %}
+          <a
+            href="?page={{ page_obj.next_page_number }}"
+            class="inline-flex min-h-11 items-center rounded border border-border-interactive px-3
+                   hover:bg-paper focus:outline-none focus-visible:ring-2 focus-visible:ring-accent
+                   focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
+          >
+            Next
+          </a>
+        {% endif %}
+      </div>
+    </nav>
+  {% endif %}
+{% endblock %}

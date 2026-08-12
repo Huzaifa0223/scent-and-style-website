@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from django.urls import URLPattern, path
 
-from . import image_views, product_actions, product_views, taxonomy_views, views
+from . import image_views, inventory_views, product_actions, product_views, taxonomy_views, views
 
 app_name = "portal"
 
@@ -87,5 +87,11 @@ urlpatterns: list[URLPattern] = [
         "attributes/<int:pk>/values/<int:value_pk>/delete/",
         taxonomy_views.AttributeValueDeleteView.as_view(),
         name="attribute_value_delete",
+    ),
+    path("inventory/", inventory_views.InventoryListView.as_view(), name="inventory_list"),
+    path(
+        "inventory/<int:pk>/adjust/",
+        inventory_views.InventoryAdjustView.as_view(),
+        name="inventory_adjust",
     ),
 ]
