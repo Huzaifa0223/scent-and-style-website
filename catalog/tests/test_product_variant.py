@@ -118,8 +118,35 @@ def test_deleting_the_default_variant_promotes_the_next_by_position() -> None:
 
 
 @pytest.mark.django_db
+def test_deleting_old_default_after_explicit_reassignment_leaves_the_new_default_alone() -> None:
+    """Proves the guard in ProductVariant.delete() ("promote next by
+    position" only fires if no other variant already holds
+    is_default=True). third has a lower position than new_default, so
+    without the guard, deleting old_default would unconditionally promote
+    third — leaving two rows with is_default=True even though the caller
+    had already made an explicit, different choice."""
+    product = ProductFactory()  # default variant already is_default=True
+    old_default = product.variants.get(is_default=True)
+    new_default = ProductVariantFactory(product=product, sku="NEW-DEFAULT", position=5)
+    third = ProductVariantFactory(product=product, sku="THIRD", position=1)
+
+    new_default.is_default = True
+    new_default.save(update_fields=["is_default", "updated_at"])
+    old_default.delete()
+
+    assert product.variants.filter(is_default=True).count() == 1
+    new_default.refresh_from_db()
+    third.refresh_from_db()
+    assert new_default.is_default is True
+    assert third.is_default is False
+
+
+@pytest.mark.django_db(transaction=True)
 def test_two_variants_with_identical_attribute_set_raise_integrity_error() -> None:
-    """Acceptance gate 4."""
+    """Acceptance gate 4. migration 0004 made this constraint a deferred
+    trigger — checked at COMMIT, not after the offending statement — so
+    this needs a real commit to observe, like the default-variant
+    constraint tests above."""
     product = ProductFactory()
     size = AttributeDefinitionFactory(name="Size")
     size_50 = AttributeValueFactory(definition=size, value="50ml")
@@ -128,8 +155,9 @@ def test_two_variants_with_identical_attribute_set_raise_integrity_error() -> No
     VariantAttributeValue.objects.create(variant=v1, value=size_50)
 
     v2 = ProductVariantFactory(product=product, sku="V2")
-    with pytest.raises(IntegrityError), transaction.atomic():
-        VariantAttributeValue.objects.create(variant=v2, value=size_50)
+    with pytest.raises(IntegrityError):
+        with transaction.atomic():
+            VariantAttributeValue.objects.create(variant=v2, value=size_50)
 
 
 @pytest.mark.django_db
@@ -145,6 +173,59 @@ def test_variants_with_different_attribute_sets_are_both_allowed() -> None:
     VariantAttributeValue.objects.create(variant=v2, value=size_100)
 
     assert ProductVariant.objects.filter(product=product).count() == 3  # default + v1 + v2
+
+
+@pytest.mark.django_db(transaction=True)
+def test_swapping_attribute_sets_between_two_variants_succeeds() -> None:
+    """The whole reason attribute_signature uniqueness is a deferred
+    constraint trigger (migration 0004), not a plain partial unique index:
+    the portal formset's own save order (v1 first, v2 second) makes v1's
+    saved signature briefly equal v2's still-unchanged one. That must not
+    raise, and the immediate version of this constraint would have."""
+    product = ProductFactory()
+    size = AttributeDefinitionFactory(name="Size")
+    size_50 = AttributeValueFactory(definition=size, value="50ml")
+    size_100 = AttributeValueFactory(definition=size, value="100ml")
+
+    v1 = ProductVariantFactory(product=product, sku="V1")
+    VariantAttributeValue.objects.create(variant=v1, value=size_50)
+    v2 = ProductVariantFactory(product=product, sku="V2")
+    VariantAttributeValue.objects.create(variant=v2, value=size_100)
+
+    with transaction.atomic():
+        VariantAttributeValue.objects.get(variant=v1, value=size_50).delete()
+        VariantAttributeValue.objects.create(variant=v1, value=size_100)
+        VariantAttributeValue.objects.get(variant=v2, value=size_100).delete()
+        VariantAttributeValue.objects.create(variant=v2, value=size_50)
+
+    v1.refresh_from_db()
+    v2.refresh_from_db()
+    assert v1.attribute_signature == str(size_100.pk)
+    assert v2.attribute_signature == str(size_50.pk)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_deleting_a_variant_and_reassigning_its_attributes_to_a_survivor_succeeds() -> None:
+    """Same deferred-trigger reasoning, for the other shape the formset
+    must support: deleting v1 while giving its attribute set to a
+    previously-blank survivor, saved before the delete (the formset's
+    survivors-then-deletes order) — v1 and survivor briefly share the same
+    signature until v1's row is gone."""
+    product = ProductFactory()
+    size = AttributeDefinitionFactory(name="Size")
+    size_50 = AttributeValueFactory(definition=size, value="50ml")
+
+    v1 = ProductVariantFactory(product=product, sku="V1")
+    VariantAttributeValue.objects.create(variant=v1, value=size_50)
+    survivor = ProductVariantFactory(product=product, sku="SURVIVOR")
+
+    with transaction.atomic():
+        VariantAttributeValue.objects.create(variant=survivor, value=size_50)
+        v1.delete()
+
+    survivor.refresh_from_db()
+    assert survivor.attribute_signature == str(size_50.pk)
+    assert ProductVariant.objects.filter(pk=v1.pk).exists() is False
 
 
 @pytest.mark.django_db

@@ -338,6 +338,31 @@ class ProductVariant(TimeStampedModel):
     next variant by position, mirroring ``ProductImage.delete()``'s
     primary-image promotion, so "every product has a default variant" holds
     for as long as it has any variant at all, not just at creation time.
+
+    That promotion only fires if no *other* variant already holds
+    ``is_default=True``. Without that guard, a caller that explicitly
+    assigns a new default before deleting the old one (Stage 3's portal
+    formset: save survivors first, delete removed variants second, so the
+    deferred trigger's transient-multi-default tolerance during the request
+    doesn't matter) would race against the auto-promotion picking a third,
+    unrelated variant by position — briefly leaving two rows with
+    ``is_default=True`` and failing the deferred trigger at commit for a
+    reason that has nothing to do with the actual edit. The guard assumes
+    "at most one default" already held before the delete — that's the
+    deferred trigger's job, not this method's; if it didn't hold, this
+    method now leaves the pre-existing extra default in place rather than
+    also promoting a second one, which is the safer of two wrong outcomes,
+    not a fix for the underlying corruption.
+
+    ``attribute_signature`` uniqueness per product is the same story a third
+    time (catalog/migrations/0004): a plain partial unique index forces
+    every request that changes two variants' attribute sets in one
+    transaction — swapping 50ml/100ml between two variants, or deleting one
+    variant and reassigning its attributes to a survivor — into a specific
+    statement order that avoids ever holding a transient duplicate, which
+    Stage 3's formset (saves survivors in form order, not attribute-aware
+    order) can't guarantee. Deferred to COMMIT for the same reason as the
+    other two.
     """
 
     objects = ProductVariantQuerySet.as_manager()
@@ -366,19 +391,9 @@ class ProductVariant(TimeStampedModel):
 
     class Meta:
         ordering = ["position", "id"]
-        constraints = [
-            # Blank signatures are excluded: a variant is created before its
-            # VariantAttributeValue rows can point at it (they need its pk),
-            # so it necessarily sits at "" for a moment — and the
-            # auto-created default variant may legitimately stay at "" for
-            # its whole life on a single-variant product. Only non-blank
-            # (real) attribute sets need to be unique per product.
-            models.UniqueConstraint(
-                fields=["product", "attribute_signature"],
-                condition=~Q(attribute_signature=""),
-                name="variant_unique_attribute_set_per_product",
-            ),
-        ]
+        # No Django-level uniqueness constraint on attribute_signature: see
+        # the class docstring above. Enforced by a deferred constraint
+        # trigger instead (catalog/migrations/0004).
 
     def __str__(self) -> str:
         return self.sku
@@ -387,7 +402,7 @@ class ProductVariant(TimeStampedModel):
         product = self.product
         was_default = self.is_default
         result = super().delete(*args, **kwargs)
-        if was_default:
+        if was_default and not product.variants.filter(is_default=True).exists():
             next_variant = product.variants.order_by("position", "id").first()
             if next_variant is not None:
                 next_variant.is_default = True
