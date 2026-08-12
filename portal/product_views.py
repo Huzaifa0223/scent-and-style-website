@@ -25,6 +25,7 @@ from django.views.generic import View
 from accounts.mixins import PortalPermissionRequiredMixin
 from catalog.models import AttributeValue, Product, ProductVariant, VariantAttributeValue
 
+from .image_forms import ProductImageUploadForm
 from .product_forms import (
     ProductForm,
     ProductVariantEditFormSet,
@@ -75,11 +76,16 @@ class _ProductFormsetView(PortalPermissionRequiredMixin, View):
     def _render(
         self, product: Product | None, form: ProductForm, formset: _VariantFormSet
     ) -> HttpResponse:
-        return render(
-            self.request,
-            self.template_name,
-            {"object": product, "form": form, "formset": formset},
-        )
+        context: dict[str, Any] = {"object": product, "form": form, "formset": formset}
+        if product is not None:
+            # prefetch_related("variants") is what keeps each image row's
+            # "hero image for: ..." note (ProductVariant.image's reverse
+            # accessor) from costing one query per image — the same N+1
+            # shape the variant formset had, caught by a query-count test
+            # before this view existed rather than after.
+            context["images"] = product.images.prefetch_related("variants")
+            context["image_upload_form"] = ProductImageUploadForm()
+        return render(self.request, self.template_name, context)
 
     def _save(self, form: ProductForm, formset: _VariantFormSet) -> HttpResponseRedirect:
         """One transaction for the whole edit: product, every surviving

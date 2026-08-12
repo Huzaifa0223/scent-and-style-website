@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from django.urls import URLPattern, path
 
-from . import product_views, taxonomy_views, views
+from . import image_views, product_views, taxonomy_views, views
 
 app_name = "portal"
 
@@ -10,6 +10,26 @@ urlpatterns: list[URLPattern] = [
     path("products/", views.ProductListView.as_view(), name="product_list"),
     path("products/create/", product_views.ProductCreateView.as_view(), name="product_create"),
     path("products/<int:pk>/edit/", product_views.ProductUpdateView.as_view(), name="product_edit"),
+    path(
+        "products/<int:pk>/images/upload/",
+        image_views.ProductImageUploadView.as_view(),
+        name="product_image_upload",
+    ),
+    path(
+        "products/<int:pk>/images/reorder/",
+        image_views.ProductImageReorderView.as_view(),
+        name="product_image_reorder",
+    ),
+    path(
+        "products/<int:pk>/images/<int:image_pk>/delete/",
+        image_views.ProductImageDeleteView.as_view(),
+        name="product_image_delete",
+    ),
+    path(
+        "products/<int:pk>/images/<int:image_pk>/replace/",
+        image_views.ProductImageReplaceView.as_view(),
+        name="product_image_replace",
+    ),
     path("categories/", taxonomy_views.CategoryListView.as_view(), name="category_list"),
     path("categories/create/", taxonomy_views.CategoryCreateView.as_view(), name="category_create"),
     path(

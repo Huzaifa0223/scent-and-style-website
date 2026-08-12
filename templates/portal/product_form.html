@@ -88,4 +88,142 @@
 
     {% include "portal/_button_primary.html" with type="submit" label="Save" %}
   </form>
+
+  {% if object %}
+    <div class="mt-8 max-w-4xl">
+      <h2 class="mb-2 text-lg font-semibold text-ink">Images</h2>
+      <p class="mb-4 text-sm text-text-muted">
+        Drag to reorder. One image is the primary (hero) image — deleting an
+        image a variant uses as its own hero image clears that variant's
+        pick, shown here so it's not a surprise.
+      </p>
+
+      <form method="post" action="{% url 'portal:product_image_reorder' object.pk %}">
+        {% csrf_token %}
+        <ul id="image-list" class="mb-4 space-y-2">
+          {% for image in images %}
+            <li
+              data-image-id="{{ image.pk }}"
+              class="flex flex-wrap items-center gap-3 rounded-lg border border-border-subtle
+                     bg-surface p-3 shadow-card"
+            >
+              <span
+                data-drag-handle
+                class="cursor-move select-none text-lg text-text-faint"
+                aria-hidden="true"
+              >
+                ⠿
+              </span>
+              <img
+                src="{{ image.thumb_webp.url }}"
+                alt="{{ image.alt_text }}"
+                class="h-12 w-12 rounded object-cover"
+              />
+              <input type="hidden" name="order" value="{{ image.pk }}" />
+              <div class="min-w-0 flex-1 text-sm text-ink">
+                <span class="block truncate">{{ image.alt_text }}</span>
+                {% with variants=image.variants.all %}
+                  {% if variants %}
+                    <span class="block text-xs text-text-muted">
+                      Hero image for:
+                      {% for variant in variants %}{{ variant.sku }}{% if not forloop.last %}, {% endif %}{% endfor %}
+                    </span>
+                  {% endif %}
+                {% endwith %}
+              </div>
+              <label class="flex items-center gap-1 text-sm text-ink">
+                <input
+                  type="radio"
+                  name="primary_image"
+                  value="{{ image.pk }}"
+                  {% if image.is_primary %}checked{% endif %}
+                />
+                Primary
+              </label>
+              <input
+                type="file"
+                name="image"
+                accept="image/*"
+                form="replace-form-{{ image.pk }}"
+                class="w-32 text-xs text-text-muted"
+              />
+              <button
+                type="submit"
+                form="replace-form-{{ image.pk }}"
+                class="inline-flex min-h-11 items-center rounded px-2 text-xs font-medium
+                       text-accent hover:text-accent-hover focus:outline-none
+                       focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+              >
+                Replace
+              </button>
+              <button
+                type="submit"
+                form="delete-form-{{ image.pk }}"
+                class="inline-flex min-h-11 items-center rounded px-2 text-xs font-medium
+                       text-text-muted hover:text-danger focus:outline-none
+                       focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+              >
+                Delete
+              </button>
+            </li>
+          {% empty %}
+            <li class="px-4 py-3 text-sm text-text-muted">No images yet.</li>
+          {% endfor %}
+        </ul>
+        {% include "portal/_button_primary.html" with type="submit" label="Save order" %}
+      </form>
+
+      {% for image in images %}
+        <form
+          id="replace-form-{{ image.pk }}"
+          method="post"
+          enctype="multipart/form-data"
+          action="{% url 'portal:product_image_replace' object.pk image.pk %}"
+          class="hidden"
+        >
+          {% csrf_token %}
+        </form>
+        <form
+          id="delete-form-{{ image.pk }}"
+          method="post"
+          action="{% url 'portal:product_image_delete' object.pk image.pk %}"
+          class="hidden"
+        >
+          {% csrf_token %}
+        </form>
+      {% endfor %}
+
+      <form
+        method="post"
+        action="{% url 'portal:product_image_upload' object.pk %}"
+        enctype="multipart/form-data"
+        class="mt-6 flex flex-wrap items-end gap-3"
+      >
+        {% csrf_token %}
+        {% for field in image_upload_form.visible_fields %}
+          <div>
+            <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-ink">
+              {{ field.label }}
+            </label>
+            {{ field }}
+          </div>
+        {% endfor %}
+        {% include "portal/_button_primary.html" with type="submit" label="Add image" %}
+      </form>
+    </div>
+  {% endif %}
+{% endblock %}
+
+{% block extra_body %}
+  {{ block.super }}
+  {% if object %}
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        var list = document.getElementById("image-list");
+        if (list) {
+          new Sortable(list, { handle: "[data-drag-handle]", animation: 150 });
+        }
+      });
+    </script>
+  {% endif %}
 {% endblock %}
