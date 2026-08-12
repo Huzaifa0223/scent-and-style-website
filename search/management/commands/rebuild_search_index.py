@@ -1,11 +1,12 @@
 """Recomputes Product.search_text for every product (§15) — a full resync,
-distinct from catalog/signals.py's per-save incremental updates.
+distinct from catalog/signals.py's per-save incremental updates. Run
+on-demand, not on a schedule — unlike inventory's sweeper, nothing in this
+project currently needs it to run periodically.
 
 When this is needed even though the signals exist: an AttributeDefinition's
 is_filterable flag changes after the fact (nothing re-saves the products
-that use it), a bulk import writes rows through a path that bypasses the
-ORM's save()/delete() (raw SQL, a future CSV import using bulk_create), or
-as a periodic safety net against index drift.
+that use it), or a bulk import writes rows through a path that bypasses the
+ORM's save()/delete() (raw SQL, a future CSV import using bulk_create).
 """
 
 from __future__ import annotations

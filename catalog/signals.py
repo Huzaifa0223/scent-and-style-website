@@ -54,12 +54,11 @@ def _on_product_tags_changed(
 ) -> None:
     if action not in {"post_add", "post_remove", "post_clear"}:
         return
-    products: list[Product]
-    if reverse:
-        products = list(Product.objects.filter(pk__in=pk_set or []))
-    elif isinstance(instance, Product):
-        products = [instance]
-    else:
-        products = []
+    # reverse=False: instance is always the Product side of this specific
+    # m2m (product.tags.add(...)). reverse=True: instance is the Tag side
+    # (tag.products.add(...)), and pk_set holds the affected Product ids.
+    products: list[Product] = (
+        list(Product.objects.filter(pk__in=pk_set or [])) if reverse else [instance]
+    )
     for product in products:
         rebuild_search_text(product)

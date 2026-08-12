@@ -156,6 +156,20 @@ def test_adding_and_removing_a_tag_updates_search_text() -> None:
 
 
 @pytest.mark.django_db
+def test_adding_a_tag_from_the_reverse_side_updates_search_text() -> None:
+    """tag.products.add(product) — the reverse=True branch of
+    catalog/signals.py's m2m_changed receiver, distinct from the more
+    common product.tags.add(tag) path tested above."""
+    product = ProductFactory()
+    tag = TagFactory(name="Reverse Added")
+
+    tag.products.add(product)
+    product.refresh_from_db()
+
+    assert "reverse added" in product.search_text
+
+
+@pytest.mark.django_db
 def test_adding_a_variant_attribute_value_updates_search_text() -> None:
     product = ProductFactory()
     filterable = AttributeDefinitionFactory(is_filterable=True)

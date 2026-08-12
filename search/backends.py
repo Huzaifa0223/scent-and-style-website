@@ -80,9 +80,17 @@ class PostgresSearchBackend:
         if not normalized:
             return Product.objects.none()
 
+        # contains, not icontains: Postgres compiles icontains to
+        # UPPER(search_text) LIKE UPPER(...), and that UPPER() wrapper on
+        # the column makes product_search_trgm_gin structurally unusable
+        # (confirmed with enable_seqscan=off — icontains still couldn't
+        # reach the index at all, contains did). search_text is already
+        # stored lowercased and normalized is already .lower()'d, so plain
+        # contains is semantically identical here, not a correctness
+        # trade-off for speed.
         return (
             Product.objects.filter(
-                status=Product.Status.PUBLISHED, search_text__icontains=normalized
+                status=Product.Status.PUBLISHED, search_text__contains=normalized
             )
             .with_pricing()
             .prefetch_related(
