@@ -6,17 +6,18 @@
     <title>Something went wrong</title>
     <link rel="stylesheet" href="{% static 'css/app.css' %}" />
   </head>
-  <body class="flex h-full flex-col items-center justify-center gap-4 bg-white px-4 text-center">
-    <p class="text-sm font-semibold uppercase tracking-wide text-slate-500">500</p>
-    <h1 class="text-2xl font-bold text-slate-900">Something went wrong on our end</h1>
-    <p class="max-w-sm text-slate-600">
+  <body class="flex h-full flex-col items-center justify-center gap-4 bg-paper px-4 text-center font-sans">
+    <p class="text-sm font-semibold uppercase tracking-wide text-text-muted">500</p>
+    <h1 class="text-2xl font-semibold text-ink">Something went wrong on our end</h1>
+    <p class="max-w-sm text-text-muted">
       Nothing you did caused this. Please try again in a moment — if it keeps happening, the
       store has already been notified.
     </p>
     <a
       href="/"
-      class="mt-2 min-h-[44px] rounded-md bg-slate-900 px-5 py-3 text-sm font-medium text-white
-             hover:bg-slate-700"
+      class="mt-2 inline-flex min-h-11 items-center justify-center rounded bg-accent px-5 text-sm
+             font-semibold text-white hover:bg-accent-hover focus:outline-none focus-visible:ring-2
+             focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
     >
       Back to the store
     </a>

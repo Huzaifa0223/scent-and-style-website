@@ -8,25 +8,42 @@
     <link rel="stylesheet" href="{% static 'css/app.css' %}" />
     {% block extra_head %}{% endblock %}
   </head>
-  <body class="h-full bg-white text-slate-900 antialiased">
+  <body class="h-full bg-paper font-sans text-base text-ink antialiased">
     <a
       href="#main-content"
-      class="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:m-2 focus:rounded
-             focus:bg-slate-900 focus:px-4 focus:py-2 focus:text-white"
+      class="sr-only rounded focus:not-sr-only focus:absolute focus:z-50 focus:m-2
+             focus:bg-accent focus:px-4 focus:py-2 focus:text-white focus:outline-none
+             focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-paper"
     >
       Skip to content
     </a>
 
     {% if messages %}
-      <ul id="messages" class="fixed inset-x-0 top-0 z-50 space-y-2 p-4">
+      <ul
+        id="messages"
+        role="status"
+        aria-live="polite"
+        class="fixed inset-x-0 top-0 z-50 space-y-2 p-4"
+      >
         {% for message in messages %}
           <li
-            class="rounded-md px-4 py-3 text-sm shadow-lg
-                   {% if message.tags == 'error' %}bg-red-600 text-white
-                   {% elif message.tags == 'success' %}bg-emerald-600 text-white
-                   {% else %}bg-slate-800 text-white{% endif %}"
+            x-data="{ shown: true }"
+            x-show="shown"
+            class="flex items-start gap-3 rounded shadow-card px-4 py-3 text-sm font-medium
+                   {% if message.tags == 'error' %}bg-danger text-white
+                   {% elif message.tags == 'success' %}bg-success text-white
+                   {% else %}bg-surface-sunken text-text-inverse{% endif %}"
           >
-            {{ message }}
+            <span class="flex-1">{{ message }}</span>
+            <button
+              type="button"
+              @click="shown = false"
+              class="shrink-0 rounded font-semibold leading-none opacity-80 hover:opacity-100
+                     focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+              aria-label="Dismiss"
+            >
+              &times;
+            </button>
           </li>
         {% endfor %}
       </ul>
