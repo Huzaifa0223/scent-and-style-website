@@ -11,12 +11,13 @@ disagree, the code is right and this file is stale — fix it.
 ## Current position
 
 **Stage:** 3 — Merchant portal: catalog management
-**Status:** in progress, paused for human review. Product create/edit and the variant formset are
-now built and gate-verified (this pass); image management and publish/unpublish/feature/archive
-actions remain unbuilt — the human re-authorized the formset work specifically, not the rest of
-the stage, so stopping here again rather than continuing into those. See the checkpoint report at
-`specs/report.md` for the state *before* this pass (still accurate for everything except the "Not
-started" list below, which this pass shortens).
+**Status:** in progress, paused for human review. Product create/edit, the variant formset, and
+image management (upload, drag-reorder, primary selection, delete, replace) are now built and
+gate-verified; publish/unpublish/feature/archive actions remain unbuilt — the human re-authorized
+image management specifically, not the rest of the stage, so stopping here again rather than
+continuing into those. See the checkpoint report at `specs/report.md` for the state *before* the
+variant-formset pass (still accurate for everything except the "Not started" list below, which
+each pass has shortened).
 **Last updated:** 2026-08-12
 **CI:** workflow committed (`.github/workflows/ci.yml`), never executed — no push has been made
 to any remote (the human pushes, per CLAUDE.md). Everything it runs has been run locally instead;
@@ -25,9 +26,9 @@ see the Stage 1 log entry for that output.
 **What's landed so far (all committed, quality gate green):**
 `accounts/` (login/logout, `PortalPermissionRequiredMixin`, seeded "Staff" Django Group),
 `portal/` product list + Category/Brand/Attribute CRUD + product create/edit with the variant
-inline formset, a project-wide design system (`docs/design.md`, `tailwind.config.js` tokens,
-self-hosted IBM Plex). **Not started:** image management (upload, drag-reorder, primary selection,
-delete/replace), publish/unpublish/feature/archive actions.
+inline formset + product image management (upload, drag-reorder, primary selection, delete,
+replace), a project-wide design system (`docs/design.md`, `tailwind.config.js` tokens,
+self-hosted IBM Plex). **Not started:** publish/unpublish/feature/archive actions.
 
 ---
 
@@ -207,28 +208,38 @@ are worth keeping regardless of how the paused work resolves.
 Commits through the first pause: `029f20b` fix(catalog) default-variant promotion, `e419e76`
 feat(accounts,portal) auth + portal shell + catalog CRUD, `9a5a15e` feat(design) design system.
 
-Commits this pass (product create/edit + variant formset, resumed after advisor design review
+Commits, product create/edit + variant formset pass (resumed after advisor design review
 per the human's explicit instruction): `57407b9` fix(catalog) deferred attribute-signature
 constraint + default-promotion guard, `56ce9d1` feat(portal) product create/edit views and
 variant formset.
+
+Commits, image management pass (this pass): `e8ea571` fix(catalog) deferred one-primary-image
+constraint + promotion guard, `091ee05` feat(portal) product image management.
 
 **Gate status, updated this pass:**
 
 | Gate | Status |
 |---|---|
-| 1. 3-variant/2-attribute product, publish | **Provable now** — `portal/tests/test_product_form.py::test_gate1_...` |
-| 2. Last-variant-delete refused with a message | **Provable now** — `test_gate2_...`, formset `clean()`, not the DB trigger, is what the merchant sees |
-| 3. Image reorder persists | Not provable — image management not built this pass |
-| 4. Staff blocked (403) from store settings/user management | Provable — unchanged from the first pause |
-| 5. `assertNumQueries` flat 5→50 (product list) | Provable — unchanged from the first pause |
-| 5b. Same, for the variant formset's own N+1 (roadmap's named trap for this deliverable, not the acceptance-gate list, but tested the same way) | **Provable now** — `test_edit_page_query_count_stays_flat_as_variant_count_grows`, flat at 12 queries from 1 to 5 variants |
+| 1. 3-variant/2-attribute product, publish | Provable — `portal/tests/test_product_form.py::test_gate1_...` |
+| 2. Last-variant-delete refused with a message | Provable — `test_gate2_...`, formset `clean()`, not the DB trigger, is what the merchant sees |
+| 3. Image reorder persists | **Provable now** — `portal/tests/test_image_management.py::test_gate3_reordering_persists_and_survives_a_reload` |
+| 4. Staff blocked (403) from store settings/user management | Provable — unchanged |
+| 5. `assertNumQueries` flat 5→50 (product list) | Provable — unchanged |
+| 5b. Same, for the variant formset's own N+1 (named trap, not the acceptance-gate list, but tested the same way) | Provable — `test_edit_page_query_count_stays_flat_as_variant_count_grows`, flat at 12 queries from 1 to 5 variants |
+| 5c. Same, for the image formset's N+1 (same named trap, same technique) | **Provable now** — `test_edit_page_query_count_stays_flat_as_image_count_grows`, flat at 14 queries from 1 to 5 images |
 | 6. Quality gate green, 80% coverage on `portal` | **Provable now** — see numbers below |
 
+All of Stage 3's acceptance gates are now provable except publish/unpublish/feature/archive, which
+isn't built yet — that's the entire remaining gap in the stage.
+
 Quality gate, actual numbers this pass: `ruff check` — all checks passed. `ruff format --check` —
-all files formatted. `mypy .` — no issues in 77 source files. `makemigrations --check --dry-run` —
-no changes detected. `pytest` — 150 passed. Coverage: `portal` 96% (floor 80%), `catalog` 96%
-(floor 85%), `core`/`store`/`accounts` 100% (floor 80% each). `manage.py check --deploy` clean
-under prod settings.
+all files formatted. `mypy portal/ catalog/` — no issues (31 source files, mypy scoped to the two
+apps this pass touched rather than the whole tree — matches the flow used for the variant-formset
+pass). `makemigrations --check --dry-run` — no changes detected. `pytest --create-db` — 167
+passed. Coverage: `portal` 96% (floor 80%), `catalog` 96% (floor 85%). `manage.py check --deploy`
+clean under `config.settings.prod` (DEBUG=False, ALLOWED_HOSTS set, a real random `SECRET_KEY`
+via `get_random_secret_key()`, placeholder R2 credentials). `manage.py check` clean under
+`config.settings.dev`.
 
 **The Staff-group flush bug — a three-layer diagnosis, worth the full chain for Stage 4 and
 Stage 17, both of which will hit adjacent traps:**
@@ -362,6 +373,93 @@ the human's explicit instruction, which caught two real gaps before any code was
   collision rather than raising — verified by reading it, not assumed. Marked resolved *for this
   specific caller* in Open questions below; the underlying question still applies to any future
   caller that passes an explicit `slug`.
+
+**Product image management (this pass).** `portal/image_forms.py` (`ProductImageUploadForm`,
+`ProductImageReplaceForm`), `portal/image_views.py` (`ProductImageUploadView`,
+`ProductImageReorderView`, `ProductImageDeleteView`, `ProductImageReplaceView`), the Images section
+of `templates/portal/product_form.html` (SortableJS drag-reorder, per-row primary radio, replace
+and delete as hidden sibling `<form>`s referenced via the file input's `form="replace-form-N"`
+HTML5 attribute so they don't nest inside the reorder `<form>`). Gate 3 now provable; see Gate
+status above.
+
+- **The fourth instance of the deferrable-with-condition trap**, same as the default-variant and
+  attribute-signature constraints before it: `productimage_one_primary_per_product` was a partial
+  `UniqueConstraint` (`condition=Q(is_primary=True)`), immediate because Postgres/Django forbid
+  combining a unique constraint's `condition` with `deferrable=True`. That breaks a combined
+  reorder+re-primary submit, which briefly holds two (or momentarily zero) primary images
+  mid-transaction depending on statement order. Confirmed the constraint's shape by reading
+  `catalog/models.py` directly *before* writing the reorder handler, per the human's explicit
+  instruction, rather than discovering it after a handler failed. Migration 0005 replaces it with a
+  deferred `CONSTRAINT TRIGGER`, same mechanism as 0002/0003/0004. Two tests
+  (`catalog/tests/test_product_image.py`) prove the swap-primary and delete-and-reassign-primary
+  cases both now succeed, mirroring the variant precedent exactly.
+- **`ProductImage.delete()`'s promotion-on-delete had the same latent bug as
+  `ProductVariant.delete()`** — a guard described in the docstring but never written into the
+  method body. `test_deleting_old_primary_after_explicit_reassignment_leaves_the_new_primary_alone`
+  written first, confirmed it failed against the unguarded code, then fixed:
+  `if was_primary and not product.images.filter(is_primary=True).exists():`.
+- **N+1 in the image formset, same shape as the variant formset's own named trap, caught by a
+  `CaptureQueriesContext` test written before the feature existed** (trivially green with zero
+  images at the time; the real measurement came after the feature was built). Each image row's
+  "hero image for: SKU" note reads `ProductVariant.image`'s reverse accessor
+  (`related_name="variants"`) — without prefetching, one query per image. Fixed by
+  `product.images.prefetch_related("variants")` in `_ProductFormsetView._render()`. Flat at 14
+  queries from 1 to 5 images.
+- **Permission separation is a real endpoint split, not a shared view with a branch.** Upload and
+  reorder need `catalog.add_productimage`/`catalog.change_productimage`; delete needs
+  `catalog.delete_productimage`. The seeded Staff group (`accounts/permissions.py`) has the first
+  two but never delete, on any app — so `ProductImageDeleteView` is its own endpoint specifically
+  so a staff user can add, reorder, and replace images but never remove one. Tested directly
+  (`test_staff_without_delete_permission_cannot_delete_an_image`, expects 403).
+- **Two real bugs an advisor review caught before this pass was reported done, both fixed and
+  regression-tested — worth recording since neither was visible from the passing test suite that
+  existed at the time:**
+  1. The reorder handler's `enumerate(order)` assigned dense positions `0..N-1` over only the
+     *submitted* ids. If a submit ever omits an image (a stale page after another tab deleted one,
+     a partial submit), the omitted image kept its old position — which now collides with whatever
+     the submitted images were just reassigned to, and `Meta.ordering = ["position", "id"]` breaks
+     the tie silently rather than raising. Existing tests all submitted every image, so this passed
+     clean. Fixed by applying the submitted order first, then appending any unsubmitted images
+     after in their existing relative order, so positions stay dense and distinct regardless of
+     whether the submit is complete. Regression test:
+     `test_reorder_with_an_omitted_image_does_not_collide_positions`.
+  2. `test_deleting_an_image_nulls_the_variant_fk_and_warns_the_merchant` claimed to mirror Stage
+     2's direct-delete test but didn't test the case that actually matters: both tests deleted the
+     *only* image, exercising only the `next_image is None` branch of the promotion guard. Neither
+     exercised deleting a referenced image while a second image survives — the case where the
+     promotion guard and the variant's `SET_NULL` fire in the same `delete()` call. Rewrote the
+     test to add a second, non-primary image before deleting the primary one, and assert both
+     `variant.image_id is None` and that exactly one image is primary afterward.
+- **A separate, later review (the human's own, not the advisor's) caught an access-control gap
+  before any of this was reported done: the reorder handler accepted any submitted image id without
+  checking it belonged to the product in the URL.** `ProductImageDeleteView`/`ProductImageReplaceView`
+  already scoped their `get_object_or_404` lookups with `product=product`, but the reorder handler
+  only silently skipped (`images.get(id)` → `None` → `continue`) ids that weren't in the current
+  product's image set — meaning a crafted `order` or `primary_image` referencing another product's
+  image id would be silently dropped rather than rejected, which is the wrong failure mode for a
+  request that shouldn't have been accepted at all. Fixed: the view now returns `400` if any
+  submitted id in `order` or `primary_image` doesn't belong to the product. Regression tests:
+  `test_reorder_rejects_an_image_id_belonging_to_another_product`,
+  `test_reorder_rejects_a_primary_selection_belonging_to_another_product`,
+  `test_delete_under_the_wrong_product_pk_returns_404`,
+  `test_replace_under_the_wrong_product_pk_returns_404` (the latter two proving the existing
+  delete/replace scoping, which was already correct).
+- **The replace file input's `form="replace-form-N"` HTML5 attribute — the mechanism that lets a
+  file input inside the reorder `<form>` submit to a separate, hidden `<form>` elsewhere in the
+  DOM — cannot be exercised by the Django test client at all**, since there's no DOM/JS engine
+  behind it; every existing replace test POSTs directly to the endpoint, bypassing the HTML
+  association entirely. Verified live instead: started the dev server, logged in via Chrome
+  automation, uploaded a file to a row's `<input form="replace-form-N">`, clicked that row's
+  Replace button, and confirmed via the dev server's own access log that the request landed on
+  `POST /admin-portal/products/<id>/images/<id>/replace/` (not the reorder endpoint) and that the
+  image's stored file, position, and `is_primary` changed exactly as the replace endpoint alone
+  would produce — confirmed directly against the dev database. Temporary superuser, product, and
+  uploaded file all removed afterward; nothing from this check is in the dev database or repo.
+- Confirmed SortableJS is committed at `static/vendor/sortable.min.js` (1.15.6, pinned — same
+  "vendored means committed" reasoning as HTMX/Alpine's Stage 1 amendment) and loaded via
+  `{% static %}` in `templates/portal/base.html`, not a CDN; `extra_body` is a real block on that
+  template, so `templates/portal/product_form.html`'s `{{ block.super }}` renders the vendored
+  `<script>` tag before its own inline `Sortable(...)` init runs.
 
 ---
 
