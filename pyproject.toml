@@ -41,6 +41,14 @@ module = ["*.tests.*", "conftest"]
 ignore_errors = true
 
 [[tool.mypy.overrides]]
+# factory-boy's public API (Sequence, SubFactory, django.ImageField, ...) is
+# untyped, so strict mode reports every call site as "untyped call in typed
+# context" — noise, not a real bug source. Same reasoning as the tests
+# override above; factories still run under the real test suite.
+module = "*.factories"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
 module = ["factory.*", "storages.*", "environ.*"]
 ignore_missing_imports = true
 
