@@ -13,6 +13,9 @@ from django.views.generic import View
 
 from cart import services as cart_services
 from cart.services import CartLine
+from notifications.whatsapp.channel import WhatsAppLinkChannel
+from notifications.whatsapp.message_builder import build_order_confirmation_message
+from store.models import StoreSettings
 
 from .forms import CheckoutForm
 from .models import Order
@@ -99,4 +102,32 @@ class OrderConfirmationView(View):
             pk=last_order_id,
             order_number=order_number,
         )
-        return render(request, "orders/order_confirmation.html", {"order": order})
+        # The order already exists in the database (created before this
+        # view is ever reached — orders.services.create_order() commits
+        # first, this page only renders afterward) regardless of whether
+        # the WhatsApp link below is ever opened or the message ever
+        # sent. §21: "the order exists in the merchant system before
+        # WhatsApp opens."
+        whatsapp_message = build_order_confirmation_message(order)
+        merchant_whatsapp_number = StoreSettings.load().whatsapp_number
+        # A blank merchant number would make WhatsAppLinkChannel produce
+        # a phoneless deep link — a real, documented WhatsApp behaviour
+        # (opens the message ready to send to any contact) but the wrong
+        # one here specifically: this link exists to reach *the
+        # merchant*, and an unaddressed link achieves nothing for that.
+        # Omit the button entirely rather than offer one that can't do
+        # its job; the order number and the copyable message text
+        # remain the fallback regardless.
+        whatsapp_url = (
+            WhatsAppLinkChannel().build_url(
+                phone=merchant_whatsapp_number, message=whatsapp_message
+            )
+            if merchant_whatsapp_number
+            else ""
+        )
+        context = {
+            "order": order,
+            "whatsapp_url": whatsapp_url,
+            "whatsapp_message": whatsapp_message,
+        }
+        return render(request, "orders/order_confirmation.html", context)

@@ -85,6 +85,31 @@ def test_checkout_post_creates_an_order_and_redirects_to_confirmation(client) ->
 
 
 @pytest.mark.django_db
+def test_gate2_the_order_exists_before_and_independent_of_any_whatsapp_interaction(
+    client,
+) -> None:  # type: ignore[no-untyped-def]
+    """Gate 2 — the order exists and is queryable the moment checkout's
+    POST returns, before the confirmation page (and the WhatsApp link it
+    builds) is ever requested or rendered. No portal order list exists
+    yet to check "visible in the portal" through (Stage 10's job); this
+    is the structural guarantee that gate actually depends on —
+    orders.services.create_order() commits before any WhatsApp string is
+    even constructed, and construction lives entirely in
+    OrderConfirmationView.get(), a separate, later request."""
+    _flat_rate_delivery()
+    variant = _variant_with_stock(5)
+    client.post("/cart/add/", {"variant_id": variant.pk, "quantity": 1})
+
+    checkout_response = client.post(CHECKOUT_URL, _checkout_post_data())
+
+    # The order is fully committed here — the confirmation page (and the
+    # WhatsApp message/link it builds) has not been requested at all yet.
+    order = Order.objects.get()
+    assert order.order_number in checkout_response.url
+    assert order.status == Order.Status.PENDING_CONFIRMATION
+
+
+@pytest.mark.django_db
 def test_checkout_post_clears_the_cart_so_a_resubmit_finds_it_empty(client) -> None:  # type: ignore[no-untyped-def]
     _flat_rate_delivery()
     variant = _variant_with_stock(5)
@@ -192,6 +217,54 @@ def test_confirmation_renders_the_order_after_a_successful_checkout(client) -> N
     assert response.status_code == 200
     assert order.order_number.encode() in response.content
     assert variant.product.name.encode() in response.content
+
+
+@pytest.mark.django_db
+def test_confirmation_page_always_has_the_order_details_message_in_the_rendered_html(
+    client,
+) -> None:  # type: ignore[no-untyped-def]
+    """Gate 4's actual point: the message text must be recoverable even
+    if every JS path on the page fails — the Django test client never
+    executes JavaScript at all, so this is already the no-JS case for
+    content presence. Asserted against the visible <textarea>, not a
+    JSON blob only script code could reach."""
+    settings_obj = StoreSettings.load()
+    settings_obj.whatsapp_number = "+923009999999"
+    settings_obj.save()
+    variant = _variant_with_stock(5)
+    client.post("/cart/add/", {"variant_id": variant.pk, "quantity": 1})
+    checkout_response = client.post(CHECKOUT_URL, _checkout_post_data())
+    order = Order.objects.get()
+
+    response = client.get(checkout_response.url)
+
+    assert response.status_code == 200
+    assert b'id="whatsapp-message-text"' in response.content
+    assert order.order_number.encode() in response.content
+    assert variant.product.name.encode() in response.content
+    assert b'id="whatsapp-link"' in response.content
+
+
+@pytest.mark.django_db
+def test_confirmation_page_omits_the_whatsapp_button_when_the_merchant_number_is_unconfigured(
+    client,
+) -> None:  # type: ignore[no-untyped-def]
+    """StoreSettings.whatsapp_number defaults to blank — building a
+    WhatsApp deep link with no recipient would open WhatsApp addressed to
+    nobody in particular, which can't do what this button exists to do.
+    The order number and the copyable message text must still be
+    there."""
+    variant = _variant_with_stock(5)
+    client.post("/cart/add/", {"variant_id": variant.pk, "quantity": 1})
+    checkout_response = client.post(CHECKOUT_URL, _checkout_post_data())
+    order = Order.objects.get()
+
+    response = client.get(checkout_response.url)
+
+    assert response.status_code == 200
+    assert b'id="whatsapp-link"' not in response.content
+    assert order.order_number.encode() in response.content
+    assert b'id="whatsapp-message-text"' in response.content
 
 
 @pytest.mark.django_db

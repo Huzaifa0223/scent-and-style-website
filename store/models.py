@@ -4,6 +4,7 @@ from decimal import Decimal
 from typing import Any
 
 from django.core.cache import cache
+from django.core.validators import MinValueValidator
 from django.db import models
 from django.db.models import Q
 
@@ -65,6 +66,62 @@ class StoreSettings(TimeStampedModel):
     )
     city_fallback_delivery_rate = models.DecimalField(
         max_digits=12, decimal_places=2, default=Decimal("0.00")
+    )
+
+    # WhatsApp handoff (§21, §26). site_url is the deployment's own public
+    # base URL ("https://mystore.pk") — genuinely merchant/deployment
+    # -specific, so it lives here rather than being derived from
+    # ALLOWED_HOSTS (a Django security setting, not meant for building
+    # public-facing links) or hard-coded anywhere. Blank by default; the
+    # tracking link is simply omitted from WhatsApp messages until it's
+    # configured, rather than ever sending a broken or placeholder URL.
+    site_url = models.URLField(blank=True, default="")
+    # roadmap's WHATSAPP_MESSAGE_MAX_CHARS — an UNVERIFIED, deliberately
+    # conservative placeholder (see notifications/whatsapp/message_builder.py's
+    # module docstring and specs/state.md's Stage 9 entry). §21 requires
+    # this to be measured empirically on real devices/clients before the
+    # default is trusted; that measurement has not happened.
+    whatsapp_message_max_chars = models.PositiveIntegerField(
+        default=1000, validators=[MinValueValidator(200)]
+    )
+    # Status-update templates (§26), merchant-editable. Supported
+    # placeholders: {customer_name}, {order_number}, {tracking_number},
+    # {courier_name}, {tracking_url} — an unrecognised placeholder in a
+    # hand-edited template renders as empty rather than raising, so a
+    # typo degrades quietly (notifications.whatsapp.message_builder
+    # ._SafeTemplateDict). Only six of the eleven Order.Status values
+    # have a template — §26 names exactly these six; the rest (Pending
+    # Confirmation, Ready to Dispatch, Failed Delivery, Returned, Expired)
+    # have none by design.
+    whatsapp_template_confirmed = models.TextField(
+        default=(
+            "Hi {customer_name}, your order {order_number} has been confirmed! "
+            "We'll let you know as it progresses."
+        )
+    )
+    whatsapp_template_processing = models.TextField(
+        default="Hi {customer_name}, your order {order_number} is now being processed."
+    )
+    whatsapp_template_dispatched = models.TextField(
+        default=(
+            "Hi {customer_name}, your order {order_number} has been dispatched with "
+            "{courier_name}. Tracking: {tracking_number}"
+        )
+    )
+    whatsapp_template_out_for_delivery = models.TextField(
+        default="Hi {customer_name}, your order {order_number} is out for delivery today!"
+    )
+    whatsapp_template_delivered = models.TextField(
+        default=(
+            "Hi {customer_name}, your order {order_number} has been delivered. "
+            "Thank you for shopping with us!"
+        )
+    )
+    whatsapp_template_cancelled = models.TextField(
+        default=(
+            "Hi {customer_name}, your order {order_number} has been cancelled. "
+            "Please contact us if you have any questions."
+        )
     )
 
     class Meta:
