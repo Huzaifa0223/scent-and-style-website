@@ -707,6 +707,7 @@ Commits: b392d6f feat(catalog) search_text denormalisation and rebuild signals
          6d1bb86 feat(search) rebuild_search_index command and type-ahead endpoint
          8375053 fix(catalog) disable GIN fastupdate on search indexes
          0ed4469 fix(search) use contains not icontains for suggest()'s trigram match
+         48c686e fix(search) blend TrigramWordSimilarity into search() ranking
 Acceptance gates: all passed
   1. **§15.1 table written as tests first, watched fail, then implemented.** All six cases —
      `search/tests/test_backend.py`, one fixture per case (`afnan 9pm`, `9pm`, `AFNAN`, `afnn`,
@@ -734,12 +735,28 @@ Acceptance gates: all passed
 
 Quality gate, final numbers: `ruff check` — all checks passed. `ruff format --check` — all files
 formatted (121 files). `mypy .` (whole tree, unscoped) — no issues in 113 source files.
-`makemigrations --check --dry-run` — no changes detected. `pytest --create-db` — 256 passed.
+`makemigrations --check --dry-run` — no changes detected. `pytest --create-db` — 257 passed.
 Coverage: `search` 100% (all files), `catalog/search_indexing.py` 100%, `catalog/signals.py` 100%.
 `manage.py check --deploy` clean under `config.settings.prod` (DEBUG=False, ALLOWED_HOSTS set, a
 real random `SECRET_KEY`, placeholder R2 credentials). `manage.py check` clean under
 `config.settings.dev`.
 Notes:
+
+**A second advisor review, after the stage otherwise looked complete, caught that the roadmap's
+"ranking blending `ts_rank` with `word_similarity`" deliverable was only half-shipped.**
+`TrigramWordSimilarity` had never actually been used — the printed design's `.order_by("-rank",
+"-word_sim")` had quietly become `.order_by("-rank", "-created_at")` during implementation, and
+nothing caught it: `search()` used `%>` for *matching* but the similarity score was never computed
+for *ranking*, so every typo-only or partial-SKU-only match (no tsvector lexeme overlap at all)
+ties at `rank=0` and silently falls back to creation order. Gate 1's assertions are membership
+(`product in results`), which passes regardless of position — this is exactly the kind of gap a
+membership-only test can't see. Confirmed both ways before and after the fix: three products
+differing only in edit-distance from the query, deliberately created in the *opposite* of quality
+order, returned worst-match-first before adding `TrigramWordSimilarity` to `order_by()` and
+best-match-first after — recorded permanently as
+`search/tests/test_backend.py::test_results_are_ordered_by_relevance_not_just_creation_order`. Gate
+4's EXPLAIN was re-run with the new annotation present (it lives in SELECT/ORDER BY, not WHERE, so
+shouldn't affect the plan the way `rank__gt=0` did) — confirmed still index-backed, unaffected.
 
 **Gate 4 (EXPLAIN proves index usage) failed for a real reason three times before it passed for
 the right one — GIN's `fastupdate` pending list, not row count.** First attempt used a 1,000-row
@@ -836,10 +853,22 @@ again. Not fixed — recorded as the correct way to get a trustworthy number, no
   deferred.** `search/views.py` + `search/urls.py`, mounted directly at `/search/` in
   `config/urls.py` (same pattern as `/healthz/`), rather than waiting for Stage 6 to stand up
   `storefront/`. `templates/search/_search_input.html` (the `hx-trigger="keyup changed
-  delay:200ms, search"` debounced box) exists and is tested indirectly (its target URL round-trips
-  through `{% url 'search:suggest' %}`), but isn't `{% include %}`'d into
+  delay:200ms, search"` debounced box) exists but is **not rendered by anything yet** — no view,
+  template, or test includes it, so its `{% url 'search:suggest' %}` tag has never actually been
+  evaluated; a URL-name rename would break it silently right now. It isn't `{% include %}`'d into
   `templates/storefront/base.html`'s pre-existing `storefront_search` block yet — there is no
-  storefront page to host it in until Stage 6 builds one. Revisit then, not before.
+  storefront page to host it in until Stage 6 builds one. Verify this partial actually renders as
+  part of whatever Stage 6 page first includes it; don't assume it from this stage.
+- **Deploy step for any environment with pre-existing product data: `search_text` is not
+  retroactively populated.** The column has existed since Stage 2 (`default=""`), and
+  `catalog/signals.py`'s rebuild only fires on a save/delete *after* this stage's code is live — a
+  product that already existed and hasn't been touched since stays invisible to search until
+  `python manage.py rebuild_search_index` runs once. Ran it against the dev database as part of
+  this stage: `Rebuilt search_text for 0 of 0 product(s)` — the dev database currently has no
+  products at all (every manual verification fixture this stage was cleaned up after use), so
+  nothing was actually stale locally. Relevant the moment real catalog data exists in any
+  environment before this code does — a first deploy, or a staging database seeded ahead of this
+  stage landing.
 - `catalog/signals.py`'s `_on_product_tags_changed` receiver only handles `Product.tags`'s two real
   call directions (`product.tags.add(...)`, `reverse=False`, `instance` is the `Product`; and
   `tag.products.add(...)`, `reverse=True`, `instance` is the `Tag`, `pk_set` holds affected product
