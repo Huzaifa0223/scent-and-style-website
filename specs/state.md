@@ -10,11 +10,14 @@ disagree, the code is right and this file is stale — fix it.
 
 ## Current position
 
-**Stage:** 7 — Cart (not started)
-**Status:** Stage 6 is complete — see the Stage 6 log entry below for the full acceptance-gate and
-quality-gate record, including a process-failure note: a prior session shipped most of Stage 6's
-code without updating this section or writing a stage-log entry, which is exactly the kind of drift
-this file exists to prevent. That gap is closed and Stage 6 is genuinely done as of this update.
+**Stage:** 8 — Checkout and order creation (not started)
+**Status:** Stage 7 is complete — see the Stage 7 log entry below for the full acceptance-gate and
+quality-gate record. Two human design directives shaped it before any code was written: `CartItem`
+FKs to `ProductVariant` with `on_delete=SET_NULL`, and every availability check goes through
+`ProductVariant.objects.with_available_quantity()` rather than raw `stock_quantity` — both followed
+literally, see the Stage 7 notes for how. A global CSRF-for-HTMX listener was added to the root
+`templates/base.html` (shared with `portal`) — confirmed intentional and recorded there, not left as
+a silent side effect for a future session to rediscover.
 **Last updated:** 2026-08-13
 **CI:** workflow committed (`.github/workflows/ci.yml`), never executed — no push has been made
 to any remote (the human pushes, per CLAUDE.md). Everything it runs has been run locally instead;
@@ -31,9 +34,10 @@ rebuild signals, `PostgresSearchBackend` blending `ts_rank` with trigram word-si
 `rebuild_search_index` command, an HTMX type-ahead endpoint, now wired into every storefront page's
 header), `storefront/` (home page with featured/new-arrivals/category tiles, category and listing
 pages with composable filters + facet counts + sort + pagination, PDP with a variant selector,
-lightbox gallery, and skeleton loaders), a project-wide design system (`docs/design.md`,
-`tailwind.config.js` tokens, self-hosted IBM Plex). Stages 1-6 are fully built; Stage 7 (cart) is
-next and not started.
+lightbox gallery, and skeleton loaders), `cart/` (session-keyed `Cart`/`CartItem`, HTMX-driven badge
+and drawer, add/increment/decrement/remove/clear with no page reload), a project-wide design system
+(`docs/design.md`, `tailwind.config.js` tokens, self-hosted IBM Plex). Stages 1-7 are fully built;
+Stage 8 (checkout and order creation) is next and not started.
 
 ---
 
@@ -1063,6 +1067,133 @@ that would pass whether the feature actually worked or not.** What was actually 
   everything not created this session alone, since it might be data the human is using rather than
   debris. Not cleaned up; flagged here for whoever eventually does.
 
+### Stage 7 — Cart
+Completed: 2026-08-13
+Commits: 95870d1 feat(cart): add Cart/CartItem, session-keyed cart with HTMX badge and drawer
+Acceptance gates: all passed
+  1. Adding beyond `available_quantity` is refused with the actual available number in the message
+     — `cart/tests/test_services.py::test_add_item_refuses_beyond_available_quantity_with_the_real_number`
+     and the same at the HTTP layer in `cart/tests/test_views.py`, plus the increment endpoint
+     specifically (`test_increment_beyond_available_quantity_is_refused_with_the_real_number`).
+     Verified live: incrementing a 3-in-stock line to a 4th unit left the quantity at 3 and rendered
+     "Only 3 left in stock." both in the drawer and, via the PDP's `#pdp-add-error` OOB slot, next to
+     the Add to Cart button.
+  2. A cart item whose variant goes out of stock between add and view is flagged, not silently
+     dropped — `test_cart_lines_flags_a_variant_that_went_out_of_stock_after_adding` and
+     `test_a_cart_item_that_goes_out_of_stock_after_add_is_flagged_not_dropped`. The stored
+     `CartItem.quantity` is never auto-reduced; only the *rendered* purchasable portion and the
+     subtotal reflect the shortfall, so the customer's original request stays visible.
+  3. A variant deactivated after being added is handled without a 500 — covered at both the service
+     and view layer, and taken one step further than the roadmap's own wording: **a variant
+     *deleted* after being added is handled the same way**, since `CartItem.variant` is
+     `on_delete=SET_NULL`, not `CASCADE` (the human's explicit instruction for this stage). Both
+     cases collapse into the same `purchasable_quantity = 0` / "no longer available" handling in
+     `cart.services.cart_lines()` — one condition with two causes, not two special cases. Verified
+     live in a browser for both: deactivating the sole variant in a cart (via direct DB edit, no
+     portal UI change involved) and then triggering any mutation re-rendered the line as flagged,
+     no 500, quantity preserved, subtotal recalculated to exclude it; deleting a variant after
+     giving its product a second one (a product must always have ≥1 variant — unrelated invariant,
+     had to route around it in both the live check and the automated tests) produced the same
+     flagged rendering with "Item unavailable" in place of the product name. The PDP's own
+     `Add to Cart` button does not currently grey out for a deactivated (not out-of-stock) variant —
+     the server still correctly refuses it ("That item is no longer available.", confirmed live) —
+     recorded as an open question below since fixing the PDP display is a Stage 6 concern this
+     stage didn't set out to reopen.
+  4. No page reload on any cart mutation — every endpoint returns a fragment (200), never a
+     redirect; `test_increment_decrement_remove_clear_never_500_and_never_redirect` asserts
+     `response.get("Location") is None` on all four. Verified live: the cart drawer's `x-data="{
+     cartOpen }"` lives on a wrapper that's never itself swapped (only
+     `#cart-drawer-content` inside it is, via `hx-target`), so incrementing a line with the drawer
+     open left it open afterward — screenshotted before and after to confirm, not just asserted from
+     reading the markup.
+  5. Quality gate green. Coverage floor 85% on `cart` — see numbers below.
+
+Quality gate, final numbers: `ruff check` — all checks passed. `ruff format --check` — all files
+formatted (143 files). `mypy .` (whole tree, unscoped) — no issues in 135 source files.
+`makemigrations --check --dry-run` — no changes detected. `pytest --create-db` — 340 passed.
+Coverage: `cart` 100% (`models.py`/`services.py`/`views.py`/`context_processors.py` all 100%; floor
+85%). `manage.py check --deploy` clean under `config.settings.prod` (DEBUG=False, ALLOWED_HOSTS set,
+a real random `SECRET_KEY`, placeholder R2 credentials). `manage.py check` clean under
+`config.settings.dev`.
+Coverage: cart 100% (floor 85%)
+Notes:
+
+**Design directive from the human, given before any code was written, both points followed
+literally rather than reinterpreted:** (1) `CartItem` FKs to `ProductVariant`, never `Product`, and
+every availability check goes through `ProductVariant.objects.with_available_quantity()` (Stage 4's
+annotation) rather than reading `stock_quantity` directly — `cart.services` never touches
+`stock_quantity` at all, only ever reads the annotated `available_quantity`. (2) Gate 3 covers both
+deactivation *and* deletion, with `on_delete=SET_NULL` (nullable) rather than `CASCADE` — see gate 3
+above for how both collapse into one code path.
+
+**Adding to a cart never creates a `StockReservation`, deliberately, per CLAUDE.md's locked
+decision that stock is reserved at *order* creation.** `cart.services`'s docstring states this
+explicitly since it's the kind of thing a future session could "fix" by wiring `inventory.services.
+reserve()` into `add_item()`, which would be wrong — that would reserve stock the moment something
+enters a cart, long before a customer commits to buying it, defeating the whole reason CLAUDE.md's
+table separates "reserved at order creation" from "decremented at confirmation." Every availability
+check here is advisory (a plain `with_available_quantity()` read, no row lock), re-validated
+authoritatively under `select_for_update()` at Stage 8's checkout — this layer's job is keeping the
+cart's *displayed* state honest between now and then, not guaranteeing a unit survives to checkout.
+
+**Cart rows are created lazily.** `services.get_cart()` (read-only, used by the globally-registered
+context processor on every page render) never touches the session or the database if no session
+key exists yet; `services.get_or_create_cart()` (mutation views only) is the only path that creates
+a session and a `Cart` row, so browsing the storefront doesn't write a row per anonymous visitor who
+never adds anything. This split is covered directly
+(`test_get_cart_returns_none_without_creating_anything`,
+`test_get_or_create_cart_creates_a_session_and_a_cart_row_once`).
+- **A real bug this design caught before it shipped, not after:** two pre-existing tests
+  (`core/tests/test_templates.py`, `store/tests/test_context_processors.py`) render a template
+  directly through a bare `RequestFactory` request that never passed through `SessionMiddleware` —
+  a legitimate, narrow pattern for unit-testing template rendering in isolation. The newly-global
+  `cart` context processor runs on *every* template render, including theirs, and `get_cart()`'s
+  first version assumed `request.session` always exists (true for every real request —
+  `SessionMiddleware` is unconditional in `MIDDLEWARE` — but not for a request built by hand).
+  Caught by running the full suite, not just `cart/`'s own tests, before considering this stage
+  done. Fixed with `getattr(request, "session", None)` rather than assuming the attribute exists.
+
+**`cart_lines()` is two queries total regardless of item count** — the cart's own items, then every
+referenced variant's availability in one `with_available_quantity()` query, joined in Python via a
+dict keyed by variant id. Verified two ways, both directly asserting query counts rather than
+inferring flatness from reading the code: `cart/tests/test_services.py::
+test_cart_lines_query_count_stays_flat_as_item_count_grows_from_1_to_5` (1→5 items, service layer)
+and `cart/tests/test_views.py::test_query_count_stays_flat_as_item_count_grows_from_2_to_20`
+(2→20 items, through a full page render, since `cart_lines()` now runs on every storefront page via
+the context processor — a regression here costs the whole site, not just the drawer, which is why
+this gets the same flat-growth treatment as the storefront listing page's own gate 5 test even
+though Stage 7's own gate list doesn't name `assertNumQueries` explicitly).
+
+**HTMX POST is new to this project — search's endpoint (Stage 5) is GET-only, portal's mutations
+(Stage 3) are plain `<form method="post">` submits, so no CSRF-for-HTMX precedent existed yet.**
+Added a global `htmx:configRequest` listener in `templates/base.html` (root shell, shared by both
+`storefront/base.html` and `portal/base.html`) that reads the `csrftoken` cookie and sets
+`X-CSRFToken` on every HTMX request, rather than requiring each new HTMX-triggering element to carry
+its own `{% csrf_token %}`. **This is a global change to a template `portal` also extends, made
+while building a storefront-only feature — flagged explicitly since portal currently has zero HTMX
+POST usage of its own and would otherwise have no reason to reveal this in its own test suite.**
+Confirmed harmless there today (nothing in `portal` triggers an `htmx:configRequest` event, since
+none of its POSTs go through HTMX), and correct for the day something in `portal` does. Verified
+directly, not just reasoned about: `cart/tests/test_views.py::test_csrf_is_enforced_on_the_add_endpoint`
+uses `Client(enforce_csrf_checks=True)` (the Django test client's default silently *disables* CSRF
+enforcement, which would have hidden a broken listener) and asserts a request with no token still
+gets a `403` — proving CSRF protection is genuinely still active on this endpoint, not bypassed by
+the fix. Live-browser verification (a real request going through the JS listener) is the same
+add/increment/etc. flow already covered above, all of which required a valid CSRF header to succeed
+at all.
+- `test_add_with_a_non_numeric_variant_id_is_refused_without_a_500` originally asserted the escaped
+  *or* unescaped form of "Couldn't add that item." — passed regardless of which actually rendered,
+  proving nothing about the real output (the human caught this directly). `{{ error }}` is
+  auto-escaped (no `|safe`), so the apostrophe always renders as `&#x27;`; fixed to assert only that
+  form, confirmed against the real response before trusting it.
+- Deployment note for whoever runs this stage's migration for the first time on a non-fresh
+  database: this session's own dev database needed an explicit `manage.py migrate` before the cart
+  widget would render at all (`ProgrammingError: relation "cart_cart" does not exist`) — caught only
+  because live verification actually loaded a page, not from `makemigrations --check` or the test
+  suite, both of which operate against their own always-fresh databases and would never have
+  surfaced this. Not a defect in this stage's migration itself, just a reminder that `--check` proves
+  the migration *file* is correct, never that it's been *applied* anywhere real.
+
 ---
 
 ## Deviations from spec
@@ -1186,6 +1317,17 @@ Questions that did not block progress but need an answer eventually.
   the meantime: acceptable, matching how this codebase already treats Django admin bypassing
   service-layer validation elsewhere (a documented gap, not a silent one). Revisit when audit
   completeness needs to be airtight (the future `audit.AuditLog` app, or Stage 17).
+- [Stage 7] The PDP's `Add to Cart` button (Stage 6) only ever greys out for `available_quantity <=
+  0` — it does not currently account for `is_active`, so a variant deactivated while a customer is
+  looking at its PDP still shows "In stock" / an enabled button. The server-side refusal is
+  authoritative and already correct (`cart.services.add_item()` checks `is_active` and returns
+  `CartMutationError(available_quantity=0)`, rendering "That item is no longer available." on
+  click — confirmed live), so this is a UX gap, not a correctness one. Assumed in the meantime:
+  acceptable, since the roadmap's Stage 6 gate 4 ("an out-of-stock variant cannot be added ... and
+  the PDP says so specifically") only names out-of-stock, not deactivation, and fixing it means
+  threading `is_active` into `ProductDetailView`'s `variants_data`/Alpine state — a Stage 6 template
+  this stage didn't set out to reopen. Revisit alongside any future PDP work, or Stage 12's quality
+  pass.
 
 ---
 
