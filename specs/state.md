@@ -10,9 +10,11 @@ disagree, the code is right and this file is stale — fix it.
 
 ## Current position
 
-**Stage:** 6 — Storefront: browse, filter, sort (not started)
-**Status:** Stage 5 is complete — see the Stage 5 log entry below for the full acceptance-gate and
-quality-gate record. Stage 6 has not been started.
+**Stage:** 7 — Cart (not started)
+**Status:** Stage 6 is complete — see the Stage 6 log entry below for the full acceptance-gate and
+quality-gate record, including a process-failure note: a prior session shipped most of Stage 6's
+code without updating this section or writing a stage-log entry, which is exactly the kind of drift
+this file exists to prevent. That gap is closed and Stage 6 is genuinely done as of this update.
 **Last updated:** 2026-08-13
 **CI:** workflow committed (`.github/workflows/ci.yml`), never executed — no push has been made
 to any remote (the human pushes, per CLAUDE.md). Everything it runs has been run locally instead;
@@ -26,11 +28,12 @@ replace) + publish/unpublish/feature/unfeature/archive quick actions + a merchan
 `inventory/` (`StockReservation`, `InventoryAdjustment`, the reservation service layer, the
 `release_expired_reservations` sweeper), `search/` (`Product.search_text` denormalisation +
 rebuild signals, `PostgresSearchBackend` blending `ts_rank` with trigram word-similarity, the
-`rebuild_search_index` command, an HTMX type-ahead endpoint), a project-wide design system
-(`docs/design.md`, `tailwind.config.js` tokens, self-hosted IBM Plex). Stages 1-5 are fully built;
-Stage 6 (storefront browse/filter/sort) is next and not started. No `storefront` app exists yet —
-Stage 5's type-ahead endpoint lives in `search/` instead, since it didn't need one to exist (see
-Stage 5 notes).
+`rebuild_search_index` command, an HTMX type-ahead endpoint, now wired into every storefront page's
+header), `storefront/` (home page with featured/new-arrivals/category tiles, category and listing
+pages with composable filters + facet counts + sort + pagination, PDP with a variant selector,
+lightbox gallery, and skeleton loaders), a project-wide design system (`docs/design.md`,
+`tailwind.config.js` tokens, self-hosted IBM Plex). Stages 1-6 are fully built; Stage 7 (cart) is
+next and not started.
 
 ---
 
@@ -884,6 +887,181 @@ again. Not fixed — recorded as the correct way to get a trustworthy number, no
   it to `0.45` and back on a live connection before trusting it; verified `0.6` is sufficient for the
   binding cases (`afnn`/`Afnan` typo, `EDP-9PM-100` as a genuine substring of a longer stored SKU)
   against real Postgres data before writing it into `core/config.py`.
+
+### Stage 6 — Storefront: browse, filter, sort
+Completed: 2026-08-13
+Commits: 2a3dc60 feat(storefront): add product listing, PDP, and home page
+         64aeb41 feat(storefront): wire search, add new arrivals, lightbox, and skeleton loaders
+Acceptance gates: all passed
+  1. Filters compose (category + brand + price range + an attribute facet) with correct facet
+     counts that reflect the *other* active filters — `storefront/tests/test_filtering.py` (389
+     lines, one fixture per composition case). Verified live in a browser too: applying a filter,
+     reloading via the URL alone, reproduced the identical filtered state (see gate 2).
+  2. Filter state survives a reload and the back button — true by construction, not by a specific
+     mechanism that could regress: every filter round-trips through the query string
+     (`storefront/filtering.py`'s `ListingFilters`), there is no session state to lose. Confirmed
+     live in a browser during the original pass (recorded in the commit this builds on).
+  3. Selecting a variant on the PDP updates price, availability, and gallery hero without a reload —
+     Alpine `x-data` driven off `variants_data`/`gallery_images` (`json_script`-embedded, not
+     interpolated into an HTML attribute — see Notes, this was a real bug caught and fixed in the
+     original pass). `storefront/tests/test_product_detail_view.py`.
+  4. An out-of-stock variant cannot be added to the cart and the PDP names it specifically — the Add
+     to Cart button's `:disabled` binds to `variant.available_quantity <= 0`, and the button's own
+     label switches to "Out of Stock"; the availability line reads "Out of stock — this option is
+     currently unavailable.", not a generic message.
+     `test_pdp_exposes_every_variant_with_price_and_availability_for_the_selector`.
+  5. `assertNumQueries` bounded and flat as fixture count grows, on **all three** storefront list/
+     detail views — the listing page and the home page (`test_query_count_stays_flat_as_fixture_
+     count_grows_from_5_to_50` in both `storefront/tests/test_product_list_view.py` and
+     `storefront/tests/test_home_view.py`, 5→50 products, home page's featured+new-arrivals rails
+     included). The PDP has no fixture-count axis to grow against (one product per request), so its
+     query-count guard is a flat assertion instead. The home-page guard did not exist before this
+     pass — see Notes, "What the prior session's undocumented commit actually left unbuilt".
+  6. Every list and detail view has a defined empty state and a skeleton loader. Empty states:
+     product listing ("No products match these filters", with a clear-filters link) and the home
+     page's featured/new-arrivals sections ("No featured products yet" / "No products yet") existed
+     from the original pass. Skeleton loaders did not exist anywhere in the codebase before this
+     pass — added this pass to product cards (shared by listing, home-featured, and home-new-
+     arrivals via `_product_card.html`) and the PDP gallery hero. Mechanism: each image sits in an
+     `x-data="{ loaded: false }"` wrapper with a `bg-border-subtle animate-pulse` placeholder shown
+     via `x-show="!loaded"` and the real `<img>` shown via `x-show="loaded"`, set by
+     `x-init="loaded = $el.complete"` (handles the already-cached case, where the browser's `load`
+     event would otherwise never fire after Alpine attaches its listener) and `@load="loaded = true"`
+     otherwise. Custom, storefront-styled 404/500 pages (error states) already existed project-wide
+     since Stage 1 — `templates/404.html`/`500.html`, "Back to the store" CTA, no Django debug
+     traceback — re-verified applicable here, not rebuilt.
+  7. Quality gate green — see numbers below.
+
+Quality gate, final numbers (this pass): `ruff check` — all checks passed. `ruff format --check` —
+all files formatted. `mypy .` (whole tree, unscoped) — no issues in 123 source files.
+`makemigrations --check --dry-run` — no changes detected. `pytest --create-db` — 297 passed.
+Coverage: `storefront` 100%, `search` 100% (both floor 80%/90%). `manage.py check --deploy` clean
+under `config.settings.prod` (DEBUG=False, ALLOWED_HOSTS set, a real random `SECRET_KEY` via
+`get_random_secret_key()`, placeholder R2 credentials). `manage.py check` clean under
+`config.settings.dev`.
+Coverage: storefront 100%, search 100% (floors 80%/90%)
+Notes:
+
+**Process failure this stage exists to document, not just the feature gaps it caused — this is
+what `specs/state.md` exists to prevent, and it happened anyway.** A prior session committed
+`2a3dc60 feat(storefront): add product listing, PDP, and home page` — the home page, category and
+listing pages, the PDP with its variant selector, and `storefront/filtering.py` — directly onto
+`main`, with a real, substantive commit message describing live-browser-verified gates 1-4. But it
+never updated this file's **Current position** section (which still read "Stage 6 — not started,"
+"No `storefront` app exists yet" for an entire session after the app had shipped) and never wrote
+this stage-log entry. The only trace of Stage 6 having started at all was one `[Stage 6]` bullet
+added to *Proposed spec amendments* (the roadmap's `§11-18` numbering mismatch) — everything else
+about that commit's own scope was undocumented. This was caught at the start of this session by
+reading `git log` against `specs/state.md` and finding they disagreed, not because state.md said
+anything was wrong.
+
+**What that drift concretely cost: two roadmap deliverables were effectively marked done (by
+omission — nothing flagged them as missing) while genuinely unbuilt, and one Stage 5 loose end
+was never picked up.**
+- **Skeleton loaders** (named explicitly in gate 6, and in roadmap Stage 6's own deliverable list)
+  did not exist anywhere in the codebase — confirmed by `grep -rn "skeleton" .` returning zero
+  matches outside `roadmap.md` itself before this pass started.
+- **The lightbox** (named explicitly in the PDP's deliverable list — "gallery ... lightbox") did not
+  exist. The gallery's thumbnail row swapped the hero `<img>`'s `src` via a plain inline `onclick`;
+  clicking the hero image itself did nothing. There was no enlarged/full-screen view at all.
+- **Stage 5's search box was never wired into a page.** `templates/search/_search_input.html`'s own
+  comment already said "Stage 6 includes this into `storefront/base.html`'s `storefront_search`
+  block" — that block existed, empty, and stayed empty through all of `2a3dc60`. A customer visiting
+  the live Stage-6 storefront had no way to search at all. `templates/search/_suggestions.html`'s
+  own comment also already flagged that its rows had no `<a href>` to a PDP "until Stage 6 builds
+  that page" — Stage 6 built the page and still never added the link.
+
+None of this was a hard blocker anyone hit and deferred — the code that would have caught it
+(`grep -rn "skeleton"`, opening `templates/storefront/base.html` and reading its own
+`storefront_search` block) was never run against the finished work before it was declared done via
+silence (an unstated "current position," not an explicit claim of completion). Fixed this pass; see
+gate 6 above for the skeleton mechanism, and "Search wiring" below for the search fix.
+
+**What this pass actually built, on top of `2a3dc60`:**
+- **Search wiring.** `templates/storefront/base.html`'s `storefront_search` block now
+  `{% include %}`s `search/_search_input.html` (rendered on every storefront page, header
+  reflowed with `flex-wrap` so it doesn't break mobile layout). `search/_suggestions.html`'s rows
+  are now `<a href="{% url 'storefront:product_detail' ... %}">`-wrapped. Both partials' own
+  comments (quoted above) rewritten to stop describing themselves as not-yet-wired.
+- **New Arrivals**, named separately from "Featured" in roadmap Stage 6's own deliverable list and
+  genuinely absent (`HomeView` only ever queried `is_featured=True`). Added as its own `HomeView`
+  context key (`new_arrivals`, latest 8 published products by `-created_at`, deliberately not
+  deduplicated against `featured_products` — "featured" and "newest" are independent curations, a
+  product can legitimately be both) and its own home-page section with its own empty state.
+- **Lightbox**, hand-rolled in Alpine rather than vendoring Alpine's official Focus plugin (would
+  have meant a new frontend dependency for one modal, and CLAUDE.md's intervention rule 3 flags
+  "a dependency outside the approved list" as a stop-and-ask case — the vanilla-JS trap below is
+  ~15 lines and avoids that question entirely). Opens on clicking the hero image, closes on
+  Escape/click-outside/close button, Previous/Next cycle through every image. **Ships with a real
+  keyboard focus trap and focus restoration — added only after the human flagged mid-pass that the
+  first version didn't have one and §37 requires keyboard navigability.** Mechanism: `openLightbox()`
+  records `document.activeElement` before opening and moves focus to the close button;
+  `closeLightbox()` restores it; a `@keydown.tab` handler on the dialog wraps focus between the
+  dialog's first and last focusable `<button>` (computed live via `querySelectorAll`, so it
+  automatically excludes Previous/Next when there's only one image, since `x-show` removes them from
+  the tab order rather than just hiding them visually).
+- **Skeleton loaders** — mechanism described under gate 6 above. Applied to `_product_card.html`
+  (one partial, so listing/home-featured/home-new-arrivals all inherit it for free — CLAUDE.md's "one
+  partial per reusable unit") and the PDP hero image.
+- **`assertNumQueries` on the home page** — didn't exist before this pass (the human flagged this
+  too: "two rails, two prefetches... currently has no query-count guard"). Same 5→50 technique as
+  the listing page's own gate-5 test. Flat, confirmed.
+
+**Everything above was verified live in a real browser, not just asserted by a passing test suite
+— the human's explicit instruction after the first pass's skeleton/lightbox tests turned out to
+assert source strings (`b"animate-pulse" in response.content`, `b'x-init="..." ' in response.content`)
+that would pass whether the feature actually worked or not.** What was actually checked, and how:
+- **Skeleton toggling against Alpine's real `loaded` state**, not just the presence of the CSS
+  class: read `Alpine.$data(el)` directly via the browser's own JS console (through the automation
+  tool's `javascript_exec`), forced `loaded` false then true on both the PDP hero and a product
+  card, and asserted `getComputedStyle(...).display` on the skeleton div and the `<img>` flipped
+  correctly each time — confirmed on a fresh page load for both. **One real false alarm during this
+  check, worth recording so nobody re-investigates it:** the very first attempt on the product-card
+  skeleton showed the image staying hidden after `loaded` was set `true`; re-run immediately after
+  with a fresh page navigation (rather than reusing state from a script that had run moments after
+  a `navigate` call, before Alpine had necessarily finished attaching) came back clean, and every
+  subsequent repeat was clean. Treated as a test-script timing artifact, not a product defect — no
+  code changed as a result, and the mechanism itself (`x-show` bound directly to a plain reactive
+  boolean) has no code path that could reproduce a stuck skeleton.
+- **The lightbox's focus trap, in both directions, with real keyboard events**, not synthetic
+  clicks: opened the lightbox (focus landed on Close, confirmed via `document.activeElement`),
+  pressed Shift+Tab from Close and confirmed focus wrapped to Next (the last focusable), pressed Tab
+  from Next and confirmed it wrapped back to Close, then Tab again and confirmed it advanced
+  normally to Previous. Pressed Escape and confirmed both `lightboxOpen` went false *and*
+  `document.activeElement` returned to the hero button that opened it (focus restoration, not just
+  visual close). Separately confirmed click-outside (`@click.self`) also closes and restores focus
+  the same way. Previous/Next were confirmed to cycle correctly including wrap-around
+  (0 → next → 1 → prev → 0 → prev → 2, the last index).
+- **The search suggestion linking to the PDP**: typed a product name into the header search box on
+  a real page, watched the HTMX-swapped dropdown render the matching product, clicked it, and
+  confirmed the browser navigated to `/product/<slug>/`.
+- Coordinate-based and element-ref-based clicks through the browser automation tool's own
+  `computer`/`find` tools did not reliably register against the gallery's Alpine `@click` handlers
+  during this session (state didn't change after the click); dispatching the same click via
+  `element.click()` through the automation tool's JS-execution capability worked every time and is
+  indistinguishable from a real click as far as Alpine's event listener is concerned. Real keyboard
+  input (Tab/Shift+Tab/Escape) through the automation tool worked correctly throughout — the
+  keyboard-driven focus-trap verification above did not need this workaround. Recorded in case a
+  future session hits the same tooling quirk and wonders whether it's the app or the tool.
+- Given the source-string tests turned out to be weak evidence on their own, they were trimmed to
+  one minimal smoke assertion each (`b"animate-pulse"`, `b'role="dialog"'`) with a docstring pointing
+  here for the real evidence, rather than deleted outright — they still catch "the markup vanished
+  entirely," which a live check run once in one session does not keep catching on every future
+  change.
+- Home page hero is a plain text banner (store name + "Shop All Products" CTA), not an image-based
+  marketing hero — roadmap's own `§13` citation for the home page doesn't exist in
+  `REQUIREMENTS.md` (same numbering-mismatch class already recorded under *Proposed spec
+  amendments*, Stage 1's `requirements.md`/`REQUIREMENTS.md` casing entry), so there is no spec text
+  describing what a hero should contain. Left minimal rather than invented; Stage 12 (SEO and
+  performance pass) is the more natural place to add real marketing imagery once the merchant has
+  any to provide.
+- The dev database (not the test database) was found holding leftover fixture data from earlier
+  stages' live-verification passes that had never been cleaned up — 5 generic products
+  ("Product 0"-"Product 4"), roughly 90 orphaned "Category N" rows, and `StoreSettings.name`
+  overwritten to "Updated Name" (default `"My Store"`). Only the 3 `ProductImage` rows this
+  session's own verification created were removed — the human's explicit instruction was to leave
+  everything not created this session alone, since it might be data the human is using rather than
+  debris. Not cleaned up; flagged here for whoever eventually does.
 
 ---
 
