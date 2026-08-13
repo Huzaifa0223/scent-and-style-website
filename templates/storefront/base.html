@@ -28,7 +28,14 @@ partial that would couple their designs together.
 
     <footer class="border-t border-border-subtle bg-paper">
       <div class="mx-auto max-w-7xl px-4 py-8 text-sm text-text-muted">
-        {% block storefront_footer %}&copy; {{ store_settings.name }}{% endblock %}
+        {% block storefront_footer %}
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <span>&copy; {{ store_settings.name }}</span>
+            <a href="{% url 'orders:tracking' %}" class="text-ink hover:text-accent">
+              Track your order
+            </a>
+          </div>
+        {% endblock %}
       </div>
     </footer>
   </div>

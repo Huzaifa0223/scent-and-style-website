@@ -57,9 +57,15 @@
       // Every HTMX mutation in this project is a same-origin POST (cart,
       // Stage 7 onward) — Django's CSRF middleware rejects it without this
       // header. Read from the readable csrftoken cookie (CSRF_USE_SESSIONS
-      // is unset/False) rather than a per-page {% csrf_token %} value, so
-      // one listener covers every HTMX request without every template that
-      // triggers one needing to remember to embed a token.
+      // is unset/False) rather than a per-page csrf_token template-tag
+      // value (deliberately not written as literal template-tag syntax
+      // even in this comment — Django's parser doesn't know "this is
+      // inside a JS comment" and would render a real, randomly-rotating
+      // hidden input right here on every single page in the project if it
+      // were; caught by Stage 11's byte-identical-response test, which is
+      // exactly what a stray live tag anywhere breaks), so one listener
+      // covers every HTMX request without every template that triggers
+      // one needing to remember to embed a token.
       document.body.addEventListener("htmx:configRequest", (event) => {
         const match = document.cookie.match(/(?:^|; )csrftoken=([^;]+)/);
         if (match) {

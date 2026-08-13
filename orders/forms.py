@@ -52,3 +52,15 @@ class CheckoutForm(forms.Form):
         else:
             cleaned_data["whatsapp_number"] = normalized
         return cleaned_data
+
+
+class OrderTrackingForm(forms.Form):
+    """Public order lookup (§25). Deliberately no ``clean_mobile_number``
+    validation here — a malformed phone must fail the same generic way an
+    order-not-found or a wrong-phone lookup does (``orders.tracking.
+    lookup_order()`` owns that decision entirely), not surface as a
+    third, distinguishable "invalid phone format" error that a real
+    Pakistani mobile number would never trigger."""
+
+    order_number = forms.CharField(max_length=20, label="Order number")
+    mobile_number = forms.CharField(max_length=20, label="Mobile number")

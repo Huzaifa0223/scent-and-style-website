@@ -31,13 +31,12 @@ from core.templatetags.money import money
 from orders.models import Order, OrderItem
 from store.models import StoreSettings
 
-# Stage 11 (public order tracking) owns this path. Referencing it now,
-# before that view exists, is a deliberate forward reference — same
-# pattern as Stage 5's search endpoint existing before Stage 6 wired it
-# into a page — not an accident. Until Stage 11 ships, this URL 404s;
-# recorded openly in state.md rather than building a stub tracking view
-# that would blur Stage 11's own security-sensitive scope (rate limiting,
-# phone verification) into this stage.
+# orders.urls's OrderTrackingView (roadmap Stage 11, requirements §25) is
+# mounted at exactly this path — a contract this module committed to
+# before that view existed (Stage 9's forward reference, matching Stage
+# 5's search endpoint existing before Stage 6 wired it into a page), and
+# now must keep matching exactly, since every status-update message sent
+# since Stage 9 already links here.
 TRACKING_URL_PATH = "/track/"
 
 

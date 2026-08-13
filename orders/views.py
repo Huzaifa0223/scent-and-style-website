@@ -17,7 +17,8 @@ from notifications.whatsapp.channel import WhatsAppLinkChannel
 from notifications.whatsapp.message_builder import build_order_confirmation_message
 from store.models import StoreSettings
 
-from .forms import CheckoutForm
+from . import tracking
+from .forms import CheckoutForm, OrderTrackingForm
 from .models import Order
 from .services import CheckoutInput, CheckoutValidationError, EmptyCartError, create_order
 
@@ -131,3 +132,67 @@ class OrderConfirmationView(View):
             "whatsapp_message": whatsapp_message,
         }
         return render(request, "orders/order_confirmation.html", context)
+
+
+class OrderTrackingView(View):
+    """Public order lookup by order number + mobile (§25, roadmap
+    Stage 11). Mounted at exactly ``/track/`` — the path
+    ``notifications.whatsapp.message_builder.TRACKING_URL_PATH`` already
+    committed to in every status-update message sent since Stage 9.
+
+    Every business-rule failure (rate limited, locked out, no match)
+    renders the *same* template with different context, at 200 for "no
+    match" and 429 for the two throttle cases — never a redirect, so
+    there is nothing here that depends on request timing or ordering to
+    stay indistinguishable. The "no match" branch deliberately renders no
+    form (a plain link back to a fresh lookup instead) so its response
+    body carries no per-request-random content (a fresh ``{% csrf_token
+    %}`` render differs on every call, by Django's own design) — gate 1's
+    byte-identical requirement holds by construction, not by two
+    templates that happen to agree today.
+    """
+
+    def get(self, request: HttpRequest) -> HttpResponse:
+        initial = {}
+        order_number = request.GET.get("order", "").strip()
+        if order_number:
+            initial["order_number"] = order_number
+        return render(
+            request, "orders/order_tracking.html", {"form": OrderTrackingForm(initial=initial)}
+        )
+
+    def post(self, request: HttpRequest) -> HttpResponse:
+        form = OrderTrackingForm(request.POST)
+        if not form.is_valid():
+            return render(request, "orders/order_tracking.html", {"form": form}, status=400)
+
+        ip_address = tracking.client_ip(request)
+        try:
+            tracking.check_rate_limit(ip_address=ip_address)
+        except tracking.LockedOutError:
+            return render(
+                request,
+                "orders/order_tracking.html",
+                {"form": OrderTrackingForm(), "locked_out": True},
+                status=429,
+            )
+        except tracking.RateLimitedError:
+            return render(
+                request,
+                "orders/order_tracking.html",
+                {"form": OrderTrackingForm(), "rate_limited": True},
+                status=429,
+            )
+
+        order_number = form.cleaned_data["order_number"]
+        order = tracking.lookup_order(
+            order_number=order_number, raw_mobile_number=form.cleaned_data["mobile_number"]
+        )
+        tracking.record_attempt(
+            ip_address=ip_address, order_number=order_number, succeeded=order is not None
+        )
+
+        if order is None:
+            return render(request, "orders/order_tracking.html", {"not_found": True}, status=200)
+
+        return render(request, "orders/order_tracking.html", {"order": order}, status=200)

@@ -209,3 +209,33 @@ class OrderEditEvent(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.order.order_number}: {self.edit_type} — {self.description}"
+
+
+class OrderTrackingAttempt(TimeStampedModel):
+    """Audit row for one public order-tracking lookup attempt (§25,
+    roadmap Stage 11) — the source of truth for both of
+    ``orders.tracking``'s rate-limiting tiers (a short window over every
+    attempt, a longer window over failed ones only) and "failed attempts
+    are logged" in the durable, queryable sense (``orders.tracking.
+    record_attempt()`` also emits a ``logger.warning()`` for the
+    application-log sense of "logged").
+
+    No FK to ``Order`` — a failed attempt's ``order_number`` may not
+    correspond to any real order at all, and a successful one shouldn't
+    give the audit row a reason to survive the order being deleted later.
+    No phone number stored either: §41 keeps customer PII out of logs,
+    and the attempted phone isn't needed to investigate abuse (the IP and
+    which order number was guessed are).
+    """
+
+    ip_address = models.GenericIPAddressField()
+    order_number = models.CharField(max_length=20, blank=True, default="")
+    succeeded = models.BooleanField()
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["ip_address", "created_at"])]
+
+    def __str__(self) -> str:
+        outcome = "succeeded" if self.succeeded else "failed"
+        return f"{self.ip_address} {outcome} looking up {self.order_number or '(blank)'}"
