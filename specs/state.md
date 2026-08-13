@@ -10,14 +10,16 @@ disagree, the code is right and this file is stale — fix it.
 
 ## Current position
 
-**Stage:** 9 — WhatsApp handoff (not started)
-**Status:** Stage 8 is complete — see the Stage 8 log entry below for the full acceptance-gate and
-quality-gate record. Built from a design printed up front and reviewed twice by an independent
-advisor (the first pass failed on an API error mid-run and was retried) plus the human's own review
-in between — both passes caught real, substantive issues before any code existed, all fixed and
-recorded in the Stage 8 notes. A real latent bug in Stage 2's own catalog trigger code was found and
-fixed along the way (migration 0008), and a real CI gap from Stage 7 (cart's coverage floor was
-never actually added to `.github/workflows/ci.yml`) was closed too.
+**Stage:** 10 — Order management and editing (not started)
+**Status:** Stage 9 is complete — see the Stage 9 log entry below for the full acceptance-gate and
+quality-gate record. `WHATSAPP_MESSAGE_MAX_CHARS` is a deliberately conservative, explicitly
+unverified placeholder (1000 chars) — §21's real-device measurement is a human task, not done, and
+not claimed done. Gate 4 (confirmation page works with JS disabled) is proven at the HTTP/HTML
+level (Django test client + a live same-origin `fetch()` against the running dev server, neither of
+which execute JavaScript); an actual visual check with a real browser's JS engine switched off could
+not be completed — the browser automation available this session is a Chrome extension scoped to
+page content, with no reach into `chrome://` settings or DevTools, confirmed after trying three
+approaches. Both gaps are recorded under *Human tasks* below, not silently marked done.
 **Last updated:** 2026-08-13
 **CI:** workflow committed (`.github/workflows/ci.yml`), never executed — no push has been made
 to any remote (the human pushes, per CLAUDE.md). Everything it runs has been run locally instead;
@@ -39,9 +41,12 @@ and drawer, add/increment/decrement/remove/clear with no page reload), `customer
 matched on normalised phone), `payments/` (`PaymentProvider` protocol + state enum only, no
 implementation), `shipping/` (`DeliveryZone`, the three `DeliveryCalculator` strategies), `orders/`
 (`Order`/`OrderItem` with full snapshot fields, the `ORD-{seq}-{rand}` order-number sequence, the
-`create_order()` transaction, single-page checkout, a session-scoped confirmation page), a
+`create_order()` transaction, single-page checkout, a session-scoped confirmation page),
+`notifications/` (`NotificationChannel` protocol, `WhatsAppLinkChannel`, order-confirmation message
+building with budget-aware truncation, six status-update templates on `StoreSettings` — built but
+not yet wired to a portal button, since no portal order detail page exists until Stage 10), a
 project-wide design system (`docs/design.md`, `tailwind.config.js` tokens, self-hosted IBM Plex).
-Stages 1-8 are fully built; Stage 9 (WhatsApp handoff) is next and not started.
+Stages 1-9 are fully built; Stage 10 (order management and editing) is next and not started.
 
 ---
 
@@ -1423,6 +1428,170 @@ order still 404'd.
   held. All fixture rows (order, customer, cart, category — the product/variant were already gone
   from the gate-1 check) removed by explicit primary key afterward, nothing left in the dev database.
 
+### Stage 9 — WhatsApp handoff
+Completed: 2026-08-13
+Commits: (recorded below once committed — see this entry's own note)
+Acceptance gates: all passed
+  1. A 30-item order produces a message within the budget, with the truncation notice and a
+     working tracking URL —
+     `notifications/tests/test_message_builder.py::test_gate1_a_30_item_order_truncates_within_budget_with_notice_and_tracking_url`
+     (30 real `OrderItem` rows, `whatsapp_message_max_chars=500`, asserts `len(message) <= 500`,
+     the "…and N more items" notice present, the tracking URL present, and that the
+     totals/delivery/tracking tail always survives truncation regardless of how many items got
+     cut). A second test proves the *inverse* — a generous budget truncates nothing, all 30 items
+     present. **`WHATSAPP_MESSAGE_MAX_CHARS` (`StoreSettings.whatsapp_message_max_chars`,
+     default 1000) is an unverified, deliberately conservative placeholder, explicitly not
+     recorded as a measured limit anywhere** — the human's own instruction for this stage was
+     specific: don't guess at a number and call it verified. See `docs/whatsapp-limits.md`
+     (created this stage, currently all blanks) and the *Human tasks* entry below.
+  2. The order exists and is visible in the portal whether or not the customer ever sends the
+     message — structurally true since Stage 8 (`create_order()` commits before any WhatsApp
+     string is even built) and re-asserted directly this stage:
+     `test_gate2_the_order_exists_before_and_independent_of_any_whatsapp_interaction` proves the
+     order is queryable immediately after checkout's POST returns, before
+     `OrderConfirmationView` — the only place that calls `message_builder` — has been requested at
+     all. No portal order list/detail exists yet to literally check "visible in the portal"
+     through (Stage 10's job); this is the structural guarantee that gate actually rests on.
+  3. No module outside `notifications/` constructs a WhatsApp string —
+     `tests/test_whatsapp_string_construction.py`, a repo-wide grep for the forbidden domain
+     substring across every `.py`/`.html` file outside `notifications/`. Verified to have teeth,
+     not just pass by construction: injected the substring into `orders/urls.py`, confirmed the
+     test failed naming that exact file, removed it, confirmed green again. Two real false
+     positives surfaced and fixed *before* trusting the test — see Notes.
+  4. **The confirmation page renders fully with JavaScript disabled — the redirect is an
+     enhancement, not the mechanism.** The order number, the full message text, and (when a
+     merchant WhatsApp number is configured) the `wa.me` link are all in the server-rendered HTML
+     itself: `test_confirmation_page_always_has_the_order_details_message_in_the_rendered_html`
+     asserts on the response body from the Django test client, which never executes JavaScript at
+     all — this is already a genuine no-JS proof for content presence, not a stand-in for one.
+     Confirmed live too, via `fetch()` against the running dev server from a same-origin tab
+     (retrieves raw HTML without executing any of the page's own `<script>` tags, so this is
+     exactly the no-JS case): order number, `id="whatsapp-link"` with the correct `href`,
+     `id="whatsapp-message-text"` containing the full message, and the copy button were all
+     present in the response body before any script ran. **What this session could *not* do:
+     visually confirm the rendered page in a real browser with JavaScript actually toggled off** —
+     the Chrome extension this session's browser automation runs through can only reach page
+     content, not `chrome://` settings or DevTools, which is a genuine capability limit, not
+     something worth spending more time routing around (confirmed by trying three approaches — a
+     direct `chrome://settings/content/javascript` navigation, F12, and Ctrl+Shift+I — before the
+     human explicitly said to stop). Recorded as a human task below, not silently marked done.
+  5. Quality gate green — see numbers below.
+
+Quality gate, final numbers: `ruff check` — all checks passed. `ruff format --check` — all files
+formatted (190 files). `mypy .` (whole tree, unscoped) — no issues in 181 source files.
+`makemigrations --check --dry-run` — no changes detected. `pytest --create-db` — 416 passed.
+Coverage: `notifications` 96% (`message_builder.py`/`channel.py` both 100%; `protocols.py` 0% —
+the `Protocol` body is by definition unexecuted, same accepted precedent as `payments/protocols.py`;
+floor 90%), `orders` 99%, `store` 100%. `manage.py check --deploy` clean under
+`config.settings.prod` (DEBUG=False, ALLOWED_HOSTS set, a real random `SECRET_KEY`, placeholder R2
+credentials). `manage.py check` clean under `config.settings.dev`. One transient run without
+`--create-db` showed 4 unrelated `store` test failures — confirmed as the already-documented
+test-database-staleness artifact (a `transaction=True` test committing for real across separate
+`pytest` process invocations, same mechanism Stage 5's notes already describe), not a real
+regression; re-ran with `--create-db` and it was clean, matching every other stage's own numbers
+in this file.
+Coverage: notifications 96% (protocols.py excluded from the floor check, matching payments/'s
+precedent), orders 99%, store 100% (floors 90%/90%/80%)
+Notes:
+
+**`WHATSAPP_MESSAGE_MAX_CHARS`'s placement and value, decided against the human's explicit
+instruction not to fabricate a verified number.** Lives on `StoreSettings` (`whatsapp_message_max_chars`,
+merchant-configurable, per the roadmap's own "conservative default in StoreSettings" wording), not
+a `core/config.py` constant — this is exactly the kind of value CLAUDE.md's own rule already
+covers ("if a merchant might change it, it is a StoreSettings field"). Default is **1000**
+characters of raw message text, chosen only as a deliberately conservative placeholder — smaller
+than every publicly-documented `wa.me` URL-length concern this session could find without a real
+device, at the cost of triggering truncation more eagerly than a verified number might need to.
+`docs/whatsapp-limits.md` states this explicitly at the top ("Status: not yet measured") with a
+table for the human to fill in per §21's own instruction (Android Chrome, iOS Safari, WhatsApp
+Web), rather than silently treating a guess as done. A `MinValueValidator(200)` floor on the field
+stops a merchant from fat-fingering an unusably tiny number; the truncation algorithm's own
+degenerate case (a budget too small even for a zero-item order's header+footer) is handled by
+returning the full over-budget message honestly rather than crashing — covered directly by
+`test_a_budget_too_small_even_for_a_zero_item_order_degrades_without_crashing`, which also proved
+a coverage gap (a branch that looked untested) was a real, reachable path, not dead code.
+
+**The truncation algorithm adds item lines one at a time, re-checking the full candidate (items so
+far + the "…and N more" notice + the totals/delivery/tracking footer) against the budget on every
+step**, rather than computing a byte budget for the item section in isolation — this is what
+guarantees the totals/delivery/tracking tail is never itself the thing that gets cut off, matching
+what a merchant or customer would actually need from a truncated message (item detail is the part
+that's safe to summarise; the total a customer owes and the tracking link are not). Verified this
+tail survives truncation directly, not just assumed:
+`test_gate1_a_30_item_order_truncates_within_budget_with_notice_and_tracking_url` asserts
+"Subtotal"/"Total"/"Deliver to" are all still present in the truncated output.
+
+**Two real false positives in the gate-3 grep test, found before trusting it, both from the same
+root cause: prose that *names* the forbidden substring without *constructing* one.** Stage 2's
+own no-float-on-money-fields grep (`tests/test_no_float_fields.py`) only excludes *itself* from
+its scan — it has no mechanism for a *different* file's docstring to safely discuss the term it's
+checking for in prose. This stage's first draft of both the FloatField-adjacent comment in this
+new grep test's own docstring, and two unrelated comments in `orders/views.py`/`orders/tests/
+test_views.py` explaining *why* a blank merchant WhatsApp number degrades a certain way, tripped
+their respective greps for exactly this reason. Fixed by rewording the prose to avoid the literal
+trigger substrings rather than weakening either grep's precision — matches this project's existing
+preference (Stage 2, Stage 5) for simple, blunt, reliable checks over clever ones that could miss
+a real violation.
+
+**Two real bugs caught by the human mid-implementation, both fixed before the first live-verification
+pass, not after:**
+1. The original "copy order details" button called `navigator.clipboard.writeText()`
+   unconditionally and set the button's "Copied!" state regardless of whether that call actually
+   succeeded. `navigator.clipboard` is a secure-context API — unavailable on a plain `http://`
+   deployment outside `localhost` — so on real production traffic (this project has no HTTPS
+   requirement recorded anywhere yet) the copy would silently fail while the button claimed
+   success. Fixed: the message text is now always rendered in a visible, selectable
+   `<textarea readonly>` (not hidden inside a JS-only-reachable `json_script` blob, which the
+   first draft used) — recoverable by the customer even if every JS path on the page fails, which
+   `test_confirmation_page_always_has_the_order_details_message_in_the_rendered_html` asserts
+   directly. The copy button itself now only reports success after a real `writeText()` resolution,
+   falling back to `textarea.select()` + `document.execCommand('copy')` (deprecated but still
+   broadly supported) when the Clipboard API isn't available, and simply leaves the text selected
+   for a manual Ctrl/Cmd+C if even that fails.
+2. `StoreSettings.whatsapp_number` defaults to blank, and the original design let
+   `WhatsAppLinkChannel.build_url(phone="", ...)` degrade to a real, documented WhatsApp behaviour
+   (a link that opens the message ready to send to *any* contact the person picks) — correct in
+   general, but wrong for this specific call site, since the whole point of the confirmation
+   page's WhatsApp button is reaching *the merchant specifically*. Fixed: `OrderConfirmationView`
+   now checks `StoreSettings.whatsapp_number` before building a URL at all, and omits the "Open
+   WhatsApp" button entirely (not a broken/unaddressed one) when it isn't configured — the order
+   number and the copyable message text remain regardless.
+   `test_confirmation_page_omits_the_whatsapp_button_when_the_merchant_number_is_unconfigured`
+   covers it; confirmed live too (cleared `whatsapp_number`, fetched the confirmation page, saw the
+   link genuinely absent while the order number and textarea stayed present).
+
+**Live-verified the full checkout-to-WhatsApp handoff against real WhatsApp infrastructure, not a
+mock.** Placed a real order, and the confirmation page's JS auto-redirect (same-tab
+`window.location.href`, 1.2s delay, reading the href already rendered on `#whatsapp-link` rather
+than building a second copy of the URL) actually landed on `api.whatsapp.com`'s own "Chat on
+WhatsApp with +92 300 1112222" page, showing the exact pre-composed message — order number, item,
+subtotal/delivery/total, delivery address, and tracking URL, all correctly formatted — ready to
+send. This is the strongest evidence available that the message format and the link-building logic
+are actually correct against the real service, short of the device-level truncation measurement
+that's still a human task.
+
+**Stage 9/10 scope boundary, checked against the roadmap before writing any code, matching the
+same discipline Stage 8 applied to the Stage 8/9 boundary.** §26's "merchant-initiated status-update
+messages from the order detail page" names a portal page (order detail) that doesn't exist until
+Stage 10. Built and tested `build_status_update_message()` fully in isolation this stage — six
+status templates on `StoreSettings`, editable, each rendering correctly with a real order plus a
+documented, tested graceful-degradation path for an unrecognised placeholder — but no portal button
+calls it yet, since there's no portal order detail page to put one on. Recorded here explicitly,
+same pattern as Stage 5's search endpoint existing before Stage 6 wired it into a page, so Stage 10
+knows this exists and is ready to be wired in rather than rediscovering it.
+
+**The `/track/` tracking URL Stage 9's messages already reference does not resolve to anything
+yet — a deliberate forward reference, not an oversight.** Building even a minimal stub tracking
+view now was considered and rejected: Stage 11 ("Public order tracking") owns real
+security-sensitive scope for this exact page (rate limiting by IP, phone-match verification,
+identical responses for "not found" vs. "phone doesn't match"), and a "harmless" placeholder now
+risks either blurring that scope or needing to be thrown away. `_tracking_url()`
+(`notifications/whatsapp/message_builder.py`) only ever includes the link when
+`StoreSettings.site_url` is configured (blank by default — no example.com placeholder is ever sent
+to a real customer), and the path constant `TRACKING_URL_PATH = "/track/"` is the contract Stage 11
+must satisfy. Until then, a customer who clicks it gets a 404 — the honest state, not a silently
+broken feature.
+
 ---
 
 ## Deviations from spec
@@ -1602,6 +1771,15 @@ decisions. Not blockers unless a stage's acceptance gate depends on one.
 ```
 - [ ] Measure the real wa.me payload ceiling on Android Chrome, iOS Safari, and WhatsApp Web;
       record in docs/whatsapp-limits.md and set WHATSAPP_MESSAGE_MAX_CHARS (stage 9)
+- [ ] Visually confirm the order confirmation page (stage 9) with JavaScript actually disabled in
+      a real browser. What's already verified without this: the Django test client (which never
+      executes JavaScript) asserts the order number, the full WhatsApp message text, and the
+      wa.me link are all present in the server-rendered HTML; a same-origin fetch() against the
+      live dev server confirmed the same thing against real server output before any script runs.
+      What's not verified: the actual rendered appearance/usability with a real browser's JS
+      engine switched off — the Chrome extension this agent's browser automation runs through
+      cannot reach chrome://settings or DevTools to toggle that (a capability limit, confirmed by
+      trying three approaches before giving up, not skipped)
 - [ ] Cloudflare R2 bucket and credentials (needed for stage 13, not before)
 - [ ] Domain and hosting decision (stage 13)
 - [ ] Merchant's real WhatsApp Business number for store settings
