@@ -10,16 +10,15 @@ disagree, the code is right and this file is stale — fix it.
 
 ## Current position
 
-**Stage:** 10 — Order management and editing (not started)
-**Status:** Stage 9 is complete — see the Stage 9 log entry below for the full acceptance-gate and
-quality-gate record. `WHATSAPP_MESSAGE_MAX_CHARS` is a deliberately conservative, explicitly
-unverified placeholder (1000 chars) — §21's real-device measurement is a human task, not done, and
-not claimed done. Gate 4 (confirmation page works with JS disabled) is proven at the HTTP/HTML
-level (Django test client + a live same-origin `fetch()` against the running dev server, neither of
-which execute JavaScript); an actual visual check with a real browser's JS engine switched off could
-not be completed — the browser automation available this session is a Chrome extension scoped to
-page content, with no reach into `chrome://` settings or DevTools, confirmed after trying three
-approaches. Both gaps are recorded under *Human tasks* below, not silently marked done.
+**Stage:** 11 — Public order tracking (not started)
+**Status:** Stage 10 is complete — see the Stage 10 log entry below for the full acceptance-gate
+and quality-gate record. Order status transitions, order editing (quantity/add/remove/price-
+override), the status timeline, and the merchant-initiated WhatsApp status-update panel (wired to
+Stage 9's `build_status_update_message()`) are all live in the portal, gated Owner-only pending
+Stage 17's Staff permission extension. Two real bugs in `transition_status()`'s stock-restore
+condition were caught and fixed before this stage was reported done — see its Notes. The
+`WHATSAPP_MESSAGE_MAX_CHARS` real-device measurement and the confirmation page's visual no-JS check
+(both Stage 9 human tasks) remain outstanding — see *Human tasks* below.
 **Last updated:** 2026-08-13
 **CI:** workflow committed (`.github/workflows/ci.yml`), never executed — no push has been made
 to any remote (the human pushes, per CLAUDE.md). Everything it runs has been run locally instead;
@@ -43,10 +42,16 @@ implementation), `shipping/` (`DeliveryZone`, the three `DeliveryCalculator` str
 (`Order`/`OrderItem` with full snapshot fields, the `ORD-{seq}-{rand}` order-number sequence, the
 `create_order()` transaction, single-page checkout, a session-scoped confirmation page),
 `notifications/` (`NotificationChannel` protocol, `WhatsAppLinkChannel`, order-confirmation message
-building with budget-aware truncation, six status-update templates on `StoreSettings` — built but
-not yet wired to a portal button, since no portal order detail page exists until Stage 10), a
-project-wide design system (`docs/design.md`, `tailwind.config.js` tokens, self-hosted IBM Plex).
-Stages 1-9 are fully built; Stage 10 (order management and editing) is next and not started.
+building with budget-aware truncation, six status-update templates on `StoreSettings`, now wired
+into the portal order detail page's "Notify customer" panel), a project-wide design system
+(`docs/design.md`, `tailwind.config.js` tokens, self-hosted IBM Plex). Stage 10 adds the order
+status state machine (`orders/status.py`'s explicit transition map, `orders/state_machine.py`'s
+`transition_status()` — the first real caller of Stage 4's `commit_reservation()`), order editing
+(`orders/editing.py`: quantity/add-line/remove-line/price-override, each routed through new
+`inventory.services` functions — `release_reserved()`, `consume()`, and three per-order bulk
+wrappers — so `orders/` never touches `StockReservation` directly), `OrderStatusEvent`/
+`OrderEditEvent` audit models, and the portal order list/detail UI.
+Stages 1-10 are fully built; Stage 11 (public order tracking) is next and not started.
 
 ---
 
@@ -1430,7 +1435,8 @@ order still 404'd.
 
 ### Stage 9 — WhatsApp handoff
 Completed: 2026-08-13
-Commits: (recorded below once committed — see this entry's own note)
+Commits: 384842e feat(notifications): add WhatsApp handoff — Stage 9
+         4ac3c7a docs: complete Stage 9 log entry in state.md
 Acceptance gates: all passed
   1. A 30-item order produces a message within the budget, with the truncation notice and a
      working tracking URL —
@@ -1592,6 +1598,168 @@ to a real customer), and the path constant `TRACKING_URL_PATH = "/track/"` is th
 must satisfy. Until then, a customer who clicks it gets a 404 — the honest state, not a silently
 broken feature.
 
+### Stage 10 — Order management and editing
+Completed: 2026-08-13
+Commits: d1cc37e feat(orders,inventory,portal): add order management and editing — Stage 10
+         (this entry's own docs commit follows separately)
+Acceptance gates: all passed
+  1. Every allowed transition succeeds; every disallowed one is rejected with a 4xx —
+     `orders/tests/test_state_machine.py::test_gate1_every_entry_in_the_allowed_transition_map_actually_succeeds`
+     (walks every edge in `ALLOWED_TRANSITIONS` independently) and
+     `test_gate1_a_disallowed_transition_raises` at the service layer;
+     `portal/tests/test_order_views.py::test_gate1_a_valid_status_transition_succeeds` and
+     `test_gate1_an_invalid_status_transition_is_rejected_with_a_4xx` at the HTTP layer (asserts
+     `response.status_code == 400` specifically, not just "not 200"). Live-verified: the portal's
+     status dropdown only ever offers the current status's legal next steps (confirmed at Pending
+     Confirmation, Confirmed, and Processing), which is itself proof `allowed_transitions` renders
+     correctly — the illegal-transition 400 path itself was exercised via the test client, not
+     manually, since the UI structurally can't submit one.
+  2. Editing a line quantity upward reserves the delta; downward releases it —
+     `orders/tests/test_editing.py::test_gate2_a_quantity_increase_while_pending_reserves_the_delta`
+     /`test_gate2_a_quantity_decrease_while_pending_releases_the_delta`, asserting the actual
+     `StockReservation` row quantities, not just the `OrderItem`. Live-verified: raised a real
+     order's quantity 3 -> 5 through the portal UI, confirmed via a direct DB query that the delta
+     (not the whole new quantity) was reflected correctly and `stock_quantity` stayed untouched
+     while still Pending Confirmation.
+  3. A line-price override changes the total and writes an audit row showing both values —
+     `test_gate3_a_price_override_changes_the_total_and_writes_an_audit_row_with_both_values`,
+     which calls `event.refresh_from_db()` before asserting on `before`/`after` specifically to
+     prove the `JSONField(encoder=DjangoJSONEncoder)` round-trip, not just the in-memory dict.
+     Live-verified: overrode a line's price 750 -> 600 through the portal UI, watched subtotal/total
+     recalculate and the Edit history panel render "Price overridden — ... " with the actor and
+     timestamp.
+  4. Editing a dispatched order is refused — `test_gate4_editing_a_dispatched_order_is_refused`
+     (all four edit actions) and, at the HTTP layer,
+     `test_gate4_editing_a_dispatched_order_via_http_is_refused_with_a_4xx`. Live-verified: walked
+     a real order from Confirmed through Processing and watched the detail page's item rows lose
+     every Set/Remove/Add-line control, replaced with "This order is processing and can no longer
+     be edited." — confirming editing locks out starting at Processing, not just Dispatched, per
+     the literal two-status whitelist (see Open questions).
+  5. Cancel-after-confirm restores exactly the confirmed quantity —
+     `test_gate5_cancel_after_confirm_restores_exactly_the_confirmed_quantity`. A real bug in the
+     first draft of `transition_status()` was caught here before any of this was reported done: it
+     only special-cased the `Confirmed -> Cancelled` edge specifically, but the transition map also
+     legally allows cancelling from `Processing`, `Ready to Dispatch`, and `Failed Delivery` — every
+     one of which already ran `commit_all_for_order()` at the Confirmed step and has no reservation
+     left, so cancelling from any of them with the narrower condition would have silently left stock
+     decremented forever with no order left to ever use it. Fixed to `to_status == CANCELLED`
+     without the `from_status == CONFIRMED` qualifier — self-caught while writing
+     `test_gate1_every_entry_in_the_allowed_transition_map_actually_succeeds`, not by a review pass.
+  6. The timeline renders every transition in order with actor and timestamp —
+     `test_gate6_timeline_lists_every_transition_in_order_with_actor_and_timestamp`, which also
+     proves the very first row (`from_status=""`, `actor=None`) is the order's own creation event,
+     written by `create_order()` itself — the timeline is never empty for a freshly-placed order.
+     Live-verified: the status timeline panel rendered "pending_confirmation — Order placed by
+     customer / Customer" as its first row before any merchant action, then each subsequent
+     transition with `stage10owner` and a real timestamp.
+  7. Quality gate green — see numbers below.
+
+Quality gate, final numbers: `ruff check` — all checks passed. `ruff format --check` — all files
+formatted (203 files). `mypy .` (whole tree, unscoped) — no issues in 189 source files.
+`makemigrations --check --dry-run` — no changes detected. `pytest --create-db` — 491 passed.
+Coverage: `orders` 95% (`editing.py`/`state_machine.py`/`status.py` all 100%; `models.py` 96%, the
+only gaps two more untested `__str__` methods, same accepted pattern as every prior stage; floor
+90%), `inventory` 97% (`services.py` 99%; floor 90%), `portal` 93% (`order_forms.py`/`order_views.py`
+both 100%; floor 80%). `manage.py check --deploy` clean under `config.settings.prod` (DEBUG=False,
+ALLOWED_HOSTS set, a real random `SECRET_KEY`, placeholder R2 credentials). `manage.py check` clean
+under `config.settings.dev`.
+Coverage: orders 95%, inventory 97%, portal 93% (floors 90%/90%/80%)
+Notes:
+
+**The two things flagged before implementation started were both real design forks, not just
+reminders — worth recording why each landed where it did.**
+
+1. *`build_status_update_message()` had to be wired in without rebuilding it, and the recipient
+   turns out to be the opposite number from Stage 9's confirmation page.* Stage 9 built and fully
+   tested the function and all six status templates but had no caller — `OrderDetailView`'s context
+   now calls it directly (a cheap string-format call, no reason for a separate HTTP round-trip) and
+   builds the `wa.me` link via `WhatsAppLinkChannel().build_url(phone=order.
+   customer_whatsapp_number, ...)`. The confirmation page (Stage 9) addresses the merchant — the
+   customer is telling the merchant a new order exists. This page addresses the customer — the
+   merchant is telling them their order's status changed. Getting this backwards (addressing
+   `StoreSettings.whatsapp_number` here, matching the confirmation page's pattern by habit) would
+   have silently sent every status update to the merchant's own number instead of the customer's;
+   caught while designing, not after, by re-reading §26's own sentence ("a pre-composed `wa.me` link
+   opens addressed to the customer") rather than assuming the prior stage's pattern generalized.
+2. *Every reservation/stock change from an edit or a status transition routes through named
+   `inventory.services` functions — `orders/` never imports or constructs a `StockReservation`.*
+   This required two genuinely new functions (`release_reserved()`, the partial-quantity
+   counterpart `reserve()` never needed until now; `consume()`, a direct decrement with `reserve()`'s
+   own availability check but no reservation row, for editing an already-`Confirmed` order) and
+   three bulk per-order wrappers (`commit_all_for_order`/`release_all_for_order`/
+   `restore_all_for_order`) so `orders/state_machine.py` and `orders/editing.py` only ever say
+   "commit/release/restore/consume this order's stock" in one call, never enumerate
+   `StockReservation` rows themselves. The alternative — reading `StockReservation.objects.filter(
+   order=order)` directly from `orders/` to get IDs to hand to the existing per-reservation
+   functions — was considered and rejected before writing any code, since it would have made the
+   boundary a convention ("orders/ doesn't *write* StockReservation, but does read it") rather than
+   a fact ("orders/ never imports the model at all") — the latter is what the instruction actually
+   asked for and what a future `grep -rn StockReservation orders/` can verify mechanically.
+
+**A second bug an early test-writing pass caught, independent of the gate-5 bug above.** The
+original `transition_status()` also missed that `Failed Delivery -> Cancelled` is a legal edge in
+`ALLOWED_TRANSITIONS` (a delivery attempt failed, the merchant gives up and cancels) — same fix as
+gate 5's, since both are instances of the same underlying rule ("cancelling from anywhere past
+Confirmed must restore stock, not just from Confirmed itself").
+
+**`OrderEditEvent` is a new model the spec doesn't name explicitly** — §23 says only "writes an
+audit row capturing before and after values," and roadmap Stage 10 says the same. Recorded under
+Deviations below, not as a problem: `audit.AuditLog` (§33) is P1/Stage 15 and doesn't exist yet, so
+this is scoped narrowly to order edits the same way `InventoryAdjustment` (Stage 4) is scoped to
+stock changes rather than waiting on a general audit app. `before`/`after` are `JSONField(null=True,
+encoder=DjangoJSONEncoder)` rather than typed columns, since the shape genuinely differs by
+`edit_type` (quantity+price for a quantity change; a full item snapshot, with one side legitimately
+`None`, for add/remove) — `null=True` specifically so "there was nothing here yet" (add/remove's
+missing side) round-trips as SQL `NULL`, not an empty dict indistinguishable from a real empty
+value.
+
+**Order editing's actual availability arithmetic depends on which side of the Confirmed transition
+the order is on, and the two sides use genuinely different mechanisms — this is the load-bearing
+design fact for this whole stage, not an implementation detail.** While `Pending Confirmation`,
+stock is only ever *reserved* (Stage 4's `StockReservation`, never touching `stock_quantity`); an
+edit there calls `reserve()`/`release_reserved()`. The moment an order becomes `Confirmed`,
+`commit_all_for_order()` (this stage's own new wiring — see below) permanently decrements
+`stock_quantity` and deletes every reservation the order held, so there is nothing left to adjust a
+delta against; an edit there instead calls `consume()`/`restore()` directly against
+`stock_quantity`, under the same variant-row lock `reserve()` already uses. Both branches live in
+`orders/editing.py`'s own `if locked_order.status == PENDING_CONFIRMATION: ... else: ...` — reading
+either function without keeping this fork in mind makes half of it look redundant with the other
+half; it isn't.
+
+**Stage 4's `reserve()`/`commit_reservation()` had never actually been wired to a real order
+lifecycle before this stage — `transition_status()`'s `Pending Confirmation -> Confirmed` edge is
+the first real caller of `commit_reservation()` (via the new `commit_all_for_order()` wrapper)
+anywhere in the codebase.** Grepped for existing callers before writing any code, per the pattern
+this session's prior stages already established (Stage 3's archive-decision grep, Stage 9's
+tracking-URL forward-reference check) — confirmed `commit_reservation()` was tested in isolation
+since Stage 4 but never invoked by application code, meaning no order had ever actually had its
+stock permanently decremented at confirmation before this stage's status-transition view existed.
+
+**The status-transition map reads the requirements' arrow chain as strictly sequential — no
+skip-ahead — which is a genuine design choice, not the only reasonable reading.** `orders/status.py`
+requires `Confirmed -> Processing -> Ready to Dispatch -> Dispatched` in that literal order; a
+merchant who never uses "Ready to Dispatch" as a distinct step can't jump `Processing -> Dispatched`
+directly. Requirements doesn't say either way. Recorded as an open question below rather than
+silently picked, since a real merchant workflow might want to skip steps and this map would refuse
+it with a 400.
+
+**Live-verified end to end against the running dev server**, not just the test suite: created a
+real order via the actual checkout flow (cart -> `create_order()`), logged into the portal as a
+temporary superuser, and walked quantity edit, price override, add-line by SKU, and a
+`Pending Confirmation -> Confirmed -> Processing` status transition — each one checked directly
+against the database (not just the rendered page) to rule out a stale-render false positive after
+one screenshot appeared not to reflect an edit (it was a browser rendering artifact of the
+screenshot tool, not a real bug — confirmed by querying the DB directly and by reloading the page,
+both showing the edit had in fact applied). The `wa.me` link on the Confirmed status's "Notify
+customer" panel was read directly via the page's accessibility tree (not just eyeballed) and
+confirmed addressed to `923005551234` (the fixture's customer WhatsApp number), never
+`923001112222` (the fixture's `StoreSettings.whatsapp_number`). Temporary superuser, category,
+products, and order all removed afterward via a scratch script that was itself deleted; nothing
+from this check is in the dev database or repo. The invalid-status-transition 400 path could not be
+triggered through the live UI (the status dropdown structurally only ever offers legal next steps,
+which is itself the correct behavior) — that path's HTTP-level proof is the Django test client
+assertion in gate 1, not a live click.
+
 ---
 
 ## Deviations from spec
@@ -1622,6 +1790,13 @@ being recorded. The second is far more likely.
   stage). Reversible; the natural fix is a portal `DeliveryZone` CRUD (no roadmap stage currently
   assigns one — see Proposed spec amendments) followed by switching this field to a
   `ModelChoiceField`/dynamic select once one exists.
+- [Stage 10] `OrderEditEvent` is a model neither `requirements.md` nor `roadmap.md` names —
+  both say only "writes an audit row capturing before and after values." Added a small,
+  purpose-scoped model (order FK, actor, edit_type, description, before/after JSON) rather than
+  waiting on `audit.AuditLog` (§33, P1/Stage 15, doesn't exist yet), the same reasoning
+  `InventoryAdjustment` (Stage 4) already established for stock-change audit rows. Reversible;
+  once Stage 15 builds a general audit app, `OrderEditEvent` rows could be migrated into it or left
+  as a specialised sibling — not decided here.
 
 ---
 
@@ -1691,7 +1866,9 @@ says, and continue. The human resolves these.
   `Customer` itself ships with just the fields explicitly named (`name`, `phone`,
   `whatsapp_number`, `email`). Proposed change: add an explicit "Customers" deliverable to some
   stage (Stage 10's order-management work is the most natural fit, since it already builds portal
-  order list/detail UI) rather than leaving it unassigned.
+  order list/detail UI) rather than leaving it unassigned. **Not resolved by Stage 10** — that
+  stage's roadmap entry doesn't list a customer-profile page among its own deliverables/gates, so
+  none was built; still open.
 
 ---
 
@@ -1760,6 +1937,30 @@ Questions that did not block progress but need an answer eventually.
   under `reserve()`'s own lock). Revisit if it turns out to matter in practice — an idempotency
   token on the checkout form, or disabling the submit button client-side, are the two obvious
   fixes, neither implemented here since neither is spec-required.
+- [Stage 10] `EDITABLE_STATUSES` is read as the literal two-status whitelist from §23's operative
+  sentence ("While an order is Pending Confirmation or Confirmed, the merchant may...") rather than
+  the looser "blocked from Dispatched onward" restatement in the same section — meaning editing is
+  refused for `Processing` and `Ready to Dispatch` too, not just `Dispatched` and beyond. Assumed
+  in the meantime: the narrower, more literal reading is safer to ship than the more permissive
+  one, and easy to widen later (add two statuses to a frozenset) if the intent was actually
+  broader. Revisit if a merchant workflow needs to negotiate a discount or quantity change after
+  an order has moved into active processing.
+- [Stage 10] `orders/status.py`'s `ALLOWED_TRANSITIONS` requires the main pipeline
+  (`Confirmed -> Processing -> Ready to Dispatch -> Dispatched`) to proceed strictly in order, with
+  no skip-ahead — a merchant who doesn't use "Ready to Dispatch" as a distinct step can't jump
+  `Processing -> Dispatched` directly; the attempt is refused with a 400 like any other disallowed
+  transition. Requirements doesn't specify either way. Assumed in the meantime: strict sequencing,
+  since it's the literal reading of the arrow chain and the safer of two guesses. Revisit if a real
+  merchant workflow needs to skip a step.
+- [Stage 10] `release_expired_reservations()` (Stage 4's sweeper) still only deletes lapsed
+  `StockReservation` rows — it does not transition the owning `Order` to `Expired`, even though
+  that status exists specifically for "reservation lapsed" (§23) and Stage 10 now has the
+  `transition_status()` machinery that could drive it. A `Pending Confirmation` order whose
+  reservation the sweeper releases is left stuck at `Pending Confirmation` with no stock actually
+  held, and `Expired` is reachable today only via a merchant manually selecting it in the portal.
+  Not wired this stage — the roadmap's Stage 10 deliverables list doesn't mention the sweeper, and
+  inventing an automatic order-status side effect on a background job wasn't asked for. Revisit
+  either as a small Stage 10 follow-up or explicitly assigned to a future stage.
 
 ---
 
