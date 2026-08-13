@@ -1,0 +1,143 @@
+{% extends "portal/base.html" %}
+{% load money %}
+
+{% block title %}Orders — {{ store_settings.name }} Portal{% endblock %}
+
+{% block portal_breadcrumbs %}Orders{% endblock %}
+
+{% block content %}
+  <h1 class="mb-4 text-xl font-semibold text-ink">Orders</h1>
+
+  <form method="get" class="mb-4 flex flex-wrap items-end gap-3">
+    <input
+      type="text"
+      name="q"
+      value="{{ current_q }}"
+      placeholder="Order number or phone"
+      class="min-h-11 rounded border border-border-interactive bg-surface px-3 text-sm text-ink
+             focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent"
+    />
+    <select
+      name="status"
+      class="min-h-11 rounded border border-border-interactive bg-surface px-3 text-sm text-ink
+             focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent"
+    >
+      <option value="">All statuses</option>
+      {% for value, label in status_choices %}
+        <option value="{{ value }}" {% if current_status == value %}selected{% endif %}>
+          {{ label }}
+        </option>
+      {% endfor %}
+    </select>
+    <label class="flex flex-col text-xs text-text-muted">
+      From
+      <input
+        type="date"
+        name="from"
+        value="{{ current_from }}"
+        class="min-h-11 rounded border border-border-interactive bg-surface px-3 text-sm text-ink
+               focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent"
+      />
+    </label>
+    <label class="flex flex-col text-xs text-text-muted">
+      To
+      <input
+        type="date"
+        name="to"
+        value="{{ current_to }}"
+        class="min-h-11 rounded border border-border-interactive bg-surface px-3 text-sm text-ink
+               focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent"
+      />
+    </label>
+    <button
+      type="submit"
+      class="inline-flex min-h-11 items-center justify-center rounded border
+             border-border-interactive px-4 text-sm font-medium text-ink hover:bg-paper
+             focus:outline-none focus-visible:ring-2 focus-visible:ring-accent
+             focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
+    >
+      Filter
+    </button>
+  </form>
+
+  <div class="overflow-x-auto rounded-lg border border-border-subtle bg-surface shadow-card">
+    <table class="min-w-full divide-y divide-border-subtle text-sm">
+      <thead class="bg-paper text-left text-xs font-semibold uppercase tracking-wide text-text-muted">
+        <tr>
+          <th class="px-4 py-3">Order</th>
+          <th class="px-4 py-3">Customer</th>
+          <th class="px-4 py-3">Placed</th>
+          <th class="px-4 py-3">Total</th>
+          <th class="px-4 py-3">Status</th>
+          <th class="px-4 py-3"></th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-border-subtle">
+        {% for order in orders %}
+          <tr>
+            <td class="px-4 py-3 font-mono text-ink">{{ order.order_number }}</td>
+            <td class="px-4 py-3 text-text-muted">
+              {{ order.customer_name }}
+              <span class="block text-xs">{{ order.customer_phone }}</span>
+            </td>
+            <td class="px-4 py-3 text-text-muted">{{ order.created_at|date:"d M Y, H:i" }}</td>
+            <td class="px-4 py-3 font-mono text-ink">{{ order.total|money }}</td>
+            <td class="px-4 py-3">
+              {% if order.status == 'delivered' %}
+                {% include "portal/_badge.html" with tone="success" label=order.get_status_display %}
+              {% elif order.status == 'cancelled' or order.status == 'failed_delivery' or order.status == 'expired' %}
+                {% include "portal/_badge.html" with tone="danger" label=order.get_status_display %}
+              {% elif order.status == 'pending_confirmation' %}
+                {% include "portal/_badge.html" with tone="warning" label=order.get_status_display %}
+              {% else %}
+                {% include "portal/_badge.html" with tone="accent" label=order.get_status_display %}
+              {% endif %}
+            </td>
+            <td class="px-4 py-3">
+              <a
+                href="{% url 'portal:order_detail' order.pk %}"
+                class="inline-flex min-h-11 items-center rounded px-2 text-xs font-medium
+                       text-accent hover:text-accent-hover focus:outline-none
+                       focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+              >
+                View
+              </a>
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="6" class="px-4 py-6 text-center text-text-muted">No orders match these filters.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if is_paginated %}
+    <nav class="mt-4 flex items-center justify-between text-sm text-text-muted">
+      <span>Page {{ page_obj.number }} of {{ paginator.num_pages }}</span>
+      <div class="flex gap-2">
+        {% if page_obj.has_previous %}
+          <a
+            href="?page={{ page_obj.previous_page_number }}"
+            class="inline-flex min-h-11 items-center rounded border border-border-interactive px-3
+                   hover:bg-paper focus:outline-none focus-visible:ring-2 focus-visible:ring-accent
+                   focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
+          >
+            Previous
+          </a>
+        {% endif %}
+        {% if page_obj.has_next %}
+          <a
+            href="?page={{ page_obj.next_page_number }}"
+            class="inline-flex min-h-11 items-center rounded border border-border-interactive px-3
+                   hover:bg-paper focus:outline-none focus-visible:ring-2 focus-visible:ring-accent
+                   focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
+          >
+            Next
+          </a>
+        {% endif %}
+      </div>
+    </nav>
+  {% endif %}
+{% endblock %}

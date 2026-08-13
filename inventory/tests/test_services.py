@@ -18,7 +18,7 @@ from catalog.models import ProductVariant
 from inventory import services
 from inventory.factories import StockReservationFactory
 from inventory.models import InventoryAdjustment, StockReservation
-from orders.factories import OrderFactory
+from orders.factories import OrderFactory, OrderItemFactory
 from store.models import StoreSettings
 
 
@@ -272,3 +272,181 @@ def test_deleting_the_actor_leaves_the_adjustment_row_with_a_null_actor() -> Non
 def test_release_expired_reservations_returns_zero_when_nothing_is_expired() -> None:
     ProductFactory(default_variant_price=Decimal("10.00"))
     assert services.release_expired_reservations() == 0
+
+
+# --- roadmap Stage 10 additions: release_reserved, consume, and the
+# --- per-order bulk wrappers orders/ calls instead of touching
+# --- StockReservation itself. -----------------------------------------
+
+
+@pytest.mark.django_db
+def test_release_reserved_shrinks_a_single_reservation_row() -> None:
+    variant = ProductVariantFactory(stock_quantity=10)
+    order = OrderFactory()
+    reservation = services.reserve(variant_id=variant.pk, quantity=5, order=order)
+
+    services.release_reserved(variant_id=variant.pk, order=order, quantity=2)
+
+    reservation.refresh_from_db()
+    assert reservation.quantity == 3
+    variant.refresh_from_db()
+    assert variant.stock_quantity == 10  # never touched
+
+
+@pytest.mark.django_db
+def test_release_reserved_deletes_the_row_when_fully_consumed() -> None:
+    variant = ProductVariantFactory(stock_quantity=10)
+    order = OrderFactory()
+    reservation = services.reserve(variant_id=variant.pk, quantity=3, order=order)
+
+    services.release_reserved(variant_id=variant.pk, order=order, quantity=3)
+
+    assert not StockReservation.objects.filter(pk=reservation.pk).exists()
+
+
+@pytest.mark.django_db
+def test_release_reserved_spans_multiple_reservation_rows_oldest_first() -> None:
+    variant = ProductVariantFactory(stock_quantity=10)
+    order = OrderFactory()
+    first = services.reserve(variant_id=variant.pk, quantity=2, order=order)
+    second = services.reserve(variant_id=variant.pk, quantity=4, order=order)
+
+    services.release_reserved(variant_id=variant.pk, order=order, quantity=3)
+
+    assert not StockReservation.objects.filter(pk=first.pk).exists()
+    second.refresh_from_db()
+    assert second.quantity == 3  # 4 - (3 - 2) consumed from the first row
+
+
+@pytest.mark.django_db
+def test_release_reserved_ignores_another_orders_reservations_for_the_same_variant() -> None:
+    variant = ProductVariantFactory(stock_quantity=10)
+    order = OrderFactory()
+    other_order = OrderFactory()
+    services.reserve(variant_id=variant.pk, quantity=3, order=other_order)
+    reservation = services.reserve(variant_id=variant.pk, quantity=3, order=order)
+
+    services.release_reserved(variant_id=variant.pk, order=order, quantity=3)
+
+    assert not StockReservation.objects.filter(pk=reservation.pk).exists()
+    assert StockReservation.objects.filter(order=other_order, quantity=3).exists()
+
+
+@pytest.mark.django_db
+def test_release_reserved_raises_when_the_order_holds_less_than_requested() -> None:
+    variant = ProductVariantFactory(stock_quantity=10)
+    order = OrderFactory()
+    services.reserve(variant_id=variant.pk, quantity=2, order=order)
+
+    with pytest.raises(ValidationError):
+        services.release_reserved(variant_id=variant.pk, order=order, quantity=5)
+
+
+@pytest.mark.django_db
+def test_release_reserved_rejects_zero_or_negative_quantity() -> None:
+    variant = ProductVariantFactory(stock_quantity=10)
+    order = OrderFactory()
+    with pytest.raises(ValidationError):
+        services.release_reserved(variant_id=variant.pk, order=order, quantity=0)
+
+
+@pytest.mark.django_db
+def test_consume_decrements_stock_directly_and_writes_an_adjustment() -> None:
+    variant = ProductVariantFactory(stock_quantity=10)
+
+    services.consume(
+        variant_id=variant.pk, quantity=4, reason=InventoryAdjustment.Reason.ORDER_EDITED
+    )
+
+    variant.refresh_from_db()
+    assert variant.stock_quantity == 6
+    adjustment = InventoryAdjustment.objects.get(variant=variant)
+    assert adjustment.delta == -4
+    assert adjustment.reason == InventoryAdjustment.Reason.ORDER_EDITED
+    assert StockReservation.objects.filter(variant=variant).count() == 0
+
+
+@pytest.mark.django_db
+def test_consume_respects_other_orders_active_reservations() -> None:
+    variant = ProductVariantFactory(stock_quantity=10)
+    StockReservationFactory(variant=variant, quantity=7)
+
+    with pytest.raises(services.InsufficientStockError):
+        services.consume(
+            variant_id=variant.pk, quantity=4, reason=InventoryAdjustment.Reason.ORDER_EDITED
+        )
+
+    variant.refresh_from_db()
+    assert variant.stock_quantity == 10  # rejected attempt touched nothing
+
+
+@pytest.mark.django_db
+def test_consume_rejects_zero_or_negative_quantity() -> None:
+    variant = ProductVariantFactory(stock_quantity=10)
+    with pytest.raises(ValidationError):
+        services.consume(
+            variant_id=variant.pk, quantity=0, reason=InventoryAdjustment.Reason.ORDER_EDITED
+        )
+
+
+@pytest.mark.django_db
+def test_commit_all_for_order_commits_every_reservation_the_order_holds() -> None:
+    order = OrderFactory()
+    variant_a = ProductVariantFactory(stock_quantity=10)
+    variant_b = ProductVariantFactory(stock_quantity=10)
+    services.reserve(variant_id=variant_a.pk, quantity=3, order=order)
+    services.reserve(variant_id=variant_b.pk, quantity=2, order=order)
+
+    services.commit_all_for_order(order=order)
+
+    variant_a.refresh_from_db()
+    variant_b.refresh_from_db()
+    assert variant_a.stock_quantity == 7
+    assert variant_b.stock_quantity == 8
+    assert StockReservation.objects.filter(order=order).count() == 0
+
+
+@pytest.mark.django_db
+def test_release_all_for_order_releases_every_reservation_without_touching_stock() -> None:
+    order = OrderFactory()
+    variant = ProductVariantFactory(stock_quantity=10)
+    services.reserve(variant_id=variant.pk, quantity=3, order=order)
+
+    services.release_all_for_order(order=order)
+
+    variant.refresh_from_db()
+    assert variant.stock_quantity == 10
+    assert StockReservation.objects.filter(order=order).count() == 0
+
+
+@pytest.mark.django_db
+def test_restore_all_for_order_restores_each_lines_current_quantity() -> None:
+    order = OrderFactory()
+    variant = ProductVariantFactory(stock_quantity=10)
+    OrderItemFactory(order=order, variant=variant, quantity=3)
+    services.commit_reservation(
+        reservation_id=services.reserve(variant_id=variant.pk, quantity=3, order=order).pk
+    )
+    variant.refresh_from_db()
+    assert variant.stock_quantity == 7
+
+    services.restore_all_for_order(order=order, reason=InventoryAdjustment.Reason.ORDER_CANCELLED)
+
+    variant.refresh_from_db()
+    assert variant.stock_quantity == 10
+
+
+@pytest.mark.django_db
+def test_restore_all_for_order_skips_a_line_whose_variant_was_deleted() -> None:
+    order = OrderFactory()
+    product = ProductFactory()
+    variant = product.variants.get()
+    variant.stock_quantity = 10
+    variant.save(update_fields=["stock_quantity", "updated_at"])
+    ProductVariantFactory(product=product)  # so the product still has >=1 variant after delete
+    OrderItemFactory(order=order, variant=variant, quantity=2)
+    variant.delete()  # SET_NULL — item.variant_id is now None
+
+    services.restore_all_for_order(order=order, reason=InventoryAdjustment.Reason.ORDER_RETURNED)
+
+    assert InventoryAdjustment.objects.count() == 0

@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+from django.conf import settings
+from django.core.serializers.json import DjangoJSONEncoder
 from django.db import models
 
 from catalog.models import ProductVariant
@@ -127,3 +129,83 @@ class OrderItem(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.quantity} x {self.product_name} ({self.order.order_number})"
+
+
+class OrderStatusEvent(TimeStampedModel):
+    """One row per status transition (§23) — both the merchant audit trail
+    and the customer-facing timeline (§25, Stage 11). ``orders.services.
+    create_order()`` writes the first row itself (``from_status=""`` ->
+    ``PENDING_CONFIRMATION``, ``actor=None``) so the timeline has something
+    to show from the moment an order exists, not only from its first
+    merchant-driven change. ``orders.state_machine.transition_status()``
+    writes every row after that.
+
+    ``actor`` is nullable + ``SET_NULL`` (a deleted user account must not
+    erase the timeline) and blank for the creation event specifically,
+    since no merchant acted — the customer's own checkout did.
+    """
+
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="status_events")
+    from_status = models.CharField(max_length=32, blank=True, default="")
+    to_status = models.CharField(max_length=32, choices=Order.Status.choices)
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="order_status_events",
+    )
+    note = models.CharField(max_length=500, blank=True, default="")
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.order.order_number}: {self.from_status or '(new)'} -> {self.to_status}"
+
+
+class OrderEditEvent(TimeStampedModel):
+    """Audit row for one order-editing action (§23's editing rule) —
+    quantity change, line removed, line added, or a line-price override.
+    ``before``/``after`` are JSON rather than typed columns because the
+    shape genuinely differs per ``edit_type`` (quantity+price for a
+    quantity change; a full item snapshot for add/remove, where one side
+    is legitimately absent — ``null=True`` on both fields, not an empty
+    dict, so "there was nothing here yet" round-trips honestly rather than
+    being indistinguishable from "the value was empty").
+
+    No FK to ``OrderItem``: a remove-line event must survive the row it
+    describes being deleted, so ``description`` (the product name and SKU)
+    is what keeps the row identifiable on its own.
+
+    There is no ``audit.AuditLog`` app yet — §33's general-purpose audit
+    trail is P1 (roadmap Stage 15). This model is scoped narrowly to order
+    edits, the same way ``inventory.InventoryAdjustment`` is scoped to
+    stock changes rather than waiting on a general audit app that doesn't
+    exist yet.
+    """
+
+    class EditType(models.TextChoices):
+        QUANTITY_CHANGED = "quantity_changed", "Quantity changed"
+        LINE_ADDED = "line_added", "Line added"
+        LINE_REMOVED = "line_removed", "Line removed"
+        PRICE_OVERRIDDEN = "price_overridden", "Price overridden"
+
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="edit_events")
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="order_edit_events",
+    )
+    edit_type = models.CharField(max_length=32, choices=EditType.choices)
+    description = models.CharField(max_length=255)
+    before = models.JSONField(null=True, encoder=DjangoJSONEncoder)
+    after = models.JSONField(null=True, encoder=DjangoJSONEncoder)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.order.order_number}: {self.edit_type} — {self.description}"

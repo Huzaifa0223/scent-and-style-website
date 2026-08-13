@@ -52,10 +52,10 @@ class StockReservation(TimeStampedModel):
 
 class InventoryAdjustment(TimeStampedModel):
     """Append-only audit row for every real change to ``stock_quantity`` —
-    manual corrections and the two order-driven cases (confirmed,
-    cancelled/returned after confirmation). Reservation create/release
-    never touches ``stock_quantity``, so those never write a row here;
-    only actual on-hand changes do.
+    manual corrections and the order-driven cases (confirmed,
+    cancelled/returned after confirmation, edited while confirmed).
+    Reservation create/release never touches ``stock_quantity``, so those
+    never write a row here; only actual on-hand changes do.
 
     ``actor`` is nullable + ``SET_NULL`` so the audit trail survives a
     deleted user account — losing who made a change is worse than losing
@@ -68,6 +68,7 @@ class InventoryAdjustment(TimeStampedModel):
         ORDER_CONFIRMED = "order_confirmed", "Order confirmed"
         ORDER_CANCELLED = "order_cancelled", "Order cancelled after confirmation"
         ORDER_RETURNED = "order_returned", "Order returned"
+        ORDER_EDITED = "order_edited", "Order edited"
 
     variant = models.ForeignKey(
         ProductVariant, on_delete=models.CASCADE, related_name="adjustments"

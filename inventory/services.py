@@ -105,6 +105,84 @@ def reserve(
     )
 
 
+@transaction.atomic
+def release_reserved(*, variant_id: int, order: Order, quantity: int) -> None:
+    """Release exactly ``quantity`` units of ``order``'s own active
+    reservations against ``variant`` — the counterpart ``release()``
+    doesn't provide: that function deletes one whole reservation row by
+    id, but a quantity-*down* edit on a still-pending order may need to
+    give back fewer units than a single row holds (roadmap Stage 10:
+    "increasing a line quantity must reserve the delta... decreasing must
+    release it"). Consumes rows oldest-first, deleting a row once it's
+    fully released and shrinking the last partially-consumed one.
+
+    Locks the variant row first, same as every other write in this
+    module — so this can never race a concurrent ``reserve()`` or
+    ``commit_reservation()`` for the same variant.
+    """
+    if quantity <= 0:
+        raise ValidationError("quantity must be a positive integer.")
+
+    ProductVariant.objects.select_for_update().get(pk=variant_id)
+    reservations = list(
+        StockReservation.objects.select_for_update()
+        .filter(variant_id=variant_id, order=order, expires_at__gt=Now())
+        .order_by("pk")
+    )
+
+    remaining = quantity
+    for reservation in reservations:
+        if remaining <= 0:
+            break
+        if reservation.quantity <= remaining:
+            remaining -= reservation.quantity
+            reservation.delete()
+        else:
+            reservation.quantity -= remaining
+            reservation.save(update_fields=["quantity", "updated_at"])
+            remaining = 0
+
+    if remaining > 0:
+        raise ValidationError(
+            f"Cannot release {quantity} unit(s) of variant {variant_id} for order "
+            f"{order.order_number}: only {quantity - remaining} were reserved for it."
+        )
+
+
+@transaction.atomic
+def consume(
+    *,
+    variant_id: int,
+    quantity: int,
+    reason: InventoryAdjustment.Reason,
+    actor: User | None = None,
+    note: str = "",
+) -> None:
+    """Directly decrement on-hand stock, with the same availability check
+    ``reserve()`` uses, but no reservation row — for a quantity-*up* edit
+    on an already-``Confirmed`` order. A confirmed order's stock is
+    already a permanent decrement (``commit_reservation()`` deleted its
+    reservation), so there is nothing left to add a delta reservation to;
+    increasing that commitment must recheck availability against *other*
+    orders' active reservations and decrement ``stock_quantity`` directly,
+    under the variant's row lock, so two concurrent edits against the
+    last unit still serialize correctly.
+    """
+    if quantity <= 0:
+        raise ValidationError("quantity must be a positive integer.")
+
+    variant = ProductVariant.objects.select_for_update().get(pk=variant_id)
+    available = variant.stock_quantity - _active_reserved_quantity(variant)
+    if available < quantity:
+        raise InsufficientStockError(
+            f"Only {available} unit(s) of {variant.sku} available, {quantity} requested."
+        )
+
+    variant.stock_quantity -= quantity
+    variant.save(update_fields=["stock_quantity", "updated_at"])
+    _write_adjustment(variant, delta=-quantity, reason=reason, actor=actor, note=note)
+
+
 def release(*, reservation_id: int) -> None:
     """Delete a reservation without touching ``stock_quantity`` — used for
     a merchant-cancelled pending order and, via
@@ -193,6 +271,40 @@ def adjust(
         variant, delta=delta, reason=InventoryAdjustment.Reason.MANUAL, actor=actor, note=note
     )
     return variant
+
+
+def commit_all_for_order(*, order: Order, actor: User | None = None) -> None:
+    """Confirm every reservation ``order`` still holds — called when an
+    order transitions ``Pending Confirmation`` -> ``Confirmed``. Iterates
+    rather than a bulk update so each row still goes through
+    ``commit_reservation()``'s own lock and audit write, unchanged; a
+    caller in ``orders/`` never touches ``StockReservation`` itself."""
+    reservation_ids = StockReservation.objects.filter(order=order).values_list("pk", flat=True)
+    for reservation_id in list(reservation_ids):
+        commit_reservation(reservation_id=reservation_id, actor=actor)
+
+
+def release_all_for_order(*, order: Order) -> None:
+    """Release every reservation ``order`` still holds, without touching
+    on-hand stock — called when a still-``Pending Confirmation`` order is
+    cancelled or expires."""
+    reservation_ids = StockReservation.objects.filter(order=order).values_list("pk", flat=True)
+    for reservation_id in list(reservation_ids):
+        release(reservation_id=reservation_id)
+
+
+def restore_all_for_order(
+    *, order: Order, reason: InventoryAdjustment.Reason, actor: User | None = None
+) -> None:
+    """Give back exactly each line's current quantity of on-hand stock —
+    called when a ``Confirmed`` order is cancelled, or a ``Delivered`` one
+    is returned. Skips a line whose ``variant`` is ``None`` (the product
+    was deleted) — there is no ``ProductVariant`` row left to credit, and
+    that deletion already means the stock it once represented isn't
+    tracked here anymore."""
+    for item in order.items.all():
+        if item.variant_id is not None:
+            restore(variant_id=item.variant_id, quantity=item.quantity, reason=reason, actor=actor)
 
 
 def release_expired_reservations() -> int:

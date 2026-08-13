@@ -32,7 +32,7 @@ from customers import services as customer_services
 from inventory import services as inventory_services
 from shipping.calculators import get_delivery_calculator
 
-from .models import Order, OrderItem
+from .models import Order, OrderItem, OrderStatusEvent
 from .order_number import generate_order_number
 
 
@@ -203,6 +203,13 @@ def create_order(*, cart: Cart, checkout_input: CheckoutInput) -> Order:
         discount=discount,
         total=total,
         customer_notes=checkout_input.notes,
+    )
+    OrderStatusEvent.objects.create(
+        order=order,
+        from_status="",
+        to_status=order.status,
+        actor=None,
+        note="Order placed by customer.",
     )
 
     # 9-10. OrderItem snapshots, then a reservation per line — reserve()

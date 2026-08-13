@@ -2,7 +2,15 @@ from __future__ import annotations
 
 from django.urls import URLPattern, path
 
-from . import image_views, inventory_views, product_actions, product_views, taxonomy_views, views
+from . import (
+    image_views,
+    inventory_views,
+    order_views,
+    product_actions,
+    product_views,
+    taxonomy_views,
+    views,
+)
 
 app_name = "portal"
 
@@ -93,5 +101,37 @@ urlpatterns: list[URLPattern] = [
         "inventory/<int:pk>/adjust/",
         inventory_views.InventoryAdjustView.as_view(),
         name="inventory_adjust",
+    ),
+    path("orders/", order_views.OrderListView.as_view(), name="order_list"),
+    path("orders/<int:pk>/", order_views.OrderDetailView.as_view(), name="order_detail"),
+    path(
+        "orders/<int:pk>/status/",
+        order_views.OrderStatusTransitionView.as_view(),
+        name="order_status_transition",
+    ),
+    path(
+        "orders/<int:pk>/tracking/",
+        order_views.OrderTrackingUpdateView.as_view(),
+        name="order_tracking_update",
+    ),
+    path(
+        "orders/<int:pk>/lines/add/",
+        order_views.OrderLineAddView.as_view(),
+        name="order_line_add",
+    ),
+    path(
+        "orders/<int:pk>/lines/<int:item_pk>/quantity/",
+        order_views.OrderLineQuantityView.as_view(),
+        name="order_line_quantity",
+    ),
+    path(
+        "orders/<int:pk>/lines/<int:item_pk>/price/",
+        order_views.OrderLinePriceView.as_view(),
+        name="order_line_price",
+    ),
+    path(
+        "orders/<int:pk>/lines/<int:item_pk>/remove/",
+        order_views.OrderLineRemoveView.as_view(),
+        name="order_line_remove",
     ),
 ]
