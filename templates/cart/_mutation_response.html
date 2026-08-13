@@ -1,0 +1,17 @@
+{% comment %}
+Returned by every cart mutation view (cart/views.py). Two out-of-band
+swaps — the header badge count, and the PDP's inline error slot (a no-op
+on any page that doesn't have #pdp-add-error, since HTMX just skips an OOB
+swap whose target id isn't present) — plus the drawer's line items as the
+"main" response body, which is what hx-target="#cart-drawer-content"
+actually swaps in.
+{% endcomment %}
+<span
+  id="cart-badge-count"
+  hx-swap-oob="true"
+  class="flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1 text-xs font-semibold text-white"
+>{{ cart_item_count }}</span>
+<div id="pdp-add-error" hx-swap-oob="true">
+  {% if error %}<p class="mt-2 text-sm font-medium text-danger">{{ error }}</p>{% endif %}
+</div>
+{% include "cart/_drawer_content.html" %}

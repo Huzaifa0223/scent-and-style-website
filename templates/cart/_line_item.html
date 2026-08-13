@@ -1,0 +1,47 @@
+{% load money %}
+{% comment %}
+One cart line — reused for every item in the drawer. `line` is a
+cart.services.CartLine (item, variant, purchasable_quantity,
+unavailable_reason, line_total, needs_attention).
+{% endcomment %}
+<li class="flex gap-3 px-3 py-3 {% if line.needs_attention %}bg-danger-soft{% endif %}">
+  <div class="min-w-0 flex-1">
+    <p class="truncate text-sm font-medium text-ink">
+      {% if line.variant %}{{ line.variant.product.name }}{% else %}Item unavailable{% endif %}
+    </p>
+    {% if line.variant %}
+      <p class="text-xs text-text-muted">{{ line.variant.sku }}</p>
+    {% endif %}
+    {% if line.unavailable_reason %}
+      <p class="mt-1 text-xs font-medium text-danger">{{ line.unavailable_reason }}</p>
+    {% endif %}
+    <div class="mt-2 flex items-center gap-2">
+      <button
+        type="button"
+        hx-post="{% url 'cart:decrement' line.item.pk %}"
+        hx-target="#cart-drawer-content"
+        hx-swap="innerHTML"
+        aria-label="Decrease quantity"
+        class="flex h-7 w-7 items-center justify-center rounded border border-border-interactive text-ink hover:bg-paper focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      >&minus;</button>
+      <span class="w-6 text-center text-sm text-ink">{{ line.item.quantity }}</span>
+      <button
+        type="button"
+        hx-post="{% url 'cart:increment' line.item.pk %}"
+        hx-target="#cart-drawer-content"
+        hx-swap="innerHTML"
+        aria-label="Increase quantity"
+        {% if not line.variant or not line.variant.is_active %}disabled{% endif %}
+        class="flex h-7 w-7 items-center justify-center rounded border border-border-interactive text-ink hover:bg-paper disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      >+</button>
+      <button
+        type="button"
+        hx-post="{% url 'cart:remove' line.item.pk %}"
+        hx-target="#cart-drawer-content"
+        hx-swap="innerHTML"
+        class="ml-auto text-xs font-medium text-text-muted hover:text-danger"
+      >Remove</button>
+    </div>
+  </div>
+  <p class="shrink-0 font-mono text-sm text-ink">{{ line.line_total|money }}</p>
+</li>

@@ -1,0 +1,38 @@
+{% comment %}
+Cart badge + drawer, included once in storefront/base.html's header. This
+outer element and its x-data are never replaced by an HTMX swap — only
+#cart-drawer-content (inside) is, via hx-target="#cart-drawer-content" on
+every cart mutation (including the PDP's Add to Cart button, which lives
+outside this subtree entirely but targets it by id) — so the drawer's
+open/closed state survives every mutation instead of snapping shut.
+{% endcomment %}
+<div id="cart-widget" x-data="{ cartOpen: false }" class="relative">
+  <button
+    type="button"
+    @click="cartOpen = !cartOpen"
+    aria-label="Cart"
+    aria-haspopup="true"
+    :aria-expanded="cartOpen"
+    class="flex items-center gap-1.5 rounded px-2 py-1.5 text-sm font-medium text-ink hover:bg-paper focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+  >
+    <span aria-hidden="true">Cart</span>
+    <span
+      id="cart-badge-count"
+      class="flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1 text-xs font-semibold text-white"
+    >{{ cart_item_count }}</span>
+  </button>
+
+  <div
+    id="cart-drawer"
+    x-show="cartOpen"
+    @click.outside="cartOpen = false"
+    @keydown.escape.window="cartOpen = false"
+    class="absolute right-0 top-full z-50 mt-2 w-80 rounded border border-border-subtle bg-surface shadow-card"
+    role="dialog"
+    aria-label="Cart"
+  >
+    <div id="cart-drawer-content">
+      {% include "cart/_drawer_content.html" %}
+    </div>
+  </div>
+</div>

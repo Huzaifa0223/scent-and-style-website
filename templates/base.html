@@ -53,6 +53,20 @@
 
     <script src="{% static 'vendor/htmx.min.js' %}" defer></script>
     <script src="{% static 'vendor/alpine.min.js' %}" defer></script>
+    <script>
+      // Every HTMX mutation in this project is a same-origin POST (cart,
+      // Stage 7 onward) — Django's CSRF middleware rejects it without this
+      // header. Read from the readable csrftoken cookie (CSRF_USE_SESSIONS
+      // is unset/False) rather than a per-page {% csrf_token %} value, so
+      // one listener covers every HTMX request without every template that
+      // triggers one needing to remember to embed a token.
+      document.body.addEventListener("htmx:configRequest", (event) => {
+        const match = document.cookie.match(/(?:^|; )csrftoken=([^;]+)/);
+        if (match) {
+          event.detail.headers["X-CSRFToken"] = decodeURIComponent(match[1]);
+        }
+      });
+    </script>
     {% block extra_body %}{% endblock %}
   </body>
 </html>

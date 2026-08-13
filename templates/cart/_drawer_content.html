@@ -1,0 +1,37 @@
+{% load money %}
+{% comment %}
+The swappable part of the cart drawer — everything inside #cart-drawer-content.
+Rendered on first page load (via storefront/base.html's include) and
+returned as-is by every cart mutation view, so both paths render from the
+exact same context shape (cart_lines/cart_subtotal).
+{% endcomment %}
+{% if cart_lines %}
+  <ul class="max-h-80 divide-y divide-border-subtle overflow-y-auto">
+    {% for line in cart_lines %}
+      {% include "cart/_line_item.html" %}
+    {% endfor %}
+  </ul>
+  <div class="border-t border-border-subtle p-3 text-sm">
+    <div class="flex items-center justify-between">
+      <span class="text-text-muted">Subtotal</span>
+      <span class="font-mono text-ink">{{ cart_subtotal|money }}</span>
+    </div>
+    <div class="mt-1 flex items-center justify-between">
+      <span class="text-text-muted">Delivery</span>
+      <span class="text-text-muted">Calculated at checkout</span>
+    </div>
+    <div class="mt-2 flex items-center justify-between border-t border-border-subtle pt-2 font-semibold">
+      <span class="text-ink">Total</span>
+      <span class="font-mono text-ink">{{ cart_subtotal|money }}</span>
+    </div>
+    <button
+      type="button"
+      hx-post="{% url 'cart:clear' %}"
+      hx-target="#cart-drawer-content"
+      hx-swap="innerHTML"
+      class="mt-3 w-full rounded border border-border-interactive px-3 py-2 text-sm text-ink hover:bg-paper focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+    >Clear cart</button>
+  </div>
+{% else %}
+  <p class="p-4 text-sm text-text-muted">Your cart is empty.</p>
+{% endif %}

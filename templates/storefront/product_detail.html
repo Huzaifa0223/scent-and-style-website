@@ -168,19 +168,25 @@
         <div class="mt-4 flex items-center gap-3">
           <label for="quantity" class="text-sm text-text-muted">Quantity</label>
           <input
-            id="quantity" type="number" min="1" value="1"
+            id="quantity" name="quantity" type="number" min="1" value="1"
             class="w-20 rounded border-border-interactive text-sm"
           />
         </div>
 
+        <input type="hidden" id="add-to-cart-variant-id" name="variant_id" :value="variantId" />
         <button
           type="button"
+          hx-post="{% url 'cart:add' %}"
+          hx-include="#quantity, #add-to-cart-variant-id"
+          hx-target="#cart-drawer-content"
+          hx-swap="innerHTML"
           :disabled="variant.available_quantity <= 0"
           class="mt-6 w-full rounded bg-accent px-4 py-3 text-sm font-semibold text-white hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           <span x-show="variant.available_quantity > 0">Add to Cart</span>
           <span x-show="variant.available_quantity <= 0">Out of Stock</span>
         </button>
+        <div id="pdp-add-error"></div>
 
         {% if product.description %}
           <div class="mt-8 border-t border-border-subtle pt-6 text-sm text-text-muted">

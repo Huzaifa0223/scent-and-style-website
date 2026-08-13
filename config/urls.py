@@ -20,6 +20,7 @@ urlpatterns: list[URLPattern | URLResolver] = [
     path("healthz/", healthz, name="healthz"),
     path("accounts/", include("accounts.urls")),
     path("search/", include("search.urls")),
+    path("cart/", include("cart.urls")),
     path("admin-portal/", include("portal.urls")),
     path("", include("storefront.urls")),
 ]
