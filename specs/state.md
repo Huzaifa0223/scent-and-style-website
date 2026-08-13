@@ -10,15 +10,18 @@ disagree, the code is right and this file is stale — fix it.
 
 ## Current position
 
-**Stage:** 11 — Public order tracking (not started)
-**Status:** Stage 10 is complete — see the Stage 10 log entry below for the full acceptance-gate
-and quality-gate record. Order status transitions, order editing (quantity/add/remove/price-
-override), the status timeline, and the merchant-initiated WhatsApp status-update panel (wired to
-Stage 9's `build_status_update_message()`) are all live in the portal, gated Owner-only pending
-Stage 17's Staff permission extension. Two real bugs in `transition_status()`'s stock-restore
-condition were caught and fixed before this stage was reported done — see its Notes. The
-`WHATSAPP_MESSAGE_MAX_CHARS` real-device measurement and the confirmation page's visual no-JS check
-(both Stage 9 human tasks) remain outstanding — see *Human tasks* below.
+**Stage:** 12 — SEO and performance pass (not started)
+**Status:** Stage 11 is complete — see the Stage 11 log entry below for the full acceptance-gate
+and quality-gate record. Public order tracking (`/track/`) is live with a two-tier, DB-backed rate
+limiter (no cache-based counter — `cache.incr()` on the database cache backend is genuinely racy,
+confirmed by reading Django's own source), and gate 1's byte-identical-response requirement is true
+by construction (one collapsed failure branch, not two templates). Proving that gate live surfaced
+and fixed a real, ten-stage-old, project-wide bug: `templates/base.html` had a stray live
+`{% csrf_token %}` invocation hiding inside a JS comment, silently embedding a random token on
+every page render since Stage 1 (harmless in practice, but it made any byte-for-byte page
+comparison impossible until fixed). The `WHATSAPP_MESSAGE_MAX_CHARS` real-device measurement and
+the confirmation page's visual no-JS check (both Stage 9 human tasks) remain outstanding — see
+*Human tasks* below.
 **Last updated:** 2026-08-13
 **CI:** workflow committed (`.github/workflows/ci.yml`), never executed — no push has been made
 to any remote (the human pushes, per CLAUDE.md). Everything it runs has been run locally instead;
@@ -50,8 +53,12 @@ status state machine (`orders/status.py`'s explicit transition map, `orders/stat
 (`orders/editing.py`: quantity/add-line/remove-line/price-override, each routed through new
 `inventory.services` functions — `release_reserved()`, `consume()`, and three per-order bulk
 wrappers — so `orders/` never touches `StockReservation` directly), `OrderStatusEvent`/
-`OrderEditEvent` audit models, and the portal order list/detail UI.
-Stages 1-10 are fully built; Stage 11 (public order tracking) is next and not started.
+`OrderEditEvent` audit models, and the portal order list/detail UI. Stage 11 adds public order
+tracking (`/track/`, `orders/tracking.py`) — a two-tier, DB-backed rate limiter
+(`OrderTrackingAttempt`, no cache dependency) checked before every lookup, and a single collapsed
+not-found/phone-mismatch response path that makes the byte-identical-response requirement true by
+construction rather than by convention.
+Stages 1-11 are fully built; Stage 12 (SEO and performance pass) is next and not started.
 
 ---
 
@@ -1601,7 +1608,7 @@ broken feature.
 ### Stage 10 — Order management and editing
 Completed: 2026-08-13
 Commits: d1cc37e feat(orders,inventory,portal): add order management and editing — Stage 10
-         (this entry's own docs commit follows separately)
+         b4369bf docs: complete Stage 10 log entry in state.md
 Acceptance gates: all passed
   1. Every allowed transition succeeds; every disallowed one is rejected with a 4xx —
      `orders/tests/test_state_machine.py::test_gate1_every_entry_in_the_allowed_transition_map_actually_succeeds`
@@ -1760,6 +1767,154 @@ triggered through the live UI (the status dropdown structurally only ever offers
 which is itself the correct behavior) — that path's HTTP-level proof is the Django test client
 assertion in gate 1, not a live click.
 
+### Stage 11 — Public order tracking
+Completed: 2026-08-13
+Commits: 8154d7e feat(orders): add public order tracking with rate limiting — Stage 11
+         (this entry's own docs commit follows separately)
+Acceptance gates: all passed
+  1. "Order not found" and "phone does not match" return byte-identical responses —
+     `orders/tests/test_tracking_views.py::test_gate1_not_found_and_phone_mismatch_return_byte_identical_responses`
+     and `test_gate1_an_unparseable_phone_also_matches_the_same_response_byte_for_byte`, both
+     asserting `response_a.content == response_b.content` directly (full-body comparison, not two
+     separate "looks generic" checks, per the human's explicit instruction). This is true by
+     construction: `orders.tracking.lookup_order()` collapses every non-match (no such order, wrong
+     phone, an unparseable phone) into one `None` return, so `OrderTrackingView.post()` has exactly
+     one failure branch to render — there are not two templates that happen to agree today and
+     could silently drift apart later. **Proving this gate live surfaced a real, previously-
+     undetected, project-wide bug unrelated to any of this stage's own code** — see Notes.
+  2. Rate limiting triggers at the configured threshold and the lockout applies —
+     `orders/tests/test_tracking.py::test_gate2_check_rate_limit_triggers_at_the_configured_threshold`
+     and `test_gate2_lockout_applies_after_repeated_failures` at the service layer;
+     `orders/tests/test_tracking_views.py::test_gate2_the_short_window_rate_limit_triggers_at_the_configured_threshold`
+     and `test_gate2_the_lockout_applies_after_repeated_failures` at the HTTP layer (the latter
+     proves a *correct* lookup is still refused once locked out — the whole point of that tier).
+     `test_a_locked_out_request_never_queries_for_the_order` proves the rate check runs strictly
+     before any lookup — no new `OrderTrackingAttempt` row for a request rejected at the gate.
+     Live-verified against the running dev server via `curl`: five identical POSTs succeeded (200),
+     the sixth returned 429 — exactly `TRACKING_RATE_LIMIT_MAX_ATTEMPTS`, not off by one in either
+     direction.
+  3. The response contains no email, no full address, no merchant notes, no internal IDs —
+     `test_gate3_the_response_never_leaks_email_address_notes_or_internal_ids` asserts on
+     `response.content.decode()` directly (not the view's context dict) against an order built with
+     a distinctive email, delivery address, customer note, merchant note, and a status-transition
+     note containing an internal comment about the customer, all deliberately chosen to be
+     impossible to appear on the page by accident. A second test,
+     `test_status_timeline_shows_the_status_but_never_the_actor_username`, proves the timeline
+     never renders which staff member made a change. Internal IDs are proven structurally, not by a
+     runtime substring match against `order.pk` (a small integer that can coincidentally match
+     unrelated numbers elsewhere on the page — an HTMX debounce delay, a quantity — a real false
+     positive this stage hit and fixed before trusting the test; see Notes): `test_gate3_the_
+     template_source_never_references_an_internal_pk` greps `templates/orders/order_tracking.html`
+     for `order.pk`/`order.id`/`customer_id`/`customer.pk`/`customer.id`, the same technique
+     Stage 8's own snapshot-leakage gate already uses.
+  4. Quality gate green — see numbers below.
+
+Quality gate, final numbers: `ruff check` — all checks passed. `ruff format --check` — all files
+formatted (206 files). `mypy .` (whole tree, unscoped) — no issues in 193 source files.
+`makemigrations --check --dry-run` — no changes detected. `pytest --create-db` — 519 passed.
+Coverage: `orders` 99% (`tracking.py`/`tracking_config.py` both 100%; `models.py` 94%, the only gaps
+untested `__str__` methods, same accepted pattern as every prior stage; floor 90%). `manage.py
+check --deploy` clean under `config.settings.prod` (DEBUG=False, ALLOWED_HOSTS set, a real random
+`SECRET_KEY`, placeholder R2 credentials). `manage.py check` clean under `config.settings.dev`.
+Coverage: orders 99% (floor 90%)
+Notes:
+
+**Rate limiting was built first, per the human's explicit instruction — `orders.tracking.
+check_rate_limit()` exists and is called before `orders.tracking.lookup_order()` was even
+written, not layered on after the lookup worked.** The actual mechanism was a real design
+decision, not an obvious default: Django's database cache backend (this project's only cache — no
+Redis, per CLAUDE.md) implements `cache.incr()` as a plain get-then-set with **no row lock**
+(confirmed by reading `django/core/cache/backends/base.py` directly, not assumed) — genuinely
+racy under two concurrent requests from the same IP. That imprecision is accepted elsewhere in
+this codebase (`catalog.services._generate_unique_sku()`'s check-then-create race, Stage 2) but
+was rejected here specifically, since the human's framing — "the rate limiter is the actual
+security control" — makes correctness the point, not an afterthought. Both tiers are windowed
+`COUNT` queries against a new `OrderTrackingAttempt` model instead: a short window over every
+attempt (regardless of outcome) and a longer window over failed attempts only, which self-expires
+as old failures age out of the window with no separate lockout flag or duration to track or clear.
+The same check-then-insert race exists in principle for a `COUNT`-then-`INSERT` pair, but the
+actual window for two requests from one IP landing in the same instant is far narrower in practice
+than a cache `get`-then-`set` pair (which additionally does two separate cache round-trips), and
+the consequence — a few extra guesses let through on rare timing — is bounded and non-catastrophic,
+unlike Stage 4's stock-oversell scenario. Recorded here so a future stage doesn't "simplify" this
+back to `cache.incr()` without re-deriving why it wasn't used.
+
+**A real, previously-undetected, project-wide bug surfaced only because this stage was the first
+to ever compare two full response bodies byte-for-byte.** `templates/base.html`'s HTMX
+CSRF-header script has a documentation comment reading "...rather than a per-page `{% csrf_token
+%}` value" — meant as prose describing a rejected alternative, inside a JavaScript `//` comment.
+Django's template engine has no concept of "this text is inside a JS comment"; it sees the literal
+`{% csrf_token %}` tag syntax anywhere in the file and renders a real, randomly-rotating hidden
+`<input>` right there, on **every single page in the entire project**, every single render, since
+Stage 1. Completely harmless in practice (invisible, never read by anything, inside a `<script>`
+block's comment) — which is exactly why nothing caught it for ten stages: nothing had ever needed
+two page renders to be identical before. Found by directly diffing two `client.post()` response
+bodies during this stage's own test-writing (not a code review), at byte offset ~4199 of a ~4700-
+byte page, the diff landing squarely inside that JS comment's rendered token value. Fixed by
+rewording the comment to avoid literal template-tag syntax; `git grep -n "csrf_token %}"` across
+`templates/` confirms this was the only occurrence outside `_form.html`-style partials that
+legitimately render one inside an actual `<form>`. Worth a general lesson for future stages: any
+prose anywhere in a template that needs to *describe* Django template syntax should avoid writing
+the literal `{% %}`/`{{ }}` delimiters, the same discipline already established for grep-test
+prose accidentally tripping its own check (Stage 9's WhatsApp/FloatField wording fixes) — this is
+the same failure shape one level down, at the template-engine layer instead of a grep's.
+
+**A second, smaller false positive caught before trusting gate 3: a runtime `str(order.pk) not in
+body` assertion failed on an order whose primary key happened to be a two-digit number that
+collided with an unrelated `"200ms"` HTMX debounce-delay attribute elsewhere on the page.** This
+is a structural flaw in that style of assertion, not a one-off — any small integer PK has real
+odds of coincidentally appearing in unrelated numeric page content (prices, quantities, delays,
+dimensions), so a runtime substring check against one is unreliable *by design*, not just unlucky
+this once. Replaced with a template-source grep (see gate 3 above) — the only fully reliable way to
+prove a specific Python attribute is never referenced, matching Stage 8's own precedent for the
+snapshot-leakage gate.
+
+**§25's own two named things to display — "status" and "delivery status" — are read as the same
+underlying field** (`Order.get_status_display()`, shown once), not two parallel displays; nothing
+in the domain model distinguishes a "delivery status" from the order's own status enum, and
+inventing a second parallel status field with no other spec support would be exactly the kind of
+unrequested abstraction CLAUDE.md warns against. Tracking number and courier name are shown
+separately, satisfying that half of the same sentence literally.
+
+**The public timeline shows only `to_status` and the timestamp per event — never `from_status`'s
+sibling fields `actor` or `note`.** `OrderStatusEvent.note` is merchant-entered free text at the
+point of a status transition (Stage 10's portal "Note (optional)" field) — there is no reliable way
+to know from a note's contents alone whether it's customer-safe ("handed to courier") or explicitly
+not ("customer was rude, flag account" — a real string this stage's own gate-3 test uses precisely
+because a merchant could plausibly type it). §25 already bars "merchant notes" for the Order's own
+`merchant_notes` field; the same reasoning extends to a per-event note with no spec text needed to
+justify it. This does mean the timeline loses the friendly "Order placed by customer." text
+`create_order()` writes into the very first event's own `note` — an accepted, minor UX cost of the
+blanket exclusion being simpler and safer than trying to auto-classify which notes are "safe."
+
+**Scope boundary, checked against §41 before writing any code.** §41 lists "rate limiting on
+login, checkout, tracking, and search" together. Only tracking's rate limiter is built this stage —
+the other three remain Stage 13 (Hardening)'s explicit deliverable, per the roadmap's own Stage 13
+entry repeating that exact same sentence. Stage 11's own acceptance gate 2 is scoped to tracking
+specifically ("Rate limited by IP... Failed attempts are logged"), so building the other three now
+would be scope creep the roadmap doesn't ask for, however easy it would be to justify given they
+share the "why."
+
+**No merchant-facing UI for reviewing `OrderTrackingAttempt` rows was built.** §33's general audit
+trail UI is explicitly P1 (Stage 15); this model exists purely as the rate limiter's own source of
+truth plus an application-log warning on each failure (`orders.tracking.record_attempt()`), which is
+what "failed attempts are logged" literally asks for. A merchant-visible abuse-monitoring page
+would be a real, defensible feature but isn't in this stage's deliverable list.
+
+Live-verified against the running dev server, working around a now-documented browser-automation
+quirk (Stage 10's notes already recorded that screenshots taken immediately after a form submit can
+show stale content — confirmed harmless there via a direct DB query; the same artifact reappeared
+here as a screenshot that still showed submitted form values instead of the "not found" message).
+Rather than fight the same rendering-lag issue twice, this stage's HTTP-level live checks were run
+directly via `curl` against the real running server instead of the browser tool for the failure-
+path and rate-limit checks specifically, alongside a full browser walkthrough for the successful-
+lookup case (which rendered correctly on the first screenshot: order number, status, items,
+subtotal/delivery/total, delivery city, and the three-event status timeline with timestamps, no
+email/address/notes/actor anywhere). A leftover `Cart` row from Stage 10's own live-verification
+pass (created that session, never deleted — `create_order()` clears cart *items* but not the `Cart`
+row itself) was discovered and removed as part of this stage's fixture setup; recorded here since
+it means Stage 10's "fixtures cleaned up" claim was incomplete, not because Stage 11 owns that gap.
+
 ---
 
 ## Deviations from spec
@@ -1797,6 +1952,11 @@ being recorded. The second is far more likely.
   `InventoryAdjustment` (Stage 4) already established for stock-change audit rows. Reversible;
   once Stage 15 builds a general audit app, `OrderEditEvent` rows could be migrated into it or left
   as a specialised sibling — not decided here.
+- [Stage 11] `OrderTrackingAttempt` is likewise a model neither spec file names — §25 says only
+  "failed attempts are logged." Same reasoning as `OrderEditEvent` (Stage 10): a small,
+  purpose-scoped model rather than waiting on the P1 audit app, doubling as the rate limiter's own
+  source of truth rather than a separate cache-based counter (see the Stage 11 Notes for why a
+  cache counter was rejected specifically). Reversible.
 
 ---
 
@@ -1961,6 +2121,21 @@ Questions that did not block progress but need an answer eventually.
   Not wired this stage — the roadmap's Stage 10 deliverables list doesn't mention the sweeper, and
   inventing an automatic order-status side effect on a background job wasn't asked for. Revisit
   either as a small Stage 10 follow-up or explicitly assigned to a future stage.
+- [Stage 11] `orders.tracking.client_ip()` reads only `REMOTE_ADDR` — it does not honour
+  `X-Forwarded-For` or any other proxy header. Behind this project's actual front door (Caddy,
+  per CLAUDE.md), every request in production will arrive from Caddy's own address unless Caddy is
+  explicitly configured to forward the real client IP and Django is explicitly configured to trust
+  it, which hasn't happened yet (that's Stage 13 hardening's job). Until then, the rate limiter in
+  production would see one IP (Caddy's) for every visitor, either rate-limiting all customers
+  together or none of them meaningfully. Assumed in the meantime: fine for dev/test, where
+  `REMOTE_ADDR` is the real client; must be revisited as part of Stage 13's own deployment
+  configuration, not silently assumed to already work.
+- [Stage 11] The public status timeline never renders `OrderStatusEvent.note`, including the
+  friendly "Order placed by customer." text `create_order()` itself writes into the very first
+  event — a blanket exclusion (see the Stage 11 Notes above for why) that trades away a small
+  amount of nice copy for not having to auto-classify which merchant-entered notes are
+  customer-safe. Revisit if a curated, explicitly-customer-facing note field is ever wanted
+  alongside the existing merchant-only one — a real feature, not a bug fix.
 
 ---
 
