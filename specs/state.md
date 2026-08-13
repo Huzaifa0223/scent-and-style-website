@@ -1770,7 +1770,7 @@ assertion in gate 1, not a live click.
 ### Stage 11 — Public order tracking
 Completed: 2026-08-13
 Commits: 8154d7e feat(orders): add public order tracking with rate limiting — Stage 11
-         (this entry's own docs commit follows separately)
+         32ac1a2 docs: complete Stage 11 log entry in state.md
 Acceptance gates: all passed
   1. "Order not found" and "phone does not match" return byte-identical responses —
      `orders/tests/test_tracking_views.py::test_gate1_not_found_and_phone_mismatch_return_byte_identical_responses`
