@@ -107,11 +107,6 @@ class ProductListView(ListView[Product]):
         return context
 
 
-def _variant_label(variant: ProductVariant) -> str:
-    values = [vav.value.value for vav in variant.variant_attribute_values.all()]
-    return " / ".join(values) if values else variant.sku
-
-
 class ProductDetailView(DetailView[Product]):
     """The variant selector (gate 3: price/availability/gallery update
     without a reload) is client-side Alpine, driven off ``variants_json`` —
@@ -157,7 +152,7 @@ class ProductDetailView(DetailView[Product]):
         ]
         context["default_variant"] = default_variant
         context["variant_options"] = [
-            {"id": variant.pk, "label": _variant_label(variant)} for variant in variants
+            {"id": variant.pk, "label": variant.display_label} for variant in variants
         ]
         # A plain Python list, not a pre-serialized JSON string — the
         # template's json_script tag does its own serialization/escaping.

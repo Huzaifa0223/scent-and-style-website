@@ -35,6 +35,7 @@ from catalog.factories import ProductVariantFactory
 from inventory import services
 from inventory.factories import StockReservationFactory
 from inventory.models import StockReservation
+from orders.factories import OrderFactory
 
 
 @pytest.mark.django_db
@@ -46,7 +47,7 @@ def test_reserve_locks_the_variant_row_with_select_for_update() -> None:
     variant = ProductVariantFactory(stock_quantity=5)
 
     with CaptureQueriesContext(connection) as captured:
-        services.reserve(variant_id=variant.pk, quantity=1)
+        services.reserve(variant_id=variant.pk, quantity=1, order=OrderFactory())
 
     assert any("FOR UPDATE" in query["sql"] for query in captured.captured_queries)
 
@@ -54,13 +55,19 @@ def test_reserve_locks_the_variant_row_with_select_for_update() -> None:
 @pytest.mark.django_db(transaction=True)
 def test_two_concurrent_reservations_for_the_last_unit_exactly_one_succeeds() -> None:
     variant = ProductVariantFactory(stock_quantity=1)
+    # Two different orders, standing in for two different customers racing
+    # for the same last unit — created upfront (main thread, committed
+    # before the workers start, same as `variant`) rather than inside
+    # attempt() itself, so the race is only ever over reserve(), not also
+    # over factory-boy's sequence counters across threads.
+    orders = {"t0": OrderFactory(), "t1": OrderFactory()}
     outcomes: dict[str, str] = {}
     barrier = threading.Barrier(2)
 
     def attempt(label: str) -> None:
         try:
             barrier.wait(timeout=5)
-            services.reserve(variant_id=variant.pk, quantity=1)
+            services.reserve(variant_id=variant.pk, quantity=1, order=orders[label])
             outcomes[label] = "reserved"
         except services.InsufficientStockError:
             outcomes[label] = "rejected"
@@ -87,13 +94,14 @@ def test_two_concurrent_reservations_with_enough_stock_for_both_both_succeed() -
     """The non-adversarial sibling: concurrency must not reject requests
     that both fit, only ones that don't."""
     variant = ProductVariantFactory(stock_quantity=5)
+    orders = {"t0": OrderFactory(), "t1": OrderFactory()}
     outcomes: dict[str, str] = {}
     barrier = threading.Barrier(2)
 
     def attempt(label: str) -> None:
         try:
             barrier.wait(timeout=5)
-            services.reserve(variant_id=variant.pk, quantity=2)
+            services.reserve(variant_id=variant.pk, quantity=2, order=orders[label])
             outcomes[label] = "reserved"
         except services.InsufficientStockError:
             outcomes[label] = "rejected"

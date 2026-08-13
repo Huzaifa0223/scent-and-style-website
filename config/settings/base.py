@@ -45,6 +45,10 @@ INSTALLED_APPS = [
     "search",
     "storefront",
     "cart",
+    "customers",
+    "payments",
+    "shipping",
+    "orders",
     "portal",
 ]
 

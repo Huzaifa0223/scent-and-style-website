@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any
 
 from django.core.cache import cache
@@ -8,6 +9,17 @@ from django.db.models import Q
 
 from core.config import STORE_SETTINGS_CACHE_KEY
 from core.models import TimeStampedModel
+
+
+class DeliveryStrategy(models.TextChoices):
+    """Which of shipping.calculators's three strategies
+    shipping.calculators.get_delivery_calculator() builds (§27). Lives
+    here rather than in shipping/models.py so shipping (a consumer of
+    StoreSettings) depends on store, not the other way around."""
+
+    FLAT_RATE = "flat_rate", "Flat rate"
+    FREE_ABOVE_THRESHOLD = "free_above_threshold", "Free above a threshold"
+    CITY_BASED = "city_based", "City-based"
 
 
 class StoreSettings(TimeStampedModel):
@@ -31,6 +43,29 @@ class StoreSettings(TimeStampedModel):
     # available stock (§10.1). Merchant-configurable — how long a customer
     # gets before an uncontacted WhatsApp order stops locking inventory.
     reservation_ttl_hours = models.PositiveIntegerField(default=24)
+
+    # Delivery (§27) — which strategy shipping.calculators.
+    # get_delivery_calculator() builds, and every rate/threshold all three
+    # strategies draw from. flat_delivery_rate serves both FLAT_RATE (the
+    # charge, always) and FREE_ABOVE_THRESHOLD (the charge, waived above
+    # free_delivery_threshold) — the requirement describes the free-above-
+    # threshold strategy as literally "flat rate, waived above a subtotal",
+    # not a second independent rate. free_delivery_threshold is also read
+    # by CITY_BASED, optionally ("city-based rates can carry a free-
+    # delivery threshold" — §27) — nullable because that strategy doesn't
+    # require one.
+    delivery_strategy = models.CharField(
+        max_length=32, choices=DeliveryStrategy.choices, default=DeliveryStrategy.FLAT_RATE
+    )
+    flat_delivery_rate = models.DecimalField(
+        max_digits=12, decimal_places=2, default=Decimal("0.00")
+    )
+    free_delivery_threshold = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True
+    )
+    city_fallback_delivery_rate = models.DecimalField(
+        max_digits=12, decimal_places=2, default=Decimal("0.00")
+    )
 
     class Meta:
         verbose_name = "Store Settings"

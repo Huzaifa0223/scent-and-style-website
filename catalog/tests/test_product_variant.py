@@ -10,6 +10,7 @@ from catalog.factories import (
     AttributeValueFactory,
     ProductFactory,
     ProductVariantFactory,
+    VariantAttributeValueFactory,
 )
 from catalog.models import AttributeValue, ProductVariant, VariantAttributeValue
 
@@ -30,6 +31,28 @@ def test_discount_percent_none_when_compare_at_price_not_higher() -> None:
 def test_discount_percent_computed_correctly() -> None:
     variant = ProductVariantFactory(price=Decimal("75.00"), compare_at_price=Decimal("100.00"))
     assert variant.discount_percent == 25
+
+
+@pytest.mark.django_db
+def test_display_label_falls_back_to_sku_with_no_attribute_values() -> None:
+    variant = ProductVariantFactory(sku="SKU-000123")
+    assert variant.display_label == "SKU-000123"
+
+
+@pytest.mark.django_db
+def test_display_label_joins_attribute_values_in_attachment_order() -> None:
+    """Shared by the PDP's variant <select> (storefront) and
+    OrderItem.variant_label's snapshot (orders) — tested at its own layer
+    since both now depend on it."""
+    color = AttributeDefinitionFactory(is_variant_option=True)
+    red = AttributeValueFactory(definition=color, value="Red")
+    size = AttributeDefinitionFactory(is_variant_option=True)
+    ml50 = AttributeValueFactory(definition=size, value="50ml")
+    variant = ProductVariantFactory()
+    VariantAttributeValueFactory(variant=variant, value=red)
+    VariantAttributeValueFactory(variant=variant, value=ml50)
+
+    assert variant.display_label == "Red / 50ml"
 
 
 @pytest.mark.django_db

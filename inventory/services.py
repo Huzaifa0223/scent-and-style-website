@@ -28,6 +28,7 @@ from django.db.models.functions import Now
 from django.utils import timezone
 
 from catalog.models import ProductVariant
+from orders.models import Order
 from store.models import StoreSettings
 
 from .models import InventoryAdjustment, StockReservation
@@ -65,14 +66,26 @@ def _write_adjustment(
 
 
 @transaction.atomic
-def reserve(*, variant_id: int, quantity: int, ttl_hours: int | None = None) -> StockReservation:
+def reserve(
+    *, variant_id: int, quantity: int, order: Order, ttl_hours: int | None = None
+) -> StockReservation:
     """Create a ``StockReservation`` for ``quantity`` units of the variant,
     or raise ``InsufficientStockError`` if fewer are available. Never
     touches ``stock_quantity`` — reservation is a promise against on-hand
     stock, not a decrement of it (§10.1's whole reason to exist: decrement
     at order creation permanently locks stock behind abandoned WhatsApp
     orders, decrement at confirmation lets two customers both "win" the
-    last unit)."""
+    last unit).
+
+    ``order`` is required (Stage 8) — every reservation exists to hold
+    stock for a specific order, and this is the only function that ever
+    creates a ``StockReservation``, so there is no legitimate caller left
+    that wouldn't have one. This is also the actual concurrency-safety
+    mechanism for order creation (``orders.services.create_order``):
+    ``select_for_update()`` below serializes against *any* other writer
+    to this variant row, including a second, concurrent ``reserve()``
+    call for the same variant — not just against callers that also take
+    the same lock by convention."""
     if quantity <= 0:
         raise ValidationError("quantity must be a positive integer.")
 
@@ -86,6 +99,7 @@ def reserve(*, variant_id: int, quantity: int, ttl_hours: int | None = None) -> 
     ttl = ttl_hours if ttl_hours is not None else StoreSettings.load().reservation_ttl_hours
     return StockReservation.objects.create(
         variant=variant,
+        order=order,
         quantity=quantity,
         expires_at=timezone.now() + timedelta(hours=ttl),
     )

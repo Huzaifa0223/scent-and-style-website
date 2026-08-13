@@ -84,6 +84,10 @@ jobs:
           coverage report --include="inventory/*" --fail-under=90
           coverage report --include="search/*" --fail-under=90
           coverage report --include="storefront/*" --fail-under=80
+          coverage report --include="cart/*" --fail-under=85
+          coverage report --include="customers/*" --fail-under=80
+          coverage report --include="shipping/*" --fail-under=80
+          coverage report --include="orders/*" --fail-under=90
 
       - name: manage.py check --deploy (production settings)
         env:

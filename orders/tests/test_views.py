@@ -1,0 +1,232 @@
+"""HTTP-level tests for the checkout flow (roadmap Stage 8)."""
+
+from __future__ import annotations
+
+from decimal import Decimal
+from unittest.mock import patch
+
+import pytest
+
+from catalog.factories import ProductFactory
+from orders.models import Order
+from orders.services import EmptyCartError
+from store.models import DeliveryStrategy, StoreSettings
+
+CHECKOUT_URL = "/checkout/"
+
+
+def _variant_with_stock(quantity: int, price: Decimal = Decimal("500.00")):  # type: ignore[no-untyped-def]
+    product = ProductFactory(default_variant_price=price)
+    variant = product.variants.get()
+    variant.stock_quantity = quantity
+    variant.save(update_fields=["stock_quantity", "updated_at"])
+    return variant
+
+
+def _flat_rate_delivery(rate: Decimal = Decimal("0.00")) -> None:
+    settings_obj = StoreSettings.load()
+    settings_obj.delivery_strategy = DeliveryStrategy.FLAT_RATE
+    settings_obj.flat_delivery_rate = rate
+    settings_obj.save()
+
+
+def _checkout_post_data(**overrides: str) -> dict[str, str]:
+    defaults = {
+        "name": "Ayesha Khan",
+        "mobile_number": "03001234567",
+        "same_as_mobile": "on",
+        "email": "ayesha@example.com",
+        "address": "House 1, Street 2",
+        "city": "Karachi",
+        "postal_code": "75500",
+        "instructions": "Leave at the gate",
+        "notes": "",
+    }
+    defaults.update(overrides)
+    return defaults
+
+
+@pytest.mark.django_db
+def test_checkout_get_with_an_empty_cart_redirects_to_the_listing(client) -> None:  # type: ignore[no-untyped-def]
+    response = client.get(CHECKOUT_URL)
+
+    assert response.status_code == 302
+    assert response.url == "/products/"
+
+
+@pytest.mark.django_db
+def test_checkout_get_with_items_renders_the_form(client) -> None:  # type: ignore[no-untyped-def]
+    variant = _variant_with_stock(5)
+    client.post("/cart/add/", {"variant_id": variant.pk, "quantity": 1})
+
+    response = client.get(CHECKOUT_URL)
+
+    assert response.status_code == 200
+    assert b'name="mobile_number"' in response.content
+    assert variant.product.name.encode() in response.content
+
+
+@pytest.mark.django_db
+def test_checkout_post_creates_an_order_and_redirects_to_confirmation(client) -> None:  # type: ignore[no-untyped-def]
+    _flat_rate_delivery(Decimal("100.00"))
+    variant = _variant_with_stock(5, price=Decimal("250.00"))
+    client.post("/cart/add/", {"variant_id": variant.pk, "quantity": 2})
+
+    response = client.post(CHECKOUT_URL, _checkout_post_data())
+
+    order = Order.objects.get()
+    assert response.status_code == 302
+    assert response.url == f"/orders/{order.order_number}/confirmation/"
+    assert order.customer_name == "Ayesha Khan"
+    assert order.customer_phone == "+923001234567"
+    assert order.customer_whatsapp_number == "+923001234567"
+    assert order.subtotal == Decimal("500.00")
+    assert order.delivery_charge == Decimal("100.00")
+
+
+@pytest.mark.django_db
+def test_checkout_post_clears_the_cart_so_a_resubmit_finds_it_empty(client) -> None:  # type: ignore[no-untyped-def]
+    _flat_rate_delivery()
+    variant = _variant_with_stock(5)
+    client.post("/cart/add/", {"variant_id": variant.pk, "quantity": 1})
+
+    client.post(CHECKOUT_URL, _checkout_post_data())
+    assert Order.objects.count() == 1
+
+    second_response = client.post(CHECKOUT_URL, _checkout_post_data())
+
+    assert Order.objects.count() == 1  # nothing new was created
+    assert second_response.status_code == 302
+    assert second_response.url == "/products/"
+
+
+@pytest.mark.django_db
+def test_checkout_post_with_an_invalid_mobile_number_re_renders_with_an_error(client) -> None:  # type: ignore[no-untyped-def]
+    variant = _variant_with_stock(5)
+    client.post("/cart/add/", {"variant_id": variant.pk, "quantity": 1})
+
+    response = client.post(CHECKOUT_URL, _checkout_post_data(mobile_number="not-a-number"))
+
+    assert response.status_code == 200
+    assert Order.objects.count() == 0
+    assert b"valid Pakistani mobile number" in response.content
+
+
+@pytest.mark.django_db
+def test_checkout_post_without_same_as_mobile_requires_a_whatsapp_number(client) -> None:  # type: ignore[no-untyped-def]
+    variant = _variant_with_stock(5)
+    client.post("/cart/add/", {"variant_id": variant.pk, "quantity": 1})
+
+    response = client.post(CHECKOUT_URL, _checkout_post_data(same_as_mobile="", whatsapp_number=""))
+
+    assert response.status_code == 200
+    assert Order.objects.count() == 0
+    assert b"same as mobile" in response.content
+
+
+@pytest.mark.django_db
+def test_checkout_post_with_an_invalid_whatsapp_number_re_renders_with_an_error(client) -> None:  # type: ignore[no-untyped-def]
+    variant = _variant_with_stock(5)
+    client.post("/cart/add/", {"variant_id": variant.pk, "quantity": 1})
+
+    response = client.post(
+        CHECKOUT_URL,
+        _checkout_post_data(same_as_mobile="", whatsapp_number="not-a-number"),
+    )
+
+    assert response.status_code == 200
+    assert Order.objects.count() == 0
+    assert b"valid Pakistani mobile number" in response.content
+
+
+@pytest.mark.django_db
+def test_checkout_post_with_a_stock_shortfall_shows_the_per_line_error_and_creates_nothing(
+    client,
+) -> None:  # type: ignore[no-untyped-def]
+    """Gate 4, at the HTTP layer."""
+    variant = _variant_with_stock(2, price=Decimal("100.00"))
+    client.post("/cart/add/", {"variant_id": variant.pk, "quantity": 2})
+    variant.stock_quantity = 1
+    variant.save(update_fields=["stock_quantity", "updated_at"])
+
+    response = client.post(CHECKOUT_URL, _checkout_post_data())
+
+    assert response.status_code == 200
+    assert Order.objects.count() == 0
+    assert variant.product.name.encode() in response.content
+    assert b"only" in response.content.lower()
+
+
+@pytest.mark.django_db
+def test_confirmation_404s_for_a_session_that_never_placed_an_order(client) -> None:  # type: ignore[no-untyped-def]
+    response = client.get("/orders/ORD-10000-XXX/confirmation/")
+
+    assert response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_confirmation_404s_for_the_wrong_order_number_even_with_a_valid_session(client) -> None:  # type: ignore[no-untyped-def]
+    """Confirms the confirmation page is scoped to the exact order this
+    session just placed, not any order number typed into the URL."""
+    _flat_rate_delivery()
+    variant = _variant_with_stock(5)
+    client.post("/cart/add/", {"variant_id": variant.pk, "quantity": 1})
+    client.post(CHECKOUT_URL, _checkout_post_data())
+    real_order = Order.objects.get()
+
+    response = client.get(f"/orders/{real_order.order_number}9/confirmation/")
+
+    assert response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_confirmation_renders_the_order_after_a_successful_checkout(client) -> None:  # type: ignore[no-untyped-def]
+    _flat_rate_delivery()
+    variant = _variant_with_stock(5, price=Decimal("300.00"))
+    client.post("/cart/add/", {"variant_id": variant.pk, "quantity": 1})
+    checkout_response = client.post(CHECKOUT_URL, _checkout_post_data())
+    order = Order.objects.get()
+
+    response = client.get(checkout_response.url)
+
+    assert response.status_code == 200
+    assert order.order_number.encode() in response.content
+    assert variant.product.name.encode() in response.content
+
+
+@pytest.mark.django_db
+def test_checkout_post_handles_the_cart_emptying_between_the_view_check_and_create_order(
+    client,
+) -> None:  # type: ignore[no-untyped-def]
+    """CheckoutView already refuses an empty cart before calling
+    create_order() — this is the defensive branch for the narrow race
+    where the cart empties in between (e.g. a second tab clearing it
+    concurrently), simulated directly since it isn't reproducible from a
+    single-threaded HTTP test."""
+    variant = _variant_with_stock(5)
+    client.post("/cart/add/", {"variant_id": variant.pk, "quantity": 1})
+
+    with patch("orders.views.create_order", side_effect=EmptyCartError):
+        response = client.post(CHECKOUT_URL, _checkout_post_data())
+
+    assert response.status_code == 302
+    assert response.url == "/products/"
+    assert Order.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_checkout_post_with_a_distinct_whatsapp_number_uses_it_not_the_mobile_number(
+    client,
+) -> None:  # type: ignore[no-untyped-def]
+    _flat_rate_delivery()
+    variant = _variant_with_stock(5)
+    client.post("/cart/add/", {"variant_id": variant.pk, "quantity": 1})
+
+    client.post(
+        CHECKOUT_URL,
+        _checkout_post_data(same_as_mobile="", whatsapp_number="03019876543"),
+    )
+
+    order = Order.objects.get()
+    assert order.customer_phone == "+923001234567"
+    assert order.customer_whatsapp_number == "+923019876543"

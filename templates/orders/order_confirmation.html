@@ -1,0 +1,59 @@
+{% extends "storefront/base.html" %}
+{% load money %}
+
+{% block title %}Order {{ order.order_number }} — {{ store_settings.name }}{% endblock %}
+
+{% block content %}
+  <div class="mx-auto max-w-2xl px-4 py-10 text-center">
+    <p class="text-sm font-semibold uppercase tracking-wide text-success">Order placed</p>
+    <h1 class="mt-2 text-2xl font-semibold text-ink">Thank you, {{ order.customer_name }}</h1>
+    <p class="mt-2 text-text-muted">
+      Your order number is
+      <span class="font-mono font-semibold text-ink">{{ order.order_number }}</span>.
+      Keep it handy — you'll need it to track your order.
+    </p>
+
+    <div class="mt-8 rounded border border-border-subtle bg-surface p-4 text-left">
+      <h2 class="text-sm font-semibold text-ink">Order summary</h2>
+      <ul class="mt-3 divide-y divide-border-subtle text-sm">
+        {% for item in order.items.all %}
+          <li class="flex items-start justify-between gap-3 py-2">
+            <span class="text-ink">
+              {{ item.product_name }}
+              {% if item.variant_label != item.sku %}
+                <span class="block text-xs text-text-muted">{{ item.variant_label }}</span>
+              {% endif %}
+              <span class="block text-xs text-text-muted">Qty {{ item.quantity }}</span>
+            </span>
+            <span class="shrink-0 font-mono text-ink">{{ item.line_total|money }}</span>
+          </li>
+        {% endfor %}
+      </ul>
+      <div class="mt-3 space-y-1 border-t border-border-subtle pt-3 text-sm">
+        <div class="flex items-center justify-between">
+          <span class="text-text-muted">Subtotal</span>
+          <span class="font-mono text-ink">{{ order.subtotal|money }}</span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-text-muted">Delivery</span>
+          <span class="font-mono text-ink">{{ order.delivery_charge|money }}</span>
+        </div>
+        <div class="flex items-center justify-between font-semibold">
+          <span class="text-ink">Total</span>
+          <span class="font-mono text-ink">{{ order.total|money }}</span>
+        </div>
+      </div>
+    </div>
+
+    <p class="mt-6 text-sm text-text-muted">
+      Delivering to {{ order.delivery_address }}, {{ order.delivery_city }}
+    </p>
+
+    <a
+      href="{% url 'storefront:home' %}"
+      class="mt-8 inline-flex min-h-11 items-center justify-center rounded bg-accent px-5 text-sm font-semibold text-white hover:bg-accent-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
+    >
+      Continue shopping
+    </a>
+  </div>
+{% endblock %}

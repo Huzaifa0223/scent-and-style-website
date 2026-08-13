@@ -4,14 +4,13 @@ confirmation without first reserving. See ``inventory/services.py`` for
 the actual state-machine logic; this module is deliberately just the two
 tables.
 
-``StockReservation`` has no ``order`` FK yet. The roadmap's Stage 4
-deliverable list says "order FK nullable until stage 8", but ``orders.
-Order`` does not exist until Stage 8 builds it — Django cannot define a
-``ForeignKey`` to a model in an app that isn't installed (``manage.py
-check`` would fail with E300). Read as describing the field's eventual
-shape rather than something Stage 4 can literally build; the field is
-added via ``AddField`` when Stage 8 creates ``orders.Order``. Recorded as
-a proposed spec amendment in ``specs/state.md``.
+``StockReservation.order`` was added in Stage 8, once ``orders.Order``
+existed to point at (Django cannot define a ``ForeignKey`` to a model in
+an app that isn't installed). Nullable at the DB level — required for
+``AddField`` on an already-populated table — but every real reservation
+from Stage 8 onward has one: ``inventory.services.reserve()`` takes
+``order`` as a required keyword argument, and it's the only place a
+``StockReservation`` is ever created.
 """
 
 from __future__ import annotations
@@ -28,10 +27,18 @@ class StockReservation(TimeStampedModel):
     consumed (deleted) by exactly one of: ``commit_reservation`` (order
     confirmed), ``release`` (order cancelled while pending), or the
     sweeper (TTL elapsed). ``expires_at`` is indexed because both the
-    sweeper's bulk delete and every availability check filter on it."""
+    sweeper's bulk delete and every availability check filter on it.
+
+    ``order`` is ``on_delete=CASCADE`` — a reservation with no surviving
+    order is meaningless; if an order row is ever deleted, its held
+    reservations should go with it rather than linger as orphans.
+    """
 
     variant = models.ForeignKey(
         ProductVariant, on_delete=models.CASCADE, related_name="reservations"
+    )
+    order = models.ForeignKey(
+        "orders.Order", on_delete=models.CASCADE, null=True, related_name="reservations"
     )
     quantity = models.PositiveIntegerField()
     expires_at = models.DateTimeField(db_index=True)

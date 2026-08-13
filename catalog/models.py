@@ -550,6 +550,19 @@ class ProductVariant(TimeStampedModel):
             return None
         return round((self.compare_at_price - self.price) / self.compare_at_price * 100)
 
+    @property
+    def display_label(self) -> str:
+        """Human-readable variant identity — "Red / 50ml", or the SKU for
+        a variant with no attribute values. Shared by the PDP's variant
+        `<select>` (storefront) and `OrderItem.variant_label`'s snapshot
+        (orders), rather than two copies that can drift. Reads
+        ``variant_attribute_values.all()`` — N+1-safe only when the caller
+        has prefetched ``variant_attribute_values__value``; it does not
+        prefetch for itself, same as every other relation-reading property
+        on this model."""
+        values = [vav.value.value for vav in self.variant_attribute_values.all()]
+        return " / ".join(values) if values else self.sku
+
     def compute_attribute_signature(self) -> str:
         # sorted() on a list of int value_ids is a numeric sort — sorting
         # the stringified/joined form instead would put id 10 before id 2.

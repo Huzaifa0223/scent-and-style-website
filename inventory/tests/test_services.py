@@ -18,6 +18,7 @@ from catalog.models import ProductVariant
 from inventory import services
 from inventory.factories import StockReservationFactory
 from inventory.models import InventoryAdjustment, StockReservation
+from orders.factories import OrderFactory
 from store.models import StoreSettings
 
 
@@ -27,7 +28,7 @@ def test_reserve_creates_a_reservation_expiring_at_store_settings_ttl() -> None:
     variant = ProductVariantFactory(stock_quantity=10)
     before = timezone.now()
 
-    reservation = services.reserve(variant_id=variant.pk, quantity=3)
+    reservation = services.reserve(variant_id=variant.pk, quantity=3, order=OrderFactory())
 
     assert reservation.variant_id == variant.pk
     assert reservation.quantity == 3
@@ -43,7 +44,9 @@ def test_reserve_honours_an_explicit_ttl_override() -> None:
     variant = ProductVariantFactory(stock_quantity=10)
     before = timezone.now()
 
-    reservation = services.reserve(variant_id=variant.pk, quantity=1, ttl_hours=2)
+    reservation = services.reserve(
+        variant_id=variant.pk, quantity=1, ttl_hours=2, order=OrderFactory()
+    )
 
     assert before + timedelta(hours=1, minutes=59) < reservation.expires_at
     assert reservation.expires_at < before + timedelta(hours=2, minutes=1)
@@ -54,7 +57,7 @@ def test_reserve_raises_insufficient_stock_when_not_enough_available() -> None:
     variant = ProductVariantFactory(stock_quantity=2)
 
     with pytest.raises(services.InsufficientStockError):
-        services.reserve(variant_id=variant.pk, quantity=3)
+        services.reserve(variant_id=variant.pk, quantity=3, order=OrderFactory())
 
     assert StockReservation.objects.filter(variant=variant).count() == 0
 
@@ -65,9 +68,9 @@ def test_reserve_subtracts_existing_active_reservations() -> None:
     StockReservationFactory(variant=variant, quantity=4)
 
     with pytest.raises(services.InsufficientStockError):
-        services.reserve(variant_id=variant.pk, quantity=2)  # only 1 left
+        services.reserve(variant_id=variant.pk, quantity=2, order=OrderFactory())  # only 1 left
 
-    reservation = services.reserve(variant_id=variant.pk, quantity=1)
+    reservation = services.reserve(variant_id=variant.pk, quantity=1, order=OrderFactory())
     assert reservation.quantity == 1
 
 
@@ -78,7 +81,7 @@ def test_reserve_ignores_expired_reservations() -> None:
         variant=variant, quantity=5, expires_at=timezone.now() - timedelta(hours=1)
     )
 
-    reservation = services.reserve(variant_id=variant.pk, quantity=5)
+    reservation = services.reserve(variant_id=variant.pk, quantity=5, order=OrderFactory())
     assert reservation.quantity == 5
 
 
@@ -86,9 +89,9 @@ def test_reserve_ignores_expired_reservations() -> None:
 def test_reserve_rejects_zero_or_negative_quantity() -> None:
     variant = ProductVariantFactory(stock_quantity=5)
     with pytest.raises(ValidationError):
-        services.reserve(variant_id=variant.pk, quantity=0)
+        services.reserve(variant_id=variant.pk, quantity=0, order=OrderFactory())
     with pytest.raises(ValidationError):
-        services.reserve(variant_id=variant.pk, quantity=-1)
+        services.reserve(variant_id=variant.pk, quantity=-1, order=OrderFactory())
 
 
 @pytest.mark.django_db
@@ -109,7 +112,7 @@ def test_commit_reservation_rejects_a_reservation_that_would_take_stock_negative
     reservation's own quantity by some other path (a manual adjustment)
     between the reservation being created and confirmed."""
     variant = ProductVariantFactory(stock_quantity=10)
-    reservation = services.reserve(variant_id=variant.pk, quantity=8)
+    reservation = services.reserve(variant_id=variant.pk, quantity=8, order=OrderFactory())
     services.adjust(variant_id=variant.pk, absolute_quantity=2)  # drops below the reservation
 
     with pytest.raises(ValidationError):
@@ -136,7 +139,7 @@ def test_restore_rejects_zero_or_negative_quantity() -> None:
 @pytest.mark.django_db
 def test_gate1_reserve_then_confirm_decrements_stock_and_clears_reservation() -> None:
     variant = ProductVariantFactory(stock_quantity=10)
-    reservation = services.reserve(variant_id=variant.pk, quantity=3)
+    reservation = services.reserve(variant_id=variant.pk, quantity=3, order=OrderFactory())
 
     services.commit_reservation(reservation_id=reservation.pk)
 
@@ -167,7 +170,7 @@ def test_gate2_reserve_then_expire_releases_and_leaves_stock_untouched() -> None
 @pytest.mark.django_db
 def test_gate3_reserve_then_cancel_releases_without_touching_stock() -> None:
     variant = ProductVariantFactory(stock_quantity=10)
-    reservation = services.reserve(variant_id=variant.pk, quantity=3)
+    reservation = services.reserve(variant_id=variant.pk, quantity=3, order=OrderFactory())
 
     services.release(reservation_id=reservation.pk)
 
@@ -180,7 +183,7 @@ def test_gate3_reserve_then_cancel_releases_without_touching_stock() -> None:
 @pytest.mark.django_db
 def test_release_of_an_already_released_reservation_is_a_silent_no_op() -> None:
     variant = ProductVariantFactory(stock_quantity=10)
-    reservation = services.reserve(variant_id=variant.pk, quantity=3)
+    reservation = services.reserve(variant_id=variant.pk, quantity=3, order=OrderFactory())
     services.release(reservation_id=reservation.pk)
 
     services.release(reservation_id=reservation.pk)  # must not raise
@@ -189,7 +192,7 @@ def test_release_of_an_already_released_reservation_is_a_silent_no_op() -> None:
 @pytest.mark.django_db
 def test_gate4_restore_after_post_confirmation_cancellation_increments_stock() -> None:
     variant = ProductVariantFactory(stock_quantity=10)
-    reservation = services.reserve(variant_id=variant.pk, quantity=3)
+    reservation = services.reserve(variant_id=variant.pk, quantity=3, order=OrderFactory())
     services.commit_reservation(reservation_id=reservation.pk)
     variant.refresh_from_db()
     assert variant.stock_quantity == 7
@@ -242,7 +245,7 @@ def test_commit_reservation_records_the_actor() -> None:
     user_model = get_user_model()
     owner = user_model.objects.create_user(username="owner", password="x")
     variant = ProductVariantFactory(stock_quantity=10)
-    reservation = services.reserve(variant_id=variant.pk, quantity=1)
+    reservation = services.reserve(variant_id=variant.pk, quantity=1, order=OrderFactory())
 
     services.commit_reservation(reservation_id=reservation.pk, actor=owner)
 
