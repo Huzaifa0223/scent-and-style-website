@@ -9,6 +9,26 @@ from catalog.factories import CategoryFactory, ProductFactory, ProductVariantFac
 from catalog.models import Product
 
 
+@pytest.mark.django_db(transaction=True)
+def test_deleting_a_freshly_created_product_in_the_same_transaction_is_allowed() -> None:
+    """Regression test for a real bug found by Stage 8's order-snapshot
+    test: catalog_product_must_have_variant() (migration 0002) queued a
+    deferred "does this product have a variant" obligation from the
+    original INSERT, with no guard for the product itself having also
+    been deleted by the time the deferred check fires — a product
+    created and then fully deleted (product row and its variant both)
+    within one transaction incorrectly raised "must have at least one
+    variant" for a product that no longer existed at all. Fixed in
+    migration 0008 by mirroring the guard the DELETE-side sibling
+    trigger already had. transaction=True is required — this is exactly
+    the deferred-constraint trap CLAUDE.md's Traps section already
+    documents three instances of: the check only fires at a real COMMIT,
+    which the default rolled-back django_db fixture never produces."""
+    product = ProductFactory()
+
+    product.delete()  # must not raise at delete() or at commit
+
+
 @pytest.mark.django_db
 def test_slug_generated_and_stable_across_renames() -> None:
     product = ProductFactory(name="Afnan 9PM Eau de Parfum")
