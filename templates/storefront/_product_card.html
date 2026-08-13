@@ -1,0 +1,42 @@
+{% load money %}
+{% comment %}
+One product tile — grid on the listing page, featured rail on the home
+page. `product` needs `display_price`/`has_price_range` (with_pricing())
+and `primary_image_list` (the Prefetch(to_attr=...) pattern) already
+annotated by the caller's queryset.
+{% endcomment %}
+<a
+  href="{% url 'storefront:product_detail' product.slug %}"
+  class="group block overflow-hidden rounded border border-border-subtle bg-surface transition-shadow hover:shadow-card"
+>
+  <div class="aspect-square bg-paper">
+    {% with product.primary_image_list.0 as image %}
+      {% if image %}
+        <img
+          src="{{ image.card_webp.url }}"
+          alt="{{ image.alt_text|default:product.name }}"
+          width="400"
+          height="400"
+          class="h-full w-full object-cover transition-transform group-hover:scale-105"
+        />
+      {% else %}
+        <div class="flex h-full w-full items-center justify-center text-sm text-text-muted">
+          No image
+        </div>
+      {% endif %}
+    {% endwith %}
+  </div>
+  <div class="p-3">
+    {% if product.brand %}
+      <p class="text-xs text-text-muted">{{ product.brand.name }}</p>
+    {% endif %}
+    <p class="mt-0.5 line-clamp-2 text-sm font-medium text-ink">{{ product.name }}</p>
+    <p class="mt-1 font-mono text-sm text-ink">
+      {% if product.display_price is not None %}
+        {{ product.display_price|money }}{% if product.has_price_range %}+{% endif %}
+      {% else %}
+        <span class="text-text-muted">Unavailable</span>
+      {% endif %}
+    </p>
+  </div>
+</a>

@@ -21,6 +21,7 @@ urlpatterns: list[URLPattern | URLResolver] = [
     path("accounts/", include("accounts.urls")),
     path("search/", include("search.urls")),
     path("admin-portal/", include("portal.urls")),
+    path("", include("storefront.urls")),
 ]
 
 if settings.DEBUG:

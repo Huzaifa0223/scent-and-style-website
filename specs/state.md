@@ -953,6 +953,16 @@ says, and continue. The human resolves these.
   a style concern). Read as describing the field's eventual shape rather than a literal Stage 4
   instruction. Proposed change: `StockReservation` ships without `order` in Stage 4; Stage 8 adds it
   via `AddField` once `orders.Order` exists, starting nullable as the roadmap already says.
+- [Stage 6] Roadmap's Stage 6 goal line says "§11–§18, mobile-first," but `REQUIREMENTS.md` has no
+  headings numbered §11–15 or §18 — its actual sections in that range are "§16–17. Filtering and
+  sorting" and, further down, "§34–38. Storefront quality requirements" (SEO, social sharing,
+  performance, accessibility, mobile), plus §42 (DB indexes) and §44–46 (errors/empty/loading).
+  Between them these cover every deliverable Stage 6's own list names, so nothing is actually
+  missing — the roadmap's section numbers just don't match the requirements doc's own numbering
+  scheme, the same class of drift as the `requirements.md`/`REQUIREMENTS.md` casing mismatch
+  already recorded above. Not a blocker: built against the roadmap's explicit deliverable/gate list
+  plus §16–17, §34–38, §42, §44–46's actual content. Proposed change: renumber the roadmap's Stage 6
+  goal line to cite the sections that actually exist.
 
 ---
 

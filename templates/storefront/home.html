@@ -1,0 +1,44 @@
+{% extends "storefront/base.html" %}
+
+{% block content %}
+  <section class="border-b border-border-subtle bg-surface">
+    <div class="mx-auto max-w-7xl px-4 py-16 text-center">
+      <h1 class="text-3xl font-semibold text-ink">{{ store_settings.name }}</h1>
+      <a
+        href="{% url 'storefront:product_list' %}"
+        class="mt-6 inline-block rounded bg-accent px-6 py-3 text-sm font-semibold text-white hover:bg-accent-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      >
+        Shop All Products
+      </a>
+    </div>
+  </section>
+
+  {% if categories %}
+    <section class="mx-auto max-w-7xl px-4 py-10">
+      <h2 class="text-lg font-semibold text-ink">Shop by Category</h2>
+      <div class="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+        {% for category in categories %}
+          <a
+            href="{% url 'storefront:category_product_list' category.slug %}"
+            class="rounded border border-border-subtle bg-surface p-4 text-center text-sm font-medium text-ink hover:shadow-card"
+          >
+            {{ category.name }}
+          </a>
+        {% endfor %}
+      </div>
+    </section>
+  {% endif %}
+
+  <section class="mx-auto max-w-7xl px-4 py-10">
+    <h2 class="text-lg font-semibold text-ink">Featured Products</h2>
+    {% if featured_products %}
+      <div class="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+        {% for product in featured_products %}
+          {% include "storefront/_product_card.html" %}
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="mt-4 text-sm text-text-muted">No featured products yet — check back soon.</p>
+    {% endif %}
+  </section>
+{% endblock %}

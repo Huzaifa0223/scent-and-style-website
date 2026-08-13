@@ -1,0 +1,108 @@
+{% extends "storefront/base.html" %}
+{% load money %}
+
+{% block title %}{{ product.name }} — {{ store_settings.name }}{% endblock %}
+{% block meta_description %}{{ product.short_description|default:product.meta_description }}{% endblock %}
+
+{% block content %}
+  <div class="mx-auto max-w-5xl px-4 py-6">
+    <nav class="text-sm text-text-muted">
+      <a href="{% url 'storefront:product_list' %}" class="hover:text-accent">All Products</a>
+      {% if product.category %}
+        &rsaquo; <a href="{% url 'storefront:category_product_list' product.category.slug %}" class="hover:text-accent">{{ product.category.name }}</a>
+      {% endif %}
+    </nav>
+
+    <div class="mt-4 grid gap-8 lg:grid-cols-2">
+      <div id="pdp-gallery">
+        {% with product.images.all|first as image %}
+          {% if image %}
+            <img
+              id="pdp-hero-image"
+              src="{{ image.full_webp.url }}"
+              alt="{{ image.alt_text|default:product.name }}"
+              width="800" height="800"
+              class="aspect-square w-full rounded border border-border-subtle object-cover"
+            />
+          {% else %}
+            <div class="flex aspect-square w-full items-center justify-center rounded border border-border-subtle bg-paper text-text-muted">
+              No image
+            </div>
+          {% endif %}
+        {% endwith %}
+        {% if product.images.all|length > 1 %}
+          <div class="mt-3 flex gap-2">
+            {% for image in product.images.all %}
+              <button
+                type="button"
+                data-full-src="{{ image.full_webp.url }}"
+                onclick="document.getElementById('pdp-hero-image').src = this.dataset.fullSrc"
+                class="h-16 w-16 shrink-0 overflow-hidden rounded border border-border-subtle focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              >
+                <img src="{{ image.thumb_webp.url }}" alt="" class="h-full w-full object-cover" />
+              </button>
+            {% endfor %}
+          </div>
+        {% endif %}
+      </div>
+
+      {{ variants_data|json_script:"variant-data" }}
+      <div x-data="{
+        variantId: {{ default_variant.pk|default:'null' }},
+        variants: JSON.parse(document.getElementById('variant-data').textContent),
+        get variant() { return this.variants.find(v => v.id === this.variantId) },
+      }">
+        {% if product.brand %}<p class="text-sm text-text-muted">{{ product.brand.name }}</p>{% endif %}
+        <h1 class="mt-1 text-2xl font-semibold text-ink">{{ product.name }}</h1>
+        <p class="mt-2 font-mono text-xl text-ink" x-text="'Rs. ' + variant.price"></p>
+
+        {% if variant_options|length > 1 %}
+          <div class="mt-4">
+            <label for="variant-select" class="text-sm font-semibold text-ink">Options</label>
+            <select
+              id="variant-select"
+              x-model.number="variantId"
+              class="mt-2 w-full rounded border-border-interactive text-sm"
+            >
+              {% for option in variant_options %}
+                <option value="{{ option.id }}">{{ option.label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        {% endif %}
+
+        <div class="mt-4">
+          <template x-if="variant.available_quantity > 0">
+            <p class="text-sm text-success">In stock</p>
+          </template>
+          <template x-if="variant.available_quantity <= 0">
+            <p class="text-sm text-danger">Out of stock — this option is currently unavailable.</p>
+          </template>
+        </div>
+
+        <div class="mt-4 flex items-center gap-3">
+          <label for="quantity" class="text-sm text-text-muted">Quantity</label>
+          <input
+            id="quantity" type="number" min="1" value="1"
+            class="w-20 rounded border-border-interactive text-sm"
+          />
+        </div>
+
+        <button
+          type="button"
+          :disabled="variant.available_quantity <= 0"
+          class="mt-6 w-full rounded bg-accent px-4 py-3 text-sm font-semibold text-white hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        >
+          <span x-show="variant.available_quantity > 0">Add to Cart</span>
+          <span x-show="variant.available_quantity <= 0">Out of Stock</span>
+        </button>
+
+        {% if product.description %}
+          <div class="mt-8 border-t border-border-subtle pt-6 text-sm text-text-muted">
+            {{ product.description|linebreaks }}
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+{% endblock %}

@@ -29,8 +29,10 @@ select = ["E", "F", "I", "UP", "B", "ANN", "RUF"]
 # get_queryset/get_object are typed properly instead (QuerySet[Model]), not
 # covered by this ignore — only **kwargs-forwarding overrides are. If a
 # fifth pattern is ever needed, record why in specs/state.md rather than
-# just appending it here.
-"{portal,accounts}/{views,*_views,apps}.py" = ["ANN401"]
+# just appending it here. storefront/views.py (Stage 6) added to the glob
+# rather than as a new pattern — it's the same CBV get_context_data(**kwargs)
+# shape as portal/accounts, not a new kind of exemption.
+"{portal,accounts,storefront}/{views,*_views,apps}.py" = ["ANN401"]
 # Fifth pattern (see the note above): a management command's handle(*args,
 # **options) must match Django's own BaseCommand signature, same reasoning
 # as the CBV/form overrides above. Generic across apps (not just inventory)
