@@ -1,25 +1,29 @@
 {% load money %}
 {% comment %}
-Type-ahead suggestion dropdown (§15). Deliberately no <a href> to a PDP —
-that URL doesn't exist until Stage 6 builds the storefront product page;
-this partial renders name/price/thumbnail only until then.
+Type-ahead suggestion dropdown (§15). Each row links to the storefront PDP
+(storefront:product_detail), wired in once Stage 6 built that page.
 {% endcomment %}
 <ul class="divide-y divide-border-subtle rounded border border-border-subtle bg-paper shadow-lg">
   {% for product in products %}
-    <li class="flex items-center gap-3 px-3 py-2">
-      {% with product.primary_image_list.0 as image %}
-        {% if image %}
-          <img src="{{ image.thumb_webp.url }}" alt="" class="h-8 w-8 rounded object-cover" />
-        {% else %}
-          <span class="h-8 w-8 rounded bg-paper"></span>
+    <li>
+      <a
+        href="{% url 'storefront:product_detail' product.slug %}"
+        class="flex items-center gap-3 px-3 py-2 hover:bg-surface focus:outline-none focus-visible:bg-surface"
+      >
+        {% with product.primary_image_list.0 as image %}
+          {% if image %}
+            <img src="{{ image.thumb_webp.url }}" alt="" class="h-8 w-8 rounded object-cover" />
+          {% else %}
+            <span class="h-8 w-8 rounded bg-paper"></span>
+          {% endif %}
+        {% endwith %}
+        <span class="flex-1 text-sm text-ink">{{ product.name }}</span>
+        {% if product.display_price is not None %}
+          <span class="text-sm text-text-muted">
+            {{ product.display_price|money }}{% if product.has_price_range %}+{% endif %}
+          </span>
         {% endif %}
-      {% endwith %}
-      <span class="flex-1 text-sm text-ink">{{ product.name }}</span>
-      {% if product.display_price is not None %}
-        <span class="text-sm text-text-muted">
-          {{ product.display_price|money }}{% if product.has_price_range %}+{% endif %}
-        </span>
-      {% endif %}
+      </a>
     </li>
   {% empty %}
     {% if query %}

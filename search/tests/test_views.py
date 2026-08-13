@@ -36,6 +36,15 @@ def test_suggest_returns_matching_products(client) -> None:  # type: ignore[no-u
 
 
 @pytest.mark.django_db
+def test_suggest_rows_link_to_the_storefront_pdp(client) -> None:  # type: ignore[no-untyped-def]
+    product = ProductFactory(name="Afnan 9PM Eau de Parfum", status=Product.Status.PUBLISHED)
+
+    response = client.get("/search/suggest/", {"q": "afnan"})
+
+    assert f"/product/{product.slug}/".encode() in response.content
+
+
+@pytest.mark.django_db
 def test_suggest_with_an_empty_query_returns_no_results_without_erroring(client) -> None:  # type: ignore[no-untyped-def]
     ProductFactory(name="Afnan 9PM Eau de Parfum", status=Product.Status.PUBLISHED)
 

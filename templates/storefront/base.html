@@ -10,9 +10,11 @@ partial that would couple their designs together.
 {% block body %}
   <div class="flex min-h-full flex-col">
     <header class="border-b border-border-subtle">
-      <div class="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3">
+      <div class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3">
         <a href="/" class="text-lg font-semibold tracking-tight text-ink">{{ store_settings.name }}</a>
-        {% block storefront_search %}{% endblock %}
+        <div class="order-3 w-full sm:order-none sm:w-auto sm:flex-1 sm:px-4">
+          {% block storefront_search %}{% include "search/_search_input.html" %}{% endblock %}
+        </div>
         <nav class="flex items-center gap-4 text-sm">
           {% block storefront_nav %}{% endblock %}
         </nav>

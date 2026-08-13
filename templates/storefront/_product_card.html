@@ -9,14 +9,18 @@ annotated by the caller's queryset.
   href="{% url 'storefront:product_detail' product.slug %}"
   class="group block overflow-hidden rounded border border-border-subtle bg-surface transition-shadow hover:shadow-card"
 >
-  <div class="aspect-square bg-paper">
+  <div class="relative aspect-square overflow-hidden bg-paper" x-data="{ loaded: false }">
     {% with product.primary_image_list.0 as image %}
       {% if image %}
+        <div class="absolute inset-0 animate-pulse bg-border-subtle" x-show="!loaded"></div>
         <img
           src="{{ image.card_webp.url }}"
           alt="{{ image.alt_text|default:product.name }}"
           width="400"
           height="400"
+          x-show="loaded"
+          x-init="loaded = $el.complete"
+          @load="loaded = true"
           class="h-full w-full object-cover transition-transform group-hover:scale-105"
         />
       {% else %}

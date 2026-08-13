@@ -14,6 +14,7 @@ from catalog.factories import (
     AttributeDefinitionFactory,
     AttributeValueFactory,
     ProductFactory,
+    ProductImageFactory,
     ProductVariantFactory,
     VariantAttributeValueFactory,
 )
@@ -103,3 +104,34 @@ def test_pdp_default_variant_is_the_products_designated_default(client) -> None:
     response = client.get(f"/product/{product.slug}/")
 
     assert response.context["default_variant"].pk == default_variant.pk
+
+
+@pytest.mark.django_db
+def test_pdp_exposes_every_image_for_the_gallery_and_lightbox(client) -> None:  # type: ignore[no-untyped-def]
+    product = ProductFactory(status=Product.Status.PUBLISHED)
+    first = ProductImageFactory(product=product, is_primary=True, alt_text="Front view")
+    second = ProductImageFactory(product=product)
+
+    response = client.get(f"/product/{product.slug}/")
+
+    ids = [row["id"] for row in response.context["gallery_images"]]
+    assert ids == [first.pk, second.pk]
+    assert response.context["gallery_images"][0]["alt"] == "Front view"
+
+
+@pytest.mark.django_db
+def test_pdp_gallery_renders_a_skeleton_placeholder_and_a_lightbox_dialog(client) -> None:  # type: ignore[no-untyped-def]
+    """Gate 6 (skeleton loader) and the roadmap's named "lightbox" gallery
+    deliverable. This is a minimal source-level smoke check only — the
+    actual behaviour (skeleton toggling against Alpine's loaded state,
+    focus trap wrapping in both directions, Escape restoring focus to the
+    trigger, prev/next cycling) was verified live in a real browser; see
+    the Stage 6 log entry in specs/state.md for what was checked and how."""
+    product = ProductFactory(status=Product.Status.PUBLISHED)
+    ProductImageFactory(product=product, is_primary=True)
+
+    response = client.get(f"/product/{product.slug}/")
+
+    assert response.status_code == 200
+    assert b"animate-pulse" in response.content
+    assert b'role="dialog"' in response.content

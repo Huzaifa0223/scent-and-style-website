@@ -1,8 +1,6 @@
 {% comment %}
-Reusable search box (§15) — Stage 6 includes this into
-storefront/base.html's storefront_search block. Not wired in yet: Stage 5's
-job is the endpoint and this partial; there's no page to host it in until
-Stage 6 builds the storefront shell's real content.
+Reusable search box (§15), included into every storefront page via
+storefront/base.html's storefront_search block.
 
 200ms debounce (`delay:200ms`) is deliberately not fired on every
 keystroke — short enough to feel live, long enough that a fast typist
@@ -14,7 +12,7 @@ doesn't fire a request per character.
     name="q"
     placeholder="Search products…"
     autocomplete="off"
-    class="w-64 rounded border border-border-subtle px-3 py-1.5 text-sm"
+    class="w-full max-w-md rounded border border-border-subtle px-3 py-1.5 text-sm"
     hx-get="{% url 'search:suggest' %}"
     hx-trigger="keyup changed delay:200ms, search"
     hx-target="#search-suggestions"

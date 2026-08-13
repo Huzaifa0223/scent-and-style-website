@@ -16,6 +16,7 @@ from catalog.factories import (
     BrandFactory,
     CategoryFactory,
     ProductFactory,
+    ProductImageFactory,
     VariantAttributeValueFactory,
 )
 from catalog.models import Product
@@ -34,6 +35,21 @@ def test_listing_shows_published_products_and_excludes_drafts(client) -> None:  
     assert b"Published Product" in response.content
     assert b"Draft Product" not in response.content
     assert published in response.context["products"]
+
+
+@pytest.mark.django_db
+def test_product_card_renders_a_skeleton_placeholder_behind_the_image(client) -> None:  # type: ignore[no-untyped-def]
+    """Gate 6 — every product card has a defined skeleton loader, not just
+    an empty state. This is a minimal source-level smoke check only — the
+    actual toggle against Alpine's loaded state was verified live in a
+    real browser; see the Stage 6 log entry in specs/state.md."""
+    product = ProductFactory(status=Product.Status.PUBLISHED)
+    ProductImageFactory(product=product, is_primary=True)
+
+    response = client.get(LIST_URL)
+
+    assert response.status_code == 200
+    assert b"animate-pulse" in response.content
 
 
 @pytest.mark.django_db

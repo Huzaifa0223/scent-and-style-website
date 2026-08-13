@@ -146,6 +146,15 @@ class ProductDetailView(DetailView[Product]):
             (v for v in variants if v.is_default), variants[0] if variants else None
         )
 
+        context["gallery_images"] = [
+            {
+                "id": image.pk,
+                "full": image.full_webp.url,
+                "thumb": image.thumb_webp.url,
+                "alt": image.alt_text or self.object.name,
+            }
+            for image in self.object.images.all()
+        ]
         context["default_variant"] = default_variant
         context["variant_options"] = [
             {"id": variant.pk, "label": _variant_label(variant)} for variant in variants
@@ -165,31 +174,45 @@ class ProductDetailView(DetailView[Product]):
         return context
 
 
+HOME_SECTION_SIZE = 8
+"""Featured and new-arrivals rails both cap at 8 — a 4-column desktop grid
+divides evenly with no partial final row, same reasoning as
+STOREFRONT_PAGE_SIZE."""
+
+
 class HomeView(ListView[Product]):
-    """Featured products on the home page — the fuller hero/category-tiles
-    layout is built once this view has real content to show."""
+    """Featured products, new arrivals, and category tiles on the home page
+    (roadmap Stage 6). The two rails deliberately aren't deduplicated
+    against each other — "featured" and "newest" are independent
+    curations, and a product can legitimately belong to both."""
 
     model = Product
     template_name = "storefront/home.html"
     context_object_name = "featured_products"
 
-    def get_queryset(self) -> QuerySet[Product]:
-        return (
-            Product.objects.filter(status=Product.Status.PUBLISHED, is_featured=True)
-            .with_pricing()
-            .prefetch_related(
-                Prefetch(
-                    "images",
-                    queryset=ProductImage.objects.filter(is_primary=True),
-                    to_attr="primary_image_list",
-                )
+    @staticmethod
+    def _with_primary_image(queryset: ProductQuerySet) -> ProductQuerySet:
+        return queryset.with_pricing().prefetch_related(
+            Prefetch(
+                "images",
+                queryset=ProductImage.objects.filter(is_primary=True),
+                to_attr="primary_image_list",
             )
-            .order_by("-created_at")[:8]
         )
+
+    def get_queryset(self) -> QuerySet[Product]:
+        base: ProductQuerySet = Product.objects.filter(
+            status=Product.Status.PUBLISHED, is_featured=True
+        )
+        return self._with_primary_image(base).order_by("-created_at")[:HOME_SECTION_SIZE]
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
         context["categories"] = Category.objects.filter(
             parent__isnull=True, is_published=True
         ).order_by("position", "name")
+        new_arrivals: ProductQuerySet = Product.objects.filter(status=Product.Status.PUBLISHED)
+        context["new_arrivals"] = self._with_primary_image(new_arrivals).order_by("-created_at")[
+            :HOME_SECTION_SIZE
+        ]
         return context
