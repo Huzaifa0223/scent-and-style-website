@@ -10,14 +10,14 @@ disagree, the code is right and this file is stale — fix it.
 
 ## Current position
 
-**Stage:** 8 — Checkout and order creation (not started)
-**Status:** Stage 7 is complete — see the Stage 7 log entry below for the full acceptance-gate and
-quality-gate record. Two human design directives shaped it before any code was written: `CartItem`
-FKs to `ProductVariant` with `on_delete=SET_NULL`, and every availability check goes through
-`ProductVariant.objects.with_available_quantity()` rather than raw `stock_quantity` — both followed
-literally, see the Stage 7 notes for how. A global CSRF-for-HTMX listener was added to the root
-`templates/base.html` (shared with `portal`) — confirmed intentional and recorded there, not left as
-a silent side effect for a future session to rediscover.
+**Stage:** 9 — WhatsApp handoff (not started)
+**Status:** Stage 8 is complete — see the Stage 8 log entry below for the full acceptance-gate and
+quality-gate record. Built from a design printed up front and reviewed twice by an independent
+advisor (the first pass failed on an API error mid-run and was retried) plus the human's own review
+in between — both passes caught real, substantive issues before any code existed, all fixed and
+recorded in the Stage 8 notes. A real latent bug in Stage 2's own catalog trigger code was found and
+fixed along the way (migration 0008), and a real CI gap from Stage 7 (cart's coverage floor was
+never actually added to `.github/workflows/ci.yml`) was closed too.
 **Last updated:** 2026-08-13
 **CI:** workflow committed (`.github/workflows/ci.yml`), never executed — no push has been made
 to any remote (the human pushes, per CLAUDE.md). Everything it runs has been run locally instead;
@@ -35,9 +35,13 @@ rebuild signals, `PostgresSearchBackend` blending `ts_rank` with trigram word-si
 header), `storefront/` (home page with featured/new-arrivals/category tiles, category and listing
 pages with composable filters + facet counts + sort + pagination, PDP with a variant selector,
 lightbox gallery, and skeleton loaders), `cart/` (session-keyed `Cart`/`CartItem`, HTMX-driven badge
-and drawer, add/increment/decrement/remove/clear with no page reload), a project-wide design system
-(`docs/design.md`, `tailwind.config.js` tokens, self-hosted IBM Plex). Stages 1-7 are fully built;
-Stage 8 (checkout and order creation) is next and not started.
+and drawer, add/increment/decrement/remove/clear with no page reload), `customers/` (`Customer`
+matched on normalised phone), `payments/` (`PaymentProvider` protocol + state enum only, no
+implementation), `shipping/` (`DeliveryZone`, the three `DeliveryCalculator` strategies), `orders/`
+(`Order`/`OrderItem` with full snapshot fields, the `ORD-{seq}-{rand}` order-number sequence, the
+`create_order()` transaction, single-page checkout, a session-scoped confirmation page), a
+project-wide design system (`docs/design.md`, `tailwind.config.js` tokens, self-hosted IBM Plex).
+Stages 1-8 are fully built; Stage 9 (WhatsApp handoff) is next and not started.
 
 ---
 
@@ -1194,6 +1198,231 @@ at all.
   surfaced this. Not a defect in this stage's migration itself, just a reminder that `--check` proves
   the migration *file* is correct, never that it's been *applied* anywhere real.
 
+### Stage 8 — Checkout and order creation
+Completed: 2026-08-13
+Commits: 9640d3f fix(catalog): guard product_must_have_variant trigger against same-transaction delete
+         343fb38 feat(orders): add checkout and order creation — Stage 8
+Acceptance gates: all passed
+  1. **Snapshot test:** create an order, then change the product's price and name, then delete the
+     product — the order still displays the original name, SKU, and unit price.
+     `orders/tests/test_services.py::test_gate1_snapshot_survives_a_price_change_a_rename_and_a_product_deletion`.
+     Verified live in a browser too, not just asserted: placed a real order, renamed and repriced
+     the product via the shell, then `product.delete()`'d it, reloaded the confirmation page — it
+     still showed the original name and Rs. 750.00, no 500, `item.variant_id` correctly `None`.
+  2. Every displayed order value comes from the snapshot — `tests/test_order_snapshot_leakage.py`
+     greps every template under `templates/orders/` (except `checkout.html`, which legitimately
+     renders live *cart* data pre-purchase, not an `OrderItem` snapshot — documented in the test's
+     own docstring so a future reader doesn't "fix" the exclusion away) for `.variant.price` and
+     `.variant.product.name`. Verified to have teeth, not just pass by construction: temporarily
+     injected `{{ item.variant.price }}` into `order_confirmation.html`, confirmed the test failed
+     with the exact offending line named, then removed it and confirmed green again.
+  3. A failure mid-creation rolls back completely: no orphan order, no orphan reservation —
+     `test_gate3_a_failure_mid_creation_rolls_back_completely` (one insufficient-stock line among
+     two rolls back both, including the line that would have succeeded alone; the cart itself
+     survives the rollback too, still holding both items).
+  4. Availability changing between cart view and submit produces a per-line error naming the
+     product — `test_gate4_availability_changed_since_add_produces_a_per_line_error_naming_the_product`
+     (service layer) and `test_checkout_post_with_a_stock_shortfall_shows_the_per_line_error_and_creates_nothing`
+     (HTTP layer, asserting the actual rendered page).
+  5. Order numbers are unique under a concurrent-creation test —
+     `test_gate5_concurrent_order_creation_for_the_last_unit_exactly_one_succeeds`: two real threads,
+     two different carts, one shared last-unit variant, `transaction=True`, real separate
+     connections — same methodology as Stage 4's `reserve()` concurrency test, applied here through
+     the *whole* `create_order()` transaction rather than just `reserve()` in isolation. Exactly one
+     order created, exactly one reservation, and the two order numbers (had both somehow succeeded)
+     are asserted distinct as a second, independent check.
+  6. Each of the three delivery strategies calculates correctly, including the free-delivery
+     threshold combined with city rates — `shipping/tests/test_calculators.py`, one test per
+     strategy plus the combined-with-a-city-rate case
+     (`test_city_based_calculator_waives_the_zone_rate_above_its_own_threshold`) and the
+     factory (`get_delivery_calculator()`) building the right concrete strategy from
+     `StoreSettings` for all three, including the "threshold strategy selected but no threshold
+     configured" misconfiguration case (falls back to flat-rate charging, not silently free).
+  7. Quality gate green. Coverage floor 90% on `orders` — see numbers below.
+
+Quality gate, final numbers: `ruff check` — all checks passed. `ruff format --check` — all files
+formatted (179 files). `mypy .` (whole tree, unscoped) — no issues in 171 source files.
+`makemigrations --check --dry-run` — no changes detected. `pytest --create-db` — 395 passed.
+Coverage: `orders` 99% (`forms.py`/`services.py`/`urls.py`/`views.py` all 100%, `models.py` 97% —
+only the two `__str__` methods, same accepted precedent as Stage 4's `inventory` models; floor
+90%), `customers` 97%, `shipping` 99%, `payments` (no floor — `protocols.py`'s `Protocol` body is
+by definition unexecuted, same reasoning as "UI-only code exempt"), `catalog` 97% (floor 85%,
+unaffected by the trigger fix). `manage.py check --deploy` clean under `config.settings.prod`
+(DEBUG=False, ALLOWED_HOSTS set, a real random `SECRET_KEY`, placeholder R2 credentials).
+`manage.py check` clean under `config.settings.dev`.
+Coverage: orders 99% (floor 90%), customers 97%, shipping 99% (no roadmap-stated floor; used 80%
+in CI), payments not floor-checked
+Notes:
+
+**Design was printed and reviewed by an independent advisor before any code was written, per the
+human's explicit instruction — two review passes, both substantive, the first only after a failed
+retry.** The first advisor call failed mid-run on an API connection error before producing any
+findings (the human chose to retry rather than proceed without it). Before the retry, the human's
+own review of the printed design caught four real issues, all folded into the design the advisor
+then reviewed a second time:
+1. The original design proposed combining `select_for_update()` with
+   `with_available_quantity()`'s `Subquery`-based annotation in one query to lock variants and read
+   availability together. This either errors or locks only the outer `ProductVariant` rows while
+   leaving the `StockReservation` rows the subquery aggregates over completely unlocked — silently
+   checking less than it looks like it checks. Split into two queries: a plain
+   `select_for_update()` lock, then a separate unlocked `with_available_quantity()` read while the
+   lock is held.
+2. That locking query needed `.order_by("pk")` — locking several variant rows with no deterministic
+   order deadlocks when two carts share the same variants in different orders.
+3. The original design claimed `reserve()`'s own re-check (inside the per-line reservation-creation
+   loop) was "redundant" given the upfront pre-check. Dropped that claim: it's only redundant if the
+   pre-check's lock actually covers what it needs to, which point 1 put in doubt for the *original*
+   design. Even after the fix, the safer and more accurate framing (used in the final code and
+   comments) is that `reserve()`'s own lock+check is the actual, sole, provably-race-safe mechanism
+   (Stage 4's own proven guarantee), and the pre-check exists only to produce a good multi-line error
+   message before committing to anything — not to be the safety net itself.
+4. The original design claimed locking the `Cart` row at the top of the transaction prevented a
+   double-submit (two rapid clicks creating two orders). It doesn't, fully: two requests from one
+   session can still resolve to two different `Cart` rows, or race `Cart` creation itself. The lock
+   is kept (still a partial, real guard for the common case), but double-submit is recorded below as
+   an open question, not claimed solved.
+
+**The second advisor pass (after the corrected design, this time completing successfully) caught
+one more real issue the human's own review and the first four corrections had missed:** the
+corrected design still didn't say explicitly which read `subtotal` should use. `cart.services.
+cart_lines()` (step 1, unlocked, taken before the transaction's own lock) and the locked
+`with_available_quantity()` read (step 3/4) are two independent reads of the same variant's price;
+using the first for `subtotal` and the second for each `OrderItem.unit_price` would let a
+mid-checkout reprice produce an `Order` whose `subtotal` doesn't equal the sum of its own
+`OrderItem.line_total`s — silently, and exactly the "two call sites answering the same question
+from two different reads" class of bug this project's reviews have caught before (Stage 4's
+`available_quantity` fan-out, Stage 4's Python-clock-vs-DB-clock inconsistency). Fixed:
+`create_order()` never touches `cart_lines()`'s own price read at all — it reads `cart.items.all()`
+directly for quantities/variant-ids only, and every price (`subtotal` and every
+`OrderItem.unit_price`) comes from `variant_by_item_pk`, populated once during the same validation
+pass that already locked and read availability.
+
+The second pass also caught two smaller, real bugs: the order-number alphabet
+(`23456789ABCDEFGHJKMNPQRSTUVWXYZ`) still contained `L` despite §22's explicit "no 0/O, no 1/I/l" —
+fixed (31 characters, `31³ = 29,791` combinations, the number already cited when explaining why
+rate-limiting rather than the alphabet is the real security control); and `DeliveryZone.city` was
+`unique=True` on the raw string while `CityBasedCalculator` matches `city__iexact` — Django admin
+(the only CRUD surface this stage) could have created both `"Lahore"` and `"lahore"` as separate,
+individually-valid rows, making the case-insensitive lookup non-deterministic between them — fixed
+with a `UniqueConstraint(Upper("city"), ...)`.
+
+**A real, unrelated bug in Stage 2's own trigger code was found and fixed mid-stage, not
+worked around in the test that found it.** Gate 1's snapshot test is the first test in this
+codebase to create a product and then fully delete it (product row and its variant both) within
+one transaction — every prior stage's tests that delete a product do so against a fixture that was
+created and committed in an earlier, separate transaction. `catalog_product_must_have_variant()`
+(migration 0002, the `AFTER INSERT ON catalog_product` deferred trigger) queued its "does this
+product have a variant" check from the original `INSERT`, with no guard for the product itself
+having also been deleted by the time the deferred check actually fires (at commit, or at
+`pytest-django`'s teardown `SET CONSTRAINTS ALL IMMEDIATE`) — so a product created and fully deleted
+in the same transaction incorrectly raised "must have at least one variant" for a product that no
+longer existed at all. `catalog_variant_delete_leaves_product_with_variant` (the `AFTER DELETE`
+sibling trigger, same migration) already guarded against exactly this shape of problem (`IF EXISTS
+(SELECT 1 FROM catalog_product WHERE id = OLD.product_id) AND ...`); migration 0008 brings the
+`INSERT`-side trigger in line with it. Confirmed both the failure and the fix directly (a standalone
+script reproducing the bug against a real Postgres connection, not just trusting the pytest
+traceback), and added a permanent regression test
+(`catalog/tests/test_product.py::test_deleting_a_freshly_created_product_in_the_same_transaction_is_allowed`,
+`transaction=True` — the same deferred-constraint trap CLAUDE.md's Traps section already documents
+three instances of; a fourth, this one on the INSERT side rather than a partial-unique-index
+conversion). Unlikely to matter in real production usage (creating and fully deleting the same
+product in one request is rare), but it's a real gap in an invariant this project otherwise treats
+as load-bearing everywhere, so it's fixed rather than left as a test-only workaround.
+
+**`inventory.services.reserve()` now requires `order: Order` as a keyword argument (breaking
+change, decided after the human weighed required-vs-optional explicitly).** Every real caller after
+this stage has an order — cart never calls `reserve()` (Stage 7's own design), so `create_order()`
+is `reserve()`'s first real production caller — and a reservation with no order is meaningless
+after this stage ships. The ~14 existing call sites in `inventory/tests/test_services.py` and
+`test_concurrency.py` (Stage 4) were updated to pass `order=OrderFactory()` (a new
+`orders/factories.py`, itself a new test-only dependency from `inventory`'s tests onto `orders` —
+consistent with the schema-level dependency `StockReservation.order` already creates). The two
+concurrency tests needed their `Order`s created **before** spawning worker threads (main-thread
+`orders = {"t0": OrderFactory(), "t1": OrderFactory()}`, committed under `transaction=True` same as
+`variant`), not inside each thread's own `attempt()` — creating them per-thread would have raced
+factory-boy's sequence counters across threads on top of the reservation race the test already
+exists to exercise, muddying what's actually being tested.
+
+**`ProductVariant.display_label`** — `storefront/views.py`'s private `_variant_label()` (Stage 6)
+moved to a plain property on the model, since `OrderItem.variant_label`'s snapshot needs the exact
+same "Red / 50ml" logic and two independent copies of it is exactly the kind of drift this project
+avoids elsewhere (`display_price`, `available_quantity`, ...). N+1-safe only when
+`variant_attribute_values__value` is prefetched — true both at the PDP (already prefetched, Stage
+6) and in `create_order()`'s own locked variant query (prefetch added there specifically because
+the advisor's second pass caught its absence — see below).
+
+**A second, independent finding from the advisor's second pass, folded in during implementation:
+the locked variant query in `create_order()` needed `.prefetch_related("variant_attribute_values__
+value")` for `display_label` to actually be N+1-safe there** — `with_available_quantity().select_related("product")`
+alone doesn't cover it, and Stage 8's own acceptance gates don't include an explicit
+`assertNumQueries` check for checkout the way Stages 3/6/7 do for their own list views, so nothing
+would have caught this by accident. Added, and a query-count test
+(`test_query_count_stays_flat_as_line_count_grows_from_1_to_5`) added anyway, even though it's not
+a named gate — measured the real per-line cost directly via `CaptureQueriesContext` (5 queries/line:
+one `OrderItem` insert plus `reserve()`'s own fixed four) rather than guessing a budget, so the
+assertion has real headroom above genuine cost instead of being either too tight (flaking on
+`reserve()`'s own legitimate cost) or too loose (missing a real regression).
+
+**Customer race handling — a design point the advisor's second pass corrected after checking
+Django 5.2's actual source, not just its documented behaviour.** `Customer.phone` is `unique=True`,
+so two concurrent first orders from the same brand-new phone number race. The human's original
+instruction was "use `update_or_create` and handle `IntegrityError`"; the advisor verified directly
+against the installed `django.db.models.query` source that Django 5.2's `update_or_create()`
+already takes `select_for_update()` on both its initial lookup *and* its post-`IntegrityError`
+retry — meaning the loser of the race blocks on the winner's lock and returns the winner's row, and
+never re-raises past `get_or_create_customer()` for the scenario being guarded against. The explicit
+`except IntegrityError: Customer.objects.get(phone=phone)` fallback was **dropped**, not kept as
+defensive belt-and-suspenders — it was unreachable under every scenario this codebase can actually
+produce (nothing ever deletes a `Customer` mid-race), and unreachable code is a real coverage-floor
+problem at this project's 90% floor on `orders`/`customers`, not just clutter. Recorded in the
+function's own docstring so a future session doesn't "fix" the missing except block back in.
+
+**Stage 8's own scope boundary against Stage 9, checked against the roadmap before writing any
+checkout view code, not assumed.** Stage 9 ("WhatsApp handoff") owns the *entire* WhatsApp
+message/redirect experience, including — per the roadmap's own Stage 9 deliverables line — "the
+confirmation page always showing the order number, a copy-order-details button, and a
+re-open-WhatsApp link". Stage 8 builds a genuinely minimal confirmation page (order number, line
+items, totals, delivery address) that Stage 9 will extend with the WhatsApp-specific chrome, not
+because the roadmap explicitly assigns Stage 8 a confirmation page at all, but because checkout
+structurally needs *somewhere* to redirect to once an order exists, and building nothing would leave
+checkout non-functional. `OrderConfirmationView` deliberately does not attempt any WhatsApp-related
+behaviour.
+
+**Checkout's `city` field is a required free-text `CharField`, not the `<select>` §20 literally
+describes ("city — drives delivery charge")** — deviation, decided during design and confirmed by
+the advisor, not silently made. Sourcing the select's options from `DeliveryZone` would make
+checkout unsubmittable for any flat-rate/free-threshold merchant with zero configured zones (no
+portal CRUD exists yet to populate them either — see the open question below). Recorded here and
+under Deviations.
+
+**`OrderConfirmationView`'s session-scoping is a deliberate security boundary, not an
+afterthought.** `order_number` alone is only ~30,000 combinations wide (§22's own stated ceiling)
+and Stage 11's actual rate-limited public tracking page doesn't exist yet — so the confirmation view
+is scoped to `request.session["last_order_id"]`, set only by a successful `create_order()` call
+immediately before redirect, and 404s for any `order_number` in the URL that isn't the exact order
+this session just placed (tested directly:
+`test_confirmation_404s_for_the_wrong_order_number_even_with_a_valid_session`). Verified live too:
+navigating to a fabricated order number in the same browser session that had just placed a real
+order still 404'd.
+
+- The dev database needed an explicit `manage.py migrate` again before live verification could run
+  (`customers`/`payments`(no migration)/`shipping`/`orders` migrations, plus `inventory`'s
+  `AddField` and `catalog`'s trigger fix) — same reminder as Stage 7's entry: `makemigrations
+  --check` proves the migration file is correct, never that it's been applied anywhere real. Applied
+  before this session's live checkout run.
+- CI gap fixed while adding this stage's own coverage-floor lines: `cart`'s Stage 7 floor (85%) was
+  never actually added to `.github/workflows/ci.yml`, meaning CI was never actually enforcing it —
+  confirmed the floor genuinely passes (100%) before adding the line, not just adding the line and
+  hoping.
+- Live-verified end to end in a browser: added an item to cart, opened checkout, confirmed the
+  "same as mobile" checkbox correctly hides/shows the WhatsApp field (Alpine, `x-model`/`x-show`),
+  submitted with a real Pakistani mobile number, landed on the confirmation page with a genuinely
+  generated `ORD-10000-MSC` number, correct subtotal/delivery/total math against the configured
+  flat-rate strategy, and cart badge reset to 0. Then (gate 1 above) renamed, repriced, and deleted
+  the underlying product via the shell and reloaded the confirmation page to confirm the snapshot
+  held. All fixture rows (order, customer, cart, category — the product/variant were already gone
+  from the gate-1 check) removed by explicit primary key afterward, nothing left in the dev database.
+
 ---
 
 ## Deviations from spec
@@ -1217,6 +1446,13 @@ being recorded. The second is far more likely.
   precise stubs, so strict annotation requirements there add noise without catching real bugs.
   Tests still must pass — only typing rigor on test code is relaxed. Reversible; would just mean
   annotating every test function's fixture parameters.
+- [Stage 8] Checkout's `city` field is a required free-text `CharField`, not the `<select>` §20
+  literally describes ("city — drives delivery charge"). Sourcing a select's options from
+  `DeliveryZone` would make checkout unsubmittable for any flat-rate/free-threshold merchant with
+  zero configured zones, and no portal CRUD exists yet to populate them (Django admin only this
+  stage). Reversible; the natural fix is a portal `DeliveryZone` CRUD (no roadmap stage currently
+  assigns one — see Proposed spec amendments) followed by switching this field to a
+  `ModelChoiceField`/dynamic select once one exists.
 
 ---
 
@@ -1272,6 +1508,21 @@ says, and continue. The human resolves these.
   already recorded above. Not a blocker: built against the roadmap's explicit deliverable/gate list
   plus §16–17, §34–38, §42, §44–46's actual content. Proposed change: renumber the roadmap's Stage 6
   goal line to cite the sections that actually exist.
+- [Stage 8] §24 lists `payment_method` among fields that are "all nullable — §28", but §28 itself
+  says "`payment_method` defaults to `whatsapp_pending`" — a field that always has a real default
+  is never actually null in practice, and the two sentences are in tension for this one field only
+  (every other payment field in the same list genuinely is nullable and unused in MVP). Resolved in
+  favour of §28's more specific instruction: `payment_method` is `CharField(default="whatsapp_pending")`,
+  not nullable. Proposed change: correct §24's grouping to exclude `payment_method` from the
+  "all nullable" list, or correct §28 if a nullable `payment_method` was actually intended.
+- [Stage 8] §29 describes derived `total_orders`/`total_spent`/`last_order_at` on `Customer` and a
+  customer-profile-with-order-history page, but no roadmap stage — checked end to end — ever
+  assigns a page to build that profile view (same gap class as Stage 1's Django-admin-mount-path
+  question: a real product surface with no stage owning it). Not built speculatively this stage;
+  `Customer` itself ships with just the fields explicitly named (`name`, `phone`,
+  `whatsapp_number`, `email`). Proposed change: add an explicit "Customers" deliverable to some
+  stage (Stage 10's order-management work is the most natural fit, since it already builds portal
+  order list/detail UI) rather than leaving it unassigned.
 
 ---
 
@@ -1328,6 +1579,18 @@ Questions that did not block progress but need an answer eventually.
   threading `is_active` into `ProductDetailView`'s `variants_data`/Alpine state — a Stage 6 template
   this stage didn't set out to reopen. Revisit alongside any future PDP work, or Stage 12's quality
   pass.
+- [Stage 8] Double-submit at checkout (two rapid clicks, or two tabs, creating two orders from the
+  same cart) is not fully solved. `create_order()` locks the `Cart` row at the start of the
+  transaction, which serializes two requests that both resolve to the *same, already-existing* Cart
+  row — but two requests can still resolve to two different `Cart` rows, or race `Cart` creation
+  itself, neither of which the lock touches. The advisor's second review confirmed this explicitly
+  (a correction to the original design's claim that the lock solved it). Assumed in the meantime:
+  low real-world frequency (checkout is a full-page POST, not a repeatable HTMX action like cart's
+  own mutations), and the actual failure mode if it does happen is "two legitimate orders" — not
+  data corruption, not overselling (each order still independently re-validates and reserves stock
+  under `reserve()`'s own lock). Revisit if it turns out to matter in practice — an idempotency
+  token on the checkout form, or disabling the submit button client-side, are the two obvious
+  fixes, neither implemented here since neither is spec-required.
 
 ---
 
