@@ -58,6 +58,38 @@
   font-display: swap;
 }
 
+/* ---------------------------------------------------------------------
+   Structure primitives (storefront polish pass).
+
+   `.shell` replaces ten hand-repeated copies of
+   "mx-auto max-w-sf-shell px-4 sm:px-8" across the header, footer, home
+   sections, listing, PDP, and checkout. Those copies did already agree
+   with each other — a live measurement put every region's content on the
+   same 363px left edge — so this is deduplication, not a bug fix: the
+   point is that the eleventh copy can no longer disagree.
+
+   The gutter scale itself is the real change. The old ramp stopped at
+   32px from the `sm` breakpoint (640px) all the way to the 1240px cap,
+   which is why a ~1100px viewport looked edge-to-edge despite having a
+   correct container. It now grows 24 -> 40 -> 64px.
+
+   `.shell` sets max-width via a component-layer rule, so a page needing
+   a narrower column (order confirmation, order tracking) can still pass
+   `max-w-2xl` alongside it: @tailwind utilities is emitted after
+   @tailwind components, so the utility wins at equal specificity.
+   --------------------------------------------------------------------- */
+@layer components {
+  .shell {
+    @apply mx-auto w-full max-w-sf-shell px-gutter md:px-gutter-md lg:px-gutter-lg;
+  }
+  .rule {
+    @apply border-b border-sf-line;
+  }
+  .rule-t {
+    @apply border-t border-sf-line;
+  }
+}
+
 /* Storefront redesign motion (docs/design.md's "Motion" section — animation
    spec 1, "Hero / section entrance"). static/js/storefront-reveal.js adds
    .is-in once an element is 15% into the viewport; this is the transition

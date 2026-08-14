@@ -6,7 +6,7 @@
 {% block content %}
   <section class="relative overflow-hidden bg-gradient-to-br from-[#4A3B2C] via-[#2A211C] to-[#17120F]">
     <div class="pointer-events-none absolute inset-0" style="background: radial-gradient(120% 70% at 72% 22%, rgba(216,164,72,.18), transparent 62%);"></div>
-    <div class="relative mx-auto max-w-sf-shell px-4 py-20 sm:px-8 sm:py-28">
+    <div class="shell relative py-20 sm:py-28">
       <div class="max-w-xl">
         <p data-reveal class="text-sf-eyebrow uppercase text-sf-brass">{{ store_settings.name }}</p>
         <h1 data-reveal class="mt-3 font-display text-sf-d-xl font-light leading-[1.05] text-sf-fg sm:text-sf-d-2xl">
@@ -34,7 +34,7 @@
   </section>
 
   {% if categories %}
-    <section class="mx-auto max-w-sf-shell px-4 py-16 sm:px-8">
+    <section class="shell py-16">
       <div class="flex items-baseline justify-between">
         <h2 class="font-display text-sf-d-md font-normal text-sf-fg">Shop by category</h2>
         {% if has_more_categories %}
@@ -68,7 +68,7 @@
     </section>
   {% endif %}
 
-  <section class="mx-auto max-w-sf-shell px-4 py-16 sm:px-8">
+  <section class="shell py-16">
     <div class="flex items-baseline justify-between">
       <div>
         <p class="text-sf-eyebrow uppercase text-sf-brass">Featured</p>
@@ -100,7 +100,7 @@
     {% endif %}
   </section>
 
-  <section class="mx-auto max-w-sf-shell px-4 py-16 sm:px-8">
+  <section class="shell py-16">
     <h2 class="font-display text-sf-d-md font-normal text-sf-fg">New arrivals</h2>
     {% if new_arrivals %}
       <div class="mt-6 grid grid-cols-2 gap-x-4 gap-y-8 lg:grid-cols-4">
@@ -113,7 +113,13 @@
     {% endif %}
   </section>
 
-  <section data-reveal class="mt-4 bg-sf-paper px-6 py-16 text-center sm:py-20">
+  {% comment %}
+  Full-bleed colour band, so it keeps its own padding rather than taking
+  .shell (which would centre and cap the *background* too). The gutter
+  tokens still apply so its text starts on the same edge as every other
+  section's does.
+  {% endcomment %}
+  <section data-reveal class="mt-4 bg-sf-paper px-gutter py-16 text-center md:px-gutter-md lg:px-gutter-lg sm:py-20">
     <p class="text-sf-eyebrow uppercase text-sf-paper-fg-muted">Our house</p>
     <p class="mx-auto mt-4 max-w-2xl font-display text-sf-d-md font-light leading-snug text-sf-paper-fg">
       Every order is confirmed by hand on WhatsApp — no call centre, just the merchant on the other end.

@@ -26,8 +26,8 @@ partial that would couple their designs together.
     byte-identical to the page background by design (this is the same
     dark surface, not a distinct one).
     {% endcomment %}
-    <header class="sticky top-0 z-40 border-b border-sf-line bg-sf-ink shadow-sf-lift">
-      <div class="mx-auto flex max-w-sf-shell flex-wrap items-center gap-3 px-4 py-3 sm:gap-6 sm:px-8">
+    <header class="rule sticky top-0 z-40 bg-sf-ink shadow-sf-lift">
+      <div class="shell flex flex-wrap items-center gap-3 py-3 sm:gap-6">
         <a
           href="/"
           class="font-display text-lg uppercase tracking-[0.12em] text-sf-fg hover:text-sf-brass focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass focus-visible:ring-offset-2 focus-visible:ring-offset-sf-ink"
@@ -46,8 +46,8 @@ partial that would couple their designs together.
       {% block content %}{% endblock %}
     </main>
 
-    <footer class="border-t border-sf-line">
-      <div class="mx-auto max-w-sf-shell px-4 py-10 text-sf-sm text-sf-fg-dim sm:px-8">
+    <footer class="rule-t">
+      <div class="shell py-10 text-sf-sm text-sf-fg-dim">
         {% block storefront_footer %}
           <div class="flex flex-wrap items-center justify-between gap-3">
             <span class="font-display text-base uppercase tracking-[0.14em] text-sf-fg">{{ store_settings.name }}</span>
