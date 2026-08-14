@@ -15,14 +15,14 @@ unavailable_reason, line_total, needs_attention).
     {% if line.unavailable_reason %}
       <p class="mt-1 text-sf-caption font-medium text-sf-danger">{{ line.unavailable_reason }}</p>
     {% endif %}
-    <div class="mt-3 flex items-center gap-1 rounded-sf border border-sf-line" style="width: fit-content;">
+    <div class="mt-3 flex items-center gap-2">
       <button
         type="button"
         hx-post="{% url 'cart:decrement' line.item.pk %}"
         hx-target="#cart-drawer-content"
         hx-swap="innerHTML"
         aria-label="Decrease quantity"
-        class="flex h-8 w-8 items-center justify-center text-sf-fg hover:text-sf-brass focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass"
+        class="flex h-8 w-8 items-center justify-center rounded-full border border-sf-line text-sf-fg hover:border-sf-brass hover:text-sf-brass focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass"
       >&minus;</button>
       <span class="w-6 text-center text-sf-sm text-sf-fg">{{ line.item.quantity }}</span>
       <button
@@ -32,7 +32,7 @@ unavailable_reason, line_total, needs_attention).
         hx-swap="innerHTML"
         aria-label="Increase quantity"
         {% if not line.variant or not line.variant.is_active %}disabled{% endif %}
-        class="flex h-8 w-8 items-center justify-center text-sf-fg hover:text-sf-brass disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass"
+        class="flex h-8 w-8 items-center justify-center rounded-full border border-sf-line text-sf-fg hover:border-sf-brass hover:text-sf-brass disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass"
       >+</button>
     </div>
     <button
@@ -40,7 +40,7 @@ unavailable_reason, line_total, needs_attention).
       hx-post="{% url 'cart:remove' line.item.pk %}"
       hx-target="#cart-drawer-content"
       hx-swap="innerHTML"
-      class="mt-2 text-sf-caption font-medium text-sf-fg-dim hover:text-sf-danger"
+      class="mt-2 inline-flex h-8 items-center rounded-full border border-sf-line px-3 text-sf-caption font-medium text-sf-fg-dim hover:border-sf-danger hover:text-sf-danger focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass"
     >Remove</button>
   </div>
   <p class="shrink-0 text-sf-sm text-sf-cream">{{ line.line_total|money }}</p>

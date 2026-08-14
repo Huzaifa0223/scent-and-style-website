@@ -12,11 +12,11 @@ from typing import Any
 
 from django import forms
 
-from core.forms import AriaDescribedByMixin, StyledFieldMixin
+from core.forms import AriaDescribedByMixin, StorefrontStyledFieldMixin
 from core.phone import normalize_pk_mobile
 
 
-class CheckoutForm(AriaDescribedByMixin, StyledFieldMixin, forms.Form):
+class CheckoutForm(AriaDescribedByMixin, StorefrontStyledFieldMixin, forms.Form):
     name = forms.CharField(max_length=200)
     mobile_number = forms.CharField(max_length=20, label="Mobile number")
     same_as_mobile = forms.BooleanField(required=False, initial=True, label="Same as mobile")
@@ -55,7 +55,7 @@ class CheckoutForm(AriaDescribedByMixin, StyledFieldMixin, forms.Form):
         return cleaned_data
 
 
-class OrderTrackingForm(AriaDescribedByMixin, StyledFieldMixin, forms.Form):
+class OrderTrackingForm(AriaDescribedByMixin, StorefrontStyledFieldMixin, forms.Form):
     """Public order lookup (§25). Deliberately no ``clean_mobile_number``
     validation here — a malformed phone must fail the same generic way an
     order-not-found or a wrong-phone lookup does (``orders.tracking.

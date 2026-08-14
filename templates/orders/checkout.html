@@ -4,15 +4,15 @@
 {% block title %}Checkout — {{ store_settings.name }}{% endblock %}
 
 {% block content %}
-  <div class="mx-auto max-w-3xl px-4 py-6">
-    <h1 class="text-xl font-semibold text-ink">Checkout</h1>
+  <div class="mx-auto max-w-sf-shell px-4 py-8 sm:px-8">
+    <h1 class="font-display text-sf-d-lg font-light text-sf-fg">Checkout</h1>
 
     {% if locked_out %}
-      <div class="mt-4 rounded border border-danger bg-danger-soft px-4 py-3 text-sm text-danger">
+      <div class="mt-4 rounded-sf border border-sf-danger bg-sf-danger/10 px-4 py-3 text-sf-sm text-sf-danger">
         Too many attempts. Try again later.
       </div>
     {% elif rate_limited %}
-      <div class="mt-4 rounded border border-danger bg-danger-soft px-4 py-3 text-sm text-danger">
+      <div class="mt-4 rounded-sf border border-sf-danger bg-sf-danger/10 px-4 py-3 text-sf-sm text-sf-danger">
         Too many attempts. Wait a moment and try again.
       </div>
     {% endif %}
@@ -20,7 +20,7 @@
     {% if not locked_out and not rate_limited %}
 
     {% if checkout_errors %}
-      <div class="mt-4 rounded border border-danger bg-danger-soft px-4 py-3 text-sm text-danger">
+      <div class="mt-4 rounded-sf border border-sf-danger bg-sf-danger/10 px-4 py-3 text-sf-sm text-sf-danger">
         <p class="font-medium">Some items in your cart changed since you added them:</p>
         <ul class="mt-2 list-disc space-y-1 pl-5">
           {% for error in checkout_errors %}
@@ -32,68 +32,68 @@
           {% endfor %}
         </ul>
         <p class="mt-2">
-          <a href="{% url 'storefront:product_list' %}" class="font-medium underline">
+          <a href="{% url 'storefront:product_list' %}" class="font-medium underline hover:text-sf-fg">
             Go back and update your cart
           </a>
         </p>
       </div>
     {% endif %}
 
-    <div class="mt-6 grid gap-8 lg:grid-cols-3">
+    <div class="mt-8 grid gap-10 lg:grid-cols-3 lg:gap-14">
       <div class="lg:col-span-2">
-        <form method="post" class="space-y-4">
+        <form method="post" class="space-y-5">
           {% csrf_token %}
           {% if form.non_field_errors %}
-            <div class="rounded bg-danger-soft px-3 py-2 text-sm text-danger">
+            <div class="rounded-sf border border-sf-danger bg-sf-danger/10 px-3 py-2 text-sf-sm text-sf-danger">
               {{ form.non_field_errors }}
             </div>
           {% endif %}
           {% for field in form.visible_fields %}
             {% if field.name == "mobile_number" %}
               <div>
-                <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-ink">
+                <label for="{{ field.id_for_label }}" class="text-sf-eyebrow uppercase text-sf-fg-dim">
                   {{ field.label }}
                 </label>
                 {{ field }}
-                <p id="{{ field.id_for_label }}-error" class="mt-1 text-xs text-danger">
+                <p id="{{ field.id_for_label }}-error" class="mt-1 text-sf-caption text-sf-danger">
                   {% if field.errors %}{{ field.errors|striptags }}{% endif %}
                 </p>
               </div>
               <div
                 x-data="{ sameAsMobile: {{ form.same_as_mobile.value|yesno:'true,false' }} }"
-                class="space-y-4"
+                class="space-y-5"
               >
-                <label class="flex items-center gap-2 text-sm font-medium text-ink">
+                <label class="flex min-h-sf-tap items-center gap-2.5 text-sf-sm font-medium text-sf-fg">
                   <input
                     type="checkbox" name="same_as_mobile" x-model="sameAsMobile"
                     {% if form.same_as_mobile.value %}checked{% endif %}
-                    class="rounded border-border-interactive text-accent focus:ring-accent"
+                    class="h-5 w-5 rounded-sm border-sf-line accent-sf-brass focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass"
                   />
                   {{ form.same_as_mobile.label }}
                 </label>
                 <div x-show="!sameAsMobile">
                   <label
                     for="{{ form.whatsapp_number.id_for_label }}"
-                    class="block text-sm font-medium text-ink"
+                    class="text-sf-eyebrow uppercase text-sf-fg-dim"
                   >
                     {{ form.whatsapp_number.label }}
                   </label>
                   {{ form.whatsapp_number }}
-                  <p id="{{ form.whatsapp_number.id_for_label }}-error" class="mt-1 text-xs text-danger">
+                  <p id="{{ form.whatsapp_number.id_for_label }}-error" class="mt-1 text-sf-caption text-sf-danger">
                     {% if form.whatsapp_number.errors %}{{ form.whatsapp_number.errors|striptags }}{% endif %}
                   </p>
                 </div>
               </div>
             {% elif field.name != "same_as_mobile" and field.name != "whatsapp_number" %}
               <div>
-                <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-ink">
+                <label for="{{ field.id_for_label }}" class="text-sf-eyebrow uppercase text-sf-fg-dim">
                   {{ field.label }}
                 </label>
                 {{ field }}
                 {% if field.help_text %}
-                  <p class="mt-1 text-xs text-text-muted">{{ field.help_text }}</p>
+                  <p class="mt-1 text-sf-caption text-sf-fg-dim">{{ field.help_text }}</p>
                 {% endif %}
-                <p id="{{ field.id_for_label }}-error" class="mt-1 text-xs text-danger">
+                <p id="{{ field.id_for_label }}-error" class="mt-1 text-sf-caption text-sf-danger">
                   {% if field.errors %}{{ field.errors|striptags }}{% endif %}
                 </p>
               </div>
@@ -103,31 +103,31 @@
 
           <button
             type="submit"
-            class="w-full rounded bg-accent px-4 py-3 text-sm font-semibold text-white hover:bg-accent-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            class="min-h-sf-ctrl w-full rounded-sf bg-sf-brass px-4 text-sf-caption font-semibold uppercase tracking-[0.1em] text-sf-fg-onbrass transition-colors duration-200 hover:bg-sf-brass-press focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass focus-visible:ring-offset-2 focus-visible:ring-offset-sf-ink"
           >
-            Place Order
+            Place order
           </button>
         </form>
       </div>
 
-      <div class="rounded border border-border-subtle bg-surface p-4">
-        <h2 class="text-sm font-semibold text-ink">Order review</h2>
-        <ul class="mt-3 divide-y divide-border-subtle text-sm">
+      <div class="h-fit rounded-sf border border-sf-line bg-sf-surface p-5">
+        <h2 class="text-sf-eyebrow uppercase text-sf-fg-dim">Order review</h2>
+        <ul class="mt-3 divide-y divide-sf-line text-sf-sm">
           {% for line in cart_lines %}
-            <li class="flex items-start justify-between gap-3 py-2">
-              <span class="text-ink">
+            <li class="flex items-start justify-between gap-3 py-2.5">
+              <span class="text-sf-fg">
                 {% if line.variant %}{{ line.variant.product.name }}{% else %}Item unavailable{% endif %}
-                <span class="block text-xs text-text-muted">Qty {{ line.item.quantity }}</span>
+                <span class="block text-sf-caption text-sf-fg-dim">Qty {{ line.item.quantity }}</span>
               </span>
-              <span class="shrink-0 font-mono text-ink">{{ line.line_total|money }}</span>
+              <span class="shrink-0 text-sf-fg">{{ line.line_total|money }}</span>
             </li>
           {% endfor %}
         </ul>
-        <div class="mt-3 flex items-center justify-between border-t border-border-subtle pt-3 text-sm font-semibold">
-          <span class="text-ink">Subtotal</span>
-          <span class="font-mono text-ink">{{ checkout_subtotal|money }}</span>
+        <div class="mt-3 flex items-center justify-between border-t border-sf-line pt-3 text-sf-sm font-semibold">
+          <span class="text-sf-fg">Subtotal</span>
+          <span class="text-sf-fg">{{ checkout_subtotal|money }}</span>
         </div>
-        <p class="mt-1 text-xs text-text-muted">Delivery is calculated after you place your order.</p>
+        <p class="mt-1 text-sf-caption text-sf-fg-dim">Delivery is calculated after you place your order.</p>
       </div>
     </div>
 

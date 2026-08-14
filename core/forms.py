@@ -18,6 +18,22 @@ CHECKBOX_CSS: Final[str] = (
     "h-5 w-5 rounded border-border-interactive text-accent focus:ring-2 focus:ring-accent"
 )
 
+# Storefront variant of the two constants above — same §37 requirements
+# (44px touch target, visible focus ring), styled against the sf- dark
+# editorial token set instead of the portal's light admin tokens. Kept
+# separate rather than parameterising FIELD_CSS/CHECKBOX_CSS because the
+# two token systems don't share values (see docs/design.md's Tailwind
+# config section) and portal forms must never pick up storefront colours.
+SF_FIELD_CSS: Final[str] = (
+    "mt-1 block min-h-sf-ctrl w-full rounded-sf border border-sf-line bg-sf-surface px-3 "
+    "text-sf-sm text-sf-fg placeholder:text-sf-fg-dim focus:outline-none "
+    "focus-visible:border-sf-brass focus-visible:ring-2 focus-visible:ring-sf-brass"
+)
+SF_CHECKBOX_CSS: Final[str] = (
+    "h-5 w-5 rounded-sm border-sf-line accent-sf-brass focus:outline-none "
+    "focus-visible:ring-2 focus-visible:ring-sf-brass"
+)
+
 
 class StyledFieldMixin(forms.BaseForm):
     """Applies the project's one input style to every field automatically
@@ -34,6 +50,21 @@ class StyledFieldMixin(forms.BaseForm):
                 field.widget.attrs.setdefault("class", CHECKBOX_CSS)
             else:
                 field.widget.attrs.setdefault("class", FIELD_CSS)
+
+
+class StorefrontStyledFieldMixin(forms.BaseForm):
+    """Storefront counterpart to :class:`StyledFieldMixin` — identical
+    §37 guarantees, styled against the sf- token set for forms that
+    render on customer-facing pages (checkout, order tracking).
+    """
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            if isinstance(field.widget, forms.CheckboxInput):
+                field.widget.attrs.setdefault("class", SF_CHECKBOX_CSS)
+            else:
+                field.widget.attrs.setdefault("class", SF_FIELD_CSS)
 
 
 class AriaDescribedByMixin(forms.BaseForm):

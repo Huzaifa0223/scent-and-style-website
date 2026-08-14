@@ -38,14 +38,14 @@ this fragment is always swapped inside of — never rendered standalone.
     </div>
     <a
       href="{% url 'orders:checkout' %}"
-      class="min-h-sf-ctrl mt-4 flex w-full items-center justify-center rounded-sf bg-sf-brass px-3 text-center text-sf-caption font-semibold uppercase tracking-[0.1em] text-sf-fg-onbrass transition-colors duration-200 hover:bg-sf-brass-press focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass focus-visible:ring-offset-2 focus-visible:ring-offset-sf-ink"
+      class="min-h-sf-ctrl mt-4 flex w-full items-center justify-center rounded-full bg-sf-brass px-3 text-center text-sf-caption font-semibold uppercase tracking-[0.1em] text-sf-fg-onbrass transition-colors duration-200 hover:bg-sf-brass-press focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass focus-visible:ring-offset-2 focus-visible:ring-offset-sf-ink"
     >Checkout</a>
     <button
       type="button"
       hx-post="{% url 'cart:clear' %}"
       hx-target="#cart-drawer-content"
       hx-swap="innerHTML"
-      class="min-h-sf-tap mt-2 w-full rounded-sf text-sf-caption uppercase tracking-[0.1em] text-sf-fg-dim hover:text-sf-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass"
+      class="min-h-sf-tap mt-2 w-full rounded-full border border-sf-line text-sf-caption uppercase tracking-[0.1em] text-sf-fg-dim hover:border-sf-danger hover:text-sf-danger focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass"
     >Clear cart</button>
   </div>
 {% else %}

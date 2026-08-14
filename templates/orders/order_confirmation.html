@@ -4,12 +4,12 @@
 {% block title %}Order {{ order.order_number }} — {{ store_settings.name }}{% endblock %}
 
 {% block content %}
-  <div class="mx-auto max-w-2xl px-4 py-10 text-center">
-    <p class="text-sm font-semibold uppercase tracking-wide text-success">Order placed</p>
-    <h1 class="mt-2 text-2xl font-semibold text-ink">Thank you, {{ order.customer_name }}</h1>
-    <p class="mt-2 text-text-muted">
+  <div class="mx-auto max-w-2xl px-4 py-10 text-center sm:px-8">
+    <p class="text-sf-eyebrow uppercase text-sf-ok">Order placed</p>
+    <h1 class="mt-2 font-display text-sf-d-lg font-light text-sf-fg">Thank you, {{ order.customer_name }}</h1>
+    <p class="mt-2 text-sf-sm text-sf-fg-muted">
       Your order number is
-      <span class="font-mono font-semibold text-ink">{{ order.order_number }}</span>.
+      <span class="font-semibold text-sf-cream">{{ order.order_number }}</span>.
       Keep it handy — you'll need it to track your order.
     </p>
 
@@ -22,7 +22,7 @@
     holding the message text is always visible and always selectable by
     hand, whether or not any JS on this page runs or succeeds.
     {% endcomment %}
-    <div class="mt-6" x-data="{
+    <div class="mt-8" x-data="{
       copied: false,
       copyMessage() {
         const textarea = document.getElementById('whatsapp-message-text');
@@ -50,67 +50,67 @@
         <a
           id="whatsapp-link"
           href="{{ whatsapp_url }}"
-          class="inline-flex min-h-11 w-full max-w-xs items-center justify-center gap-2 rounded bg-success px-5 text-sm font-semibold text-white hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-success focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
+          class="min-h-sf-ctrl inline-flex w-full max-w-xs items-center justify-center gap-2 rounded-sf bg-sf-whatsapp px-5 text-sf-caption font-semibold uppercase tracking-[0.1em] text-sf-fg-onbrass transition-opacity duration-200 hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-whatsapp focus-visible:ring-offset-2 focus-visible:ring-offset-sf-ink"
         >
           Open WhatsApp to notify us
         </a>
       {% endif %}
-      <p class="mt-4 text-sm text-text-muted">Your order details, to send or save:</p>
+      <p class="mt-4 text-sf-sm text-sf-fg-dim">Your order details, to send or save:</p>
       <textarea
         id="whatsapp-message-text"
         readonly
         rows="6"
-        class="mt-2 w-full rounded border border-border-subtle bg-paper p-2 font-mono text-xs text-ink"
+        class="mt-2 w-full rounded-sf border border-sf-line bg-sf-surface p-2.5 text-sf-caption text-sf-fg-muted"
       >{{ whatsapp_message }}</textarea>
       <button
         type="button"
         @click="copyMessage()"
-        class="mt-2 text-sm font-medium text-accent hover:text-accent-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        class="mt-2 text-sf-sm font-medium text-sf-brass hover:text-sf-brass-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass"
       >
         <span x-show="!copied">Copy order details</span>
         <span x-show="copied">Copied!</span>
       </button>
     </div>
 
-    <div class="mt-8 rounded border border-border-subtle bg-surface p-4 text-left">
-      <h2 class="text-sm font-semibold text-ink">Order summary</h2>
-      <ul class="mt-3 divide-y divide-border-subtle text-sm">
+    <div class="mt-8 rounded-sf border border-sf-line bg-sf-surface p-5 text-left">
+      <h2 class="text-sf-eyebrow uppercase text-sf-fg-dim">Order summary</h2>
+      <ul class="mt-3 divide-y divide-sf-line text-sf-sm">
         {% for item in order.items.all %}
-          <li class="flex items-start justify-between gap-3 py-2">
-            <span class="text-ink">
+          <li class="flex items-start justify-between gap-3 py-2.5">
+            <span class="text-sf-fg">
               {{ item.product_name }}
               {% if item.variant_label != item.sku %}
-                <span class="block text-xs text-text-muted">{{ item.variant_label }}</span>
+                <span class="block text-sf-caption text-sf-fg-dim">{{ item.variant_label }}</span>
               {% endif %}
-              <span class="block text-xs text-text-muted">Qty {{ item.quantity }}</span>
+              <span class="block text-sf-caption text-sf-fg-dim">Qty {{ item.quantity }}</span>
             </span>
-            <span class="shrink-0 font-mono text-ink">{{ item.line_total|money }}</span>
+            <span class="shrink-0 text-sf-fg">{{ item.line_total|money }}</span>
           </li>
         {% endfor %}
       </ul>
-      <div class="mt-3 space-y-1 border-t border-border-subtle pt-3 text-sm">
+      <div class="mt-3 space-y-1.5 border-t border-sf-line pt-3 text-sf-sm">
         <div class="flex items-center justify-between">
-          <span class="text-text-muted">Subtotal</span>
-          <span class="font-mono text-ink">{{ order.subtotal|money }}</span>
+          <span class="text-sf-fg-dim">Subtotal</span>
+          <span class="text-sf-fg">{{ order.subtotal|money }}</span>
         </div>
         <div class="flex items-center justify-between">
-          <span class="text-text-muted">Delivery</span>
-          <span class="font-mono text-ink">{{ order.delivery_charge|money }}</span>
+          <span class="text-sf-fg-dim">Delivery</span>
+          <span class="text-sf-fg">{{ order.delivery_charge|money }}</span>
         </div>
         <div class="flex items-center justify-between font-semibold">
-          <span class="text-ink">Total</span>
-          <span class="font-mono text-ink">{{ order.total|money }}</span>
+          <span class="text-sf-fg">Total</span>
+          <span class="text-sf-cream">{{ order.total|money }}</span>
         </div>
       </div>
     </div>
 
-    <p class="mt-6 text-sm text-text-muted">
+    <p class="mt-6 text-sf-sm text-sf-fg-dim">
       Delivering to {{ order.delivery_address }}, {{ order.delivery_city }}
     </p>
 
     <a
       href="{% url 'storefront:home' %}"
-      class="mt-8 inline-flex min-h-11 items-center justify-center rounded bg-accent px-5 text-sm font-semibold text-white hover:bg-accent-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
+      class="min-h-sf-ctrl mt-8 inline-flex items-center justify-center rounded-sf bg-sf-brass px-5 text-sf-caption font-semibold uppercase tracking-[0.1em] text-sf-fg-onbrass transition-colors duration-200 hover:bg-sf-brass-press focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass focus-visible:ring-offset-2 focus-visible:ring-offset-sf-ink"
     >
       Continue shopping
     </a>
