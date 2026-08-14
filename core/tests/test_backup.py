@@ -7,6 +7,7 @@ the real branch with no live R2 credentials involved.
 
 from __future__ import annotations
 
+import copy
 import os
 import subprocess
 from datetime import UTC
@@ -16,6 +17,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from django.conf import settings as django_settings
 from django.core.files.storage import FileSystemStorage
+from django.test import override_settings
 from storages.backends.s3boto3 import S3Boto3Storage
 
 from core.backup import (
@@ -54,13 +56,28 @@ def test_dump_database_invokes_pg_dump_with_connection_settings_and_custom_forma
 
 
 def test_dump_database_passes_the_db_password_only_via_env_not_argv(tmp_path: Path) -> None:
-    with patch("core.backup.subprocess.run", return_value=_completed_process(0)) as run:
-        dump_database(tmp_path)
+    """A literal ``settings.DATABASES["default"]["PASSWORD"]`` value isn't
+    safe to assert absent-from-argv against on its own: CI's Postgres
+    password is literally "postgres", which is also the ``-U postgres``
+    username argument — the two are indistinguishable, so the assertion
+    would pass even if the password *did* leak into argv, as long as it
+    happened to equal the username. Overriding to a sentinel that cannot
+    collide with any other argv value (host, port, username, db name,
+    dump path) makes the assertion actually test the security property,
+    not an accident of CI's own credentials.
+    """
+    sentinel_password = "sentinel-pw-8f3e2c1a9b7d4f60-does-not-collide-with-anything-else"
+    databases = copy.deepcopy(django_settings.DATABASES)
+    databases["default"]["PASSWORD"] = sentinel_password
+
+    with override_settings(DATABASES=databases):
+        with patch("core.backup.subprocess.run", return_value=_completed_process(0)) as run:
+            dump_database(tmp_path)
 
     command = run.call_args.args[0]
     passed_env = run.call_args.kwargs["env"]
-    assert "PGPASSWORD" in passed_env
-    assert passed_env["PGPASSWORD"] not in command
+    assert passed_env["PGPASSWORD"] == sentinel_password
+    assert sentinel_password not in command
 
 
 def test_dump_database_raises_backup_error_when_pg_dump_exits_nonzero(tmp_path: Path) -> None:
