@@ -30,9 +30,30 @@
     </h1>
     <p class="mt-1 text-sf-sm text-sf-fg-dim">{{ page_obj.paginator.count }} product{{ page_obj.paginator.count|pluralize }}</p>
 
-    <div class="mt-8 flex flex-col gap-10 lg:flex-row lg:gap-12">
-      <aside class="lg:w-56 lg:shrink-0">
-        <form method="get" class="space-y-7">
+    {% comment %}
+    Two explicit grid tracks rather than flex, so the rail and the results
+    column start on the same grid row and therefore the same baseline —
+    with flex the rail's height fed back into the row and there was no
+    fixed track to align against.
+
+    lg:sticky needs lg:self-start: a grid item stretches to fill its row
+    by default, and a stretched item has nothing to scroll within, so
+    sticky silently does nothing without it. top-24 (96px) is chosen
+    against a measured 69px header, leaving 27px of clearance.
+    {% endcomment %}
+    <div class="mt-8 grid gap-y-8 lg:grid-cols-[240px_1fr] lg:gap-x-gutter-lg">
+      <aside class="lg:sticky lg:top-24 lg:self-start lg:border-r lg:border-sf-line lg:pr-10">
+        {% comment %}
+        flex-col + gap, not space-y-7. Tailwind's space-y utility emits
+        "> :not([hidden]) ~ :not([hidden])", and [hidden] there is the HTML
+        hidden *attribute*, not type="hidden" — so the sort input below
+        counted as a real first child and pushed 28px of spacing onto the
+        first fieldset, dropping the rail's first legend 28px below the
+        sort bar it is supposed to share a baseline with. A flex container
+        ignores display:none children outright, so the gap cannot be
+        thrown off by adding another hidden input here later.
+        {% endcomment %}
+        <form method="get" class="flex flex-col gap-7">
           {% if current_sort %}<input type="hidden" name="sort" value="{{ current_sort }}" />{% endif %}
           {% if brand_facets %}
             <fieldset class="border-b border-sf-line pb-6">
@@ -106,8 +127,14 @@
         </form>
       </aside>
 
-      <div class="flex-1">
-        <div class="flex items-center justify-end">
+      <div>
+        {% comment %}
+        The sort bar is the results column's first child and carries the
+        rule, so it reads as the head of that column rather than as a
+        control floating above the grid. It shares a baseline with the
+        rail's first legend.
+        {% endcomment %}
+        <div class="rule flex items-center justify-end pb-4">
           <form method="get" class="flex items-center gap-2.5">
             {% for key, value in request.GET.items %}
               {% if key != "sort" %}
@@ -129,12 +156,20 @@
 
         {% if products %}
           {% comment %}
-          grid-cols-2 → lg:grid-cols-4 only, same reasoning as home.html's
-          product rails: no sm:grid-cols-3 tier, since STOREFRONT_PAGE_SIZE
-          (24) is a multiple of 2 and 4 but a partial final page still
-          isn't guaranteed to be a multiple of 3.
+          grid-cols-2 → md:3 → xl:4. From lg up the rail takes a fixed
+          240px track plus a 64px gap, so four columns in what remains is
+          cramped between 1024 and 1279px (~148px a tile); three holds
+          until xl gives it the room back.
+
+          An earlier revision of this file avoided a 3-column tier on the
+          grounds that a partial final page might not divide by 3. That
+          argument does not actually single out 3 — a partial page divides
+          evenly by 2 or 4 just as rarely — so it is dropped here. It does
+          still hold on home.html, whose rails render a fixed
+          HOME_SECTION_SIZE of 8: 8 divides by 2 and 4 but never by 3, so
+          there the orphan is guaranteed rather than incidental.
           {% endcomment %}
-          <div class="mt-6 grid grid-cols-2 gap-x-4 gap-y-8 lg:grid-cols-4">
+          <div class="mt-6 grid grid-cols-2 gap-x-6 gap-y-10 md:grid-cols-3 xl:grid-cols-4">
             {% for product in products %}
               {% include "storefront/_product_card.html" %}
             {% endfor %}
