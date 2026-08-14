@@ -22,6 +22,25 @@
     <meta name="twitter:title" content="{% block twitter_title %}{{ store_settings.name }}{% endblock %}" />
     <meta name="twitter:description" content="{% block twitter_description %}{% endblock %}" />
     <link rel="stylesheet" href="{% static 'css/app.css' %}" />
+    {% comment %}
+    [data-reveal] starts at opacity:0 and is brought in by
+    static/js/storefront-reveal.js. Without this fallback, any failure to
+    run that script — JS disabled, a blocked or truncated asset — leaves
+    the elements carrying it permanently invisible, which on the home page
+    is the entire hero (eyebrow, H1, lede, CTA) plus the category tiles and
+    both product rails. §21's "usable with JavaScript entirely disabled"
+    rules that out, so the opacity:0 is reverted when scripting is off.
+    Lives here rather than in a template block so no child can override it
+    away by defining extra_head.
+    {% endcomment %}
+    <noscript>
+      <style>
+        [data-reveal] {
+          opacity: 1 !important;
+          transform: none !important;
+        }
+      </style>
+    </noscript>
     {% block extra_head %}{% endblock %}
   </head>
   <body class="h-full font-sans text-base antialiased {% block body_class %}bg-paper text-ink{% endblock %}">

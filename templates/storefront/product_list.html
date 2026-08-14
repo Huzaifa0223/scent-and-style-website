@@ -169,7 +169,14 @@
           HOME_SECTION_SIZE of 8: 8 divides by 2 and 4 but never by 3, so
           there the orphan is guaranteed rather than incidental.
           {% endcomment %}
-          <div class="mt-6 grid grid-cols-2 gap-x-6 gap-y-10 md:grid-cols-3 xl:grid-cols-4">
+          {% comment %}
+          grid-stagger (M4) is applied here but not to home.html's rails:
+          those already animate in via [data-reveal]/IntersectionObserver,
+          and running both would double-animate the same cards. The
+          listing grid had no entrance motion at all — measured
+          [data-reveal] count of 0 on this page.
+          {% endcomment %}
+          <div class="grid-stagger mt-6 grid grid-cols-2 gap-x-6 gap-y-10 md:grid-cols-3 xl:grid-cols-4">
             {% for product in products %}
               {% include "storefront/_product_card.html" %}
             {% endfor %}

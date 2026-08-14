@@ -100,8 +100,13 @@
      `group` is deliberately NOT applied here: it is a marker class with no
      declarations of its own and Tailwind cannot @apply it, so it stays in
      the template markup alongside .p-card. */
+  /* M1: lift + hairline shifts to gold + elevation. transition is listed
+     property-by-property rather than transition-all so the border-color
+     change cannot drag unrelated properties into a paint. */
   .p-card {
-    @apply block overflow-hidden rounded-sf border border-sf-line bg-sf-surface;
+    @apply block overflow-hidden rounded-sf border border-sf-line bg-sf-surface
+           transition-[transform,border-color,box-shadow] duration-base ease-sf-editorial
+           hover:-translate-y-1 hover:border-sf-line-gold hover:shadow-sf-card-hover;
   }
   /* aspect-[3/4] is what actually locks tile height: derivatives are
      generated with Pillow's thumbnail(), which preserves each source's own
@@ -111,8 +116,11 @@
   .p-card__media {
     @apply relative aspect-[3/4] w-full overflow-hidden bg-sf-surface-raised;
   }
+  /* M2: the zoom is deliberately slower than the lift it accompanies —
+     matched durations read as one abrupt jerk rather than a settle. */
   .p-card__img {
-    @apply h-full w-full object-cover;
+    @apply h-full w-full object-cover
+           transition-transform duration-slow ease-sf-editorial group-hover:scale-[1.04];
   }
   .p-card__body {
     @apply border-t border-sf-line px-3.5 py-3;
@@ -123,9 +131,43 @@
   .p-card__title {
     @apply mt-1 line-clamp-2 font-display text-sf-d-sm leading-tight text-sf-fg;
   }
+  /* M3 */
   .p-card__price {
-    @apply mt-1.5 text-sf-sm text-sf-cream;
+    @apply mt-1.5 text-sf-sm text-sf-cream
+           transition-colors duration-fast group-hover:text-sf-brass-hover;
   }
+
+  /* M4: grid entrance. CSS-only and capped at 12 children on purpose —
+     an IntersectionObserver would re-introduce the flash-of-invisible-
+     content risk this avoids (nothing depends on JS running for a card to
+     be visible), and a per-item inline animation-delay computed in the
+     template would put presentation back into the markup. Cards past the
+     twelfth simply render with no entrance animation rather than sitting
+     invisible behind an ever-growing delay.
+
+     :nth-of-type scoped to .p-card, NOT :nth-child. Each rendered card is
+     two sibling elements, not one — _product_card.html emits a
+     <script type="application/ld+json"> before its <a> — so :nth-child
+     counts 2 per card and every delay lands on the wrong tile (card 1 got
+     40ms, card 3 got 200ms) while half the budget is spent on invisible
+     script tags, cutting the animated run from 12 cards to 6. Counting by
+     type ignores the scripts, since they are <script> and the cards are
+     <a>. Verified by measurement, not by reading. */
+  .grid-stagger > .p-card:nth-of-type(-n + 12) {
+    @apply animate-rise-in;
+  }
+  .grid-stagger > .p-card:nth-of-type(1) { animation-delay: 0ms; }
+  .grid-stagger > .p-card:nth-of-type(2) { animation-delay: 40ms; }
+  .grid-stagger > .p-card:nth-of-type(3) { animation-delay: 80ms; }
+  .grid-stagger > .p-card:nth-of-type(4) { animation-delay: 120ms; }
+  .grid-stagger > .p-card:nth-of-type(5) { animation-delay: 160ms; }
+  .grid-stagger > .p-card:nth-of-type(6) { animation-delay: 200ms; }
+  .grid-stagger > .p-card:nth-of-type(7) { animation-delay: 240ms; }
+  .grid-stagger > .p-card:nth-of-type(8) { animation-delay: 280ms; }
+  .grid-stagger > .p-card:nth-of-type(9) { animation-delay: 320ms; }
+  .grid-stagger > .p-card:nth-of-type(10) { animation-delay: 360ms; }
+  .grid-stagger > .p-card:nth-of-type(11) { animation-delay: 400ms; }
+  .grid-stagger > .p-card:nth-of-type(12) { animation-delay: 440ms; }
 }
 
 /* Storefront redesign motion (docs/design.md's "Motion" section — animation
@@ -179,5 +221,49 @@
     background-image: none;
     background-color: #2a2321;
     animation: none;
+  }
+}
+
+/* ---------------------------------------------------------------------
+   Global motion guard. Deliberately the last thing in this file and
+   deliberately !important: it has to beat every utility and component
+   rule above, including ones added later by someone who has not read
+   this comment.
+
+   animation-delay is reset alongside animation-duration, which the usual
+   form of this snippet omits. It matters here because .grid-stagger uses
+   fill-mode `both`, so a card holds the animation's 0% state — opacity 0
+   — for the length of its delay. Zeroing only the duration would leave a
+   reduced-motion visitor looking at an empty grid for up to 440ms and
+   then a pop-in, which is a worse experience than the animation being
+   guarded against.
+
+   The two transform resets are not redundant with the duration reset: a
+   0.01ms transition still *applies* the transform, just instantly. Motion
+   sensitivity is about the movement existing at all, not its speed, so
+   the lift and the zoom are removed outright rather than accelerated.
+
+   This also flattens the 200ms opacity fade the [data-reveal] block above
+   keeps for reduced motion. That is intended — content still appears,
+   because storefront-reveal.js reveals every [data-reveal] element
+   immediately when reduced motion is set.
+   --------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
+    scroll-behavior: auto !important;
+  }
+  .p-card:hover {
+    transform: none !important;
+  }
+  .p-card__img,
+  .p-card:hover .p-card__img {
+    transform: none !important;
   }
 }

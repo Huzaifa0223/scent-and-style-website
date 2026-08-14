@@ -26,7 +26,18 @@ partial that would couple their designs together.
     byte-identical to the page background by design (this is the same
     dark surface, not a distinct one).
     {% endcomment %}
-    <header class="rule sticky top-0 z-40 bg-sf-ink shadow-sf-lift">
+    {% comment %}
+    The lift shadow is now conditional on data-scrolled (M6,
+    static/js/storefront-header.js) rather than permanent. It was added
+    because the header had no perceivable separation from content scrolled
+    beneath it — but at scroll 0 there is nothing beneath it to separate
+    from, so showing it there was decoration. The border-b is
+    unconditional and still carries the boundary if the script never runs.
+    {% endcomment %}
+    <header
+      data-sticky-header
+      class="rule sticky top-0 z-40 bg-sf-ink transition-shadow duration-200 ease-sf-editorial data-[scrolled]:shadow-sf-lift"
+    >
       <div class="shell flex flex-wrap items-center gap-3 py-3 sm:gap-6">
         <a
           href="/"
@@ -66,4 +77,5 @@ partial that would couple their designs together.
 
 {% block extra_body %}
   <script src="{% static 'js/storefront-reveal.js' %}" defer></script>
+  <script src="{% static 'js/storefront-header.js' %}" defer></script>
 {% endblock %}

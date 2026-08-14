@@ -58,13 +58,20 @@ module.exports = {
         // compliant border already marks the boundary — every consumer of
         // sf-surface in this codebase pairs it with an sf-line border).
         "sf-surface": { DEFAULT: "#2C2621", raised: "#3A322B" },
-        // `gold` is the hover-state hairline only — a decorative accent on
-        // an element whose boundary is already carried by DEFAULT/strong at
-        // 3.49:1, so its own low alpha is not a WCAG 1.4.11 concern. Derived
-        // from the real sf-brass #D8A448 = rgb(216 164 72), not from the
-        // polish brief's #C9922F, which was sampled from a lossy screenshot
-        // and would have shifted the brand gold by ~7% on every hover.
-        "sf-line": { DEFAULT: "#786755", strong: "#8F7C67", gold: "rgb(216 164 72 / 0.28)" },
+        // Hover-state hairline. Derived from the real sf-brass #D8A448 =
+        // rgb(216 164 72), not the polish brief's screenshot-sampled
+        // #C9922F, which would have shifted the brand gold ~7% on hover.
+        //
+        // 50%, not the brief's 28%. A border composites over the element's
+        // own background (background-clip defaults to border-box), so at
+        // 28% over sf-surface #2C2621 this resolves to #5C492C — 2.20:1
+        // against the page, i.e. hovering a card would have dropped its
+        // boundary below the 3:1 that WCAG 1.4.11 requires and that
+        // sf-line DEFAULT was specifically corrected to clear. 50%
+        // resolves to #826534 at 3.48:1, holding the boundary essentially
+        // level with the 3.49:1 base state instead of trading it away for
+        // a hover effect.
+        "sf-line": { DEFAULT: "#786755", strong: "#8F7C67", gold: "rgb(216 164 72 / 0.50)" },
         "sf-paper": "#F4EFE9",
         // The spec (docs/design.md) verifies sf-paper pairs with #1A1512
         // text at 14.6:1 but names no token for that text color — added
