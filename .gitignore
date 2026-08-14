@@ -42,6 +42,10 @@ static/css/app.css
 .DS_Store
 Thumbs.db
 
+# Design tool export (reference only — tokens/specs are implemented into
+# tailwind.config.js/templates directly; the export itself isn't source)
+/website design/
+
 # Backups / dumps
 *.sql
 *.dump
