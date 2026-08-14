@@ -13,82 +13,83 @@
 {% endblock %}
 
 {% block content %}
-  <div class="mx-auto max-w-7xl px-4 py-6">
-    <nav aria-label="Breadcrumb" class="mb-2 text-sm text-text-muted">
-      <ol class="flex flex-wrap items-center gap-1">
-        <li><a href="{% url 'storefront:home' %}" class="hover:text-accent">Home</a></li>
+  <div class="mx-auto max-w-sf-shell px-4 py-8 sm:px-8">
+    <nav aria-label="Breadcrumb" class="mb-2 text-sf-caption text-sf-fg-dim">
+      <ol class="flex flex-wrap items-center gap-1.5">
+        <li><a href="{% url 'storefront:home' %}" class="hover:text-sf-brass focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass">Home</a></li>
         <li aria-hidden="true">&rsaquo;</li>
         {% if category %}
-          <li aria-current="page" class="text-ink">{{ category.name }}</li>
+          <li aria-current="page" class="text-sf-fg-muted">{{ category.name }}</li>
         {% else %}
-          <li aria-current="page" class="text-ink">All Products</li>
+          <li aria-current="page" class="text-sf-fg-muted">All Products</li>
         {% endif %}
       </ol>
     </nav>
-    <h1 class="text-xl font-semibold text-ink">
+    <h1 class="font-display text-sf-d-lg font-light text-sf-fg">
       {% if category %}{{ category.name }}{% else %}All Products{% endif %}
     </h1>
+    <p class="mt-1 text-sf-sm text-sf-fg-dim">{{ page_obj.paginator.count }} product{{ page_obj.paginator.count|pluralize }}</p>
 
-    <div class="mt-6 flex flex-col gap-6 lg:flex-row">
+    <div class="mt-8 flex flex-col gap-10 lg:flex-row lg:gap-12">
       <aside class="lg:w-56 lg:shrink-0">
-        <form method="get" class="space-y-6">
+        <form method="get" class="space-y-7">
           {% if current_sort %}<input type="hidden" name="sort" value="{{ current_sort }}" />{% endif %}
           {% if brand_facets %}
-            <fieldset>
-              <legend class="text-sm font-semibold text-ink">Brand</legend>
-              <div class="mt-2 space-y-1">
+            <fieldset class="border-b border-sf-line pb-6">
+              <legend class="text-sf-eyebrow uppercase text-sf-fg-dim">Brand</legend>
+              <div class="mt-3 space-y-2.5">
                 {% for facet in brand_facets %}
-                  <label class="flex items-center justify-between gap-2 text-sm text-text-muted">
-                    <span class="flex items-center gap-2">
+                  <label class="flex min-h-sf-tap items-center justify-between gap-2 text-sf-sm text-sf-fg-muted">
+                    <span class="flex items-center gap-2.5">
                       <input
                         type="radio"
                         name="brand"
                         value="{{ facet.brand__slug }}"
                         {% if current_brand == facet.brand__slug %}checked{% endif %}
-                        class="border-border-interactive text-accent focus:ring-accent"
+                        class="h-4 w-4 border-sf-line accent-sf-brass focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass"
                       />
                       {{ facet.brand__name }}
                     </span>
-                    <span>({{ facet.count }})</span>
+                    <span class="text-sf-fg-dim">({{ facet.count }})</span>
                   </label>
                 {% endfor %}
               </div>
             </fieldset>
           {% endif %}
 
-          <fieldset>
-            <legend class="text-sm font-semibold text-ink">Price</legend>
-            <div class="mt-2 flex items-center gap-2">
+          <fieldset class="border-b border-sf-line pb-6">
+            <legend class="text-sf-eyebrow uppercase text-sf-fg-dim">Price</legend>
+            <div class="mt-3 flex items-center gap-2">
               <input
                 type="number" name="price_min" placeholder="Min" value="{{ current_price_min }}"
-                class="w-full rounded border-border-interactive text-sm"
+                class="min-h-sf-tap w-full rounded-sf border border-sf-line bg-sf-surface px-2.5 text-sf-sm text-sf-fg placeholder:text-sf-fg-dim focus:outline-none focus-visible:border-sf-brass focus-visible:ring-2 focus-visible:ring-sf-brass"
               />
-              <span class="text-text-muted">–</span>
+              <span class="text-sf-fg-dim">–</span>
               <input
                 type="number" name="price_max" placeholder="Max" value="{{ current_price_max }}"
-                class="w-full rounded border-border-interactive text-sm"
+                class="min-h-sf-tap w-full rounded-sf border border-sf-line bg-sf-surface px-2.5 text-sf-sm text-sf-fg placeholder:text-sf-fg-dim focus:outline-none focus-visible:border-sf-brass focus-visible:ring-2 focus-visible:ring-sf-brass"
               />
             </div>
           </fieldset>
 
           {% for group in attribute_facets %}
             {% if group.values %}
-              <fieldset>
-                <legend class="text-sm font-semibold text-ink">{{ group.definition.name }}</legend>
-                <div class="mt-2 space-y-1">
+              <fieldset class="border-b border-sf-line pb-6">
+                <legend class="text-sf-eyebrow uppercase text-sf-fg-dim">{{ group.definition.name }}</legend>
+                <div class="mt-3 space-y-2.5">
                   {% for entry in group.values %}
-                    <label class="flex items-center justify-between gap-2 text-sm text-text-muted">
-                      <span class="flex items-center gap-2">
+                    <label class="flex min-h-sf-tap items-center justify-between gap-2 text-sf-sm text-sf-fg-muted">
+                      <span class="flex items-center gap-2.5">
                         <input
                           type="checkbox"
                           name="{{ group.definition.slug }}"
                           value="{{ entry.value.slug }}"
                           {% if entry.is_active %}checked{% endif %}
-                          class="rounded border-border-interactive text-accent focus:ring-accent"
+                          class="h-4 w-4 rounded-sm border-sf-line accent-sf-brass focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass"
                         />
                         {{ entry.value.value }}
                       </span>
-                      <span>({{ entry.count }})</span>
+                      <span class="text-sf-fg-dim">({{ entry.count }})</span>
                     </label>
                   {% endfor %}
                 </div>
@@ -98,7 +99,7 @@
 
           <button
             type="submit"
-            class="w-full rounded bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            class="min-h-sf-ctrl w-full rounded-sf bg-sf-brass px-4 text-sf-caption font-semibold uppercase tracking-[0.1em] text-sf-fg-onbrass transition-colors duration-200 hover:bg-sf-brass-press focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass focus-visible:ring-offset-2 focus-visible:ring-offset-sf-ink"
           >
             Apply filters
           </button>
@@ -106,18 +107,17 @@
       </aside>
 
       <div class="flex-1">
-        <div class="flex items-center justify-between">
-          <p class="text-sm text-text-muted">{{ page_obj.paginator.count }} product{{ page_obj.paginator.count|pluralize }}</p>
-          <form method="get" class="flex items-center gap-2">
+        <div class="flex items-center justify-end">
+          <form method="get" class="flex items-center gap-2.5">
             {% for key, value in request.GET.items %}
               {% if key != "sort" %}
                 <input type="hidden" name="{{ key }}" value="{{ value }}" />
               {% endif %}
             {% endfor %}
-            <label for="sort" class="text-sm text-text-muted">Sort</label>
+            <label for="sort" class="text-sf-caption uppercase tracking-[0.1em] text-sf-fg-dim">Sort</label>
             <select
               id="sort" name="sort" onchange="this.form.submit()"
-              class="rounded border-border-interactive text-sm"
+              class="min-h-sf-tap rounded-sf border border-sf-line bg-sf-surface px-2.5 text-sf-sm text-sf-fg focus:outline-none focus-visible:border-sf-brass focus-visible:ring-2 focus-visible:ring-sf-brass"
             >
               <option value="newest" {% if current_sort == "newest" %}selected{% endif %}>Newest</option>
               <option value="price_asc" {% if current_sort == "price_asc" %}selected{% endif %}>Price: Low to High</option>
@@ -128,28 +128,37 @@
         </div>
 
         {% if products %}
-          <div class="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+          {% comment %}
+          grid-cols-2 → lg:grid-cols-4 only, same reasoning as home.html's
+          product rails: no sm:grid-cols-3 tier, since STOREFRONT_PAGE_SIZE
+          (24) is a multiple of 2 and 4 but a partial final page still
+          isn't guaranteed to be a multiple of 3.
+          {% endcomment %}
+          <div class="mt-6 grid grid-cols-2 gap-x-4 gap-y-8 lg:grid-cols-4">
             {% for product in products %}
               {% include "storefront/_product_card.html" %}
             {% endfor %}
           </div>
 
           {% if page_obj.has_other_pages %}
-            <nav class="mt-8 flex items-center justify-center gap-2" aria-label="Pagination">
+            <nav class="mt-12 flex items-center justify-center gap-2" aria-label="Pagination">
               {% if page_obj.has_previous %}
-                <a href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.previous_page_number }}" class="rounded border border-border-interactive px-3 py-1.5 text-sm text-ink">Previous</a>
+                <a href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.previous_page_number }}" class="min-h-sf-tap inline-flex items-center rounded-sf border border-sf-line px-3.5 text-sf-sm text-sf-fg hover:border-sf-brass focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass">Previous</a>
               {% endif %}
-              <span class="text-sm text-text-muted">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+              <span class="px-2 text-sf-sm text-sf-fg-dim">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
               {% if page_obj.has_next %}
-                <a href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.next_page_number }}" class="rounded border border-border-interactive px-3 py-1.5 text-sm text-ink">Next</a>
+                <a href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.next_page_number }}" class="min-h-sf-tap inline-flex items-center rounded-sf border border-sf-line px-3.5 text-sf-sm text-sf-fg hover:border-sf-brass focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass">Next</a>
               {% endif %}
             </nav>
           {% endif %}
         {% else %}
           <div class="mt-16 flex flex-col items-center gap-2 text-center">
-            <p class="text-base font-medium text-ink">No products match these filters.</p>
-            <p class="text-sm text-text-muted">Try removing a filter or browsing all products.</p>
-            <a href="{% url 'storefront:product_list' %}" class="mt-2 text-sm font-medium text-accent hover:text-accent-hover">
+            <p class="font-display text-sf-d-sm text-sf-fg">No products match these filters.</p>
+            <p class="text-sf-sm text-sf-fg-dim">Try removing a filter or browsing all products.</p>
+            <a
+              href="{% url 'storefront:product_list' %}"
+              class="min-h-sf-tap mt-2 inline-flex items-center text-sf-sm font-medium text-sf-brass hover:text-sf-brass-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass"
+            >
               Clear filters
             </a>
           </div>
