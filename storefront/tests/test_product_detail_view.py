@@ -128,14 +128,19 @@ def test_pdp_gallery_renders_a_skeleton_placeholder_and_a_lightbox_dialog(client
     actual behaviour (skeleton toggling against Alpine's loaded state,
     focus trap wrapping in both directions, Escape restoring focus to the
     trigger, prev/next cycling) was verified live in a real browser; see
-    the Stage 6 log entry in specs/state.md for what was checked and how."""
+    the Stage 6 log entry in specs/state.md for what was checked and how.
+
+    Asserts ``sf-animate-shimmer`` (the storefront redesign's sweep
+    animation), not the plain ``animate-pulse`` this gallery used before
+    that redesign — same class-name update as the product card's own
+    skeleton, the underlying gate (a real skeleton element exists) unchanged."""
     product = ProductFactory(status=Product.Status.PUBLISHED)
     ProductImageFactory(product=product, is_primary=True)
 
     response = client.get(f"/product/{product.slug}/")
 
     assert response.status_code == 200
-    assert b"animate-pulse" in response.content
+    assert b"sf-animate-shimmer" in response.content
     assert b'role="dialog"' in response.content
 
 

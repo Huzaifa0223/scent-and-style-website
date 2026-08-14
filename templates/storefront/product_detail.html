@@ -23,20 +23,20 @@
 {% endblock %}
 
 {% block content %}
-  <div class="mx-auto max-w-5xl px-4 py-6">
-    <nav aria-label="Breadcrumb" class="text-sm text-text-muted">
-      <ol class="flex flex-wrap items-center gap-1">
-        <li><a href="{% url 'storefront:product_list' %}" class="hover:text-accent">All Products</a></li>
+  <div class="mx-auto max-w-sf-shell px-4 py-8 sm:px-8">
+    <nav aria-label="Breadcrumb" class="text-sf-caption text-sf-fg-dim">
+      <ol class="flex flex-wrap items-center gap-1.5">
+        <li><a href="{% url 'storefront:product_list' %}" class="hover:text-sf-brass focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass">All Products</a></li>
         {% if product.category %}
           <li aria-hidden="true">&rsaquo;</li>
-          <li><a href="{% url 'storefront:category_product_list' product.category.slug %}" class="hover:text-accent">{{ product.category.name }}</a></li>
+          <li><a href="{% url 'storefront:category_product_list' product.category.slug %}" class="hover:text-sf-brass focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass">{{ product.category.name }}</a></li>
         {% endif %}
         <li aria-hidden="true">&rsaquo;</li>
-        <li aria-current="page" class="text-ink">{{ product.name }}</li>
+        <li aria-current="page" class="text-sf-fg-muted">{{ product.name }}</li>
       </ol>
     </nav>
 
-    <div class="mt-4 grid gap-8 lg:grid-cols-2">
+    <div class="mt-6 grid gap-10 lg:grid-cols-2 lg:gap-14">
       {{ gallery_images|json_script:"gallery-data" }}
       <div
         id="pdp-gallery"
@@ -80,9 +80,9 @@
               type="button"
               @click="openLightbox()"
               aria-label="View full-size image"
-              class="relative block aspect-square w-full overflow-hidden rounded border border-border-subtle bg-paper focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              class="relative block aspect-square w-full cursor-zoom-in overflow-hidden rounded-sf border border-sf-line bg-sf-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass"
             >
-              <div class="absolute inset-0 animate-pulse bg-border-subtle" x-show="!heroLoaded"></div>
+              <div class="sf-animate-shimmer absolute inset-0" x-show="!heroLoaded"></div>
               <img
                 :src="images[activeIndex].card"
                 :srcset="images[activeIndex].card + ' 600w, ' + images[activeIndex].full + ' 1400w'"
@@ -94,6 +94,7 @@
                 width="800" height="800"
                 class="h-full w-full object-cover"
               />
+              <span class="pointer-events-none absolute left-4 top-4 rounded-sf border border-sf-fg/30 px-2.5 py-1.5 text-sf-caption uppercase tracking-[0.14em] text-sf-fg">Tap to enlarge</span>
             </button>
             <div x-show="images.length > 1" class="mt-3 flex gap-2">
               <template x-for="(image, index) in images" :key="image.id">
@@ -102,8 +103,8 @@
                   @click="activeIndex = index; heroLoaded = false"
                   :aria-label="'Show image ' + (index + 1)"
                   :aria-current="activeIndex === index"
-                  class="h-16 w-16 shrink-0 overflow-hidden rounded border focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                  :class="activeIndex === index ? 'border-accent' : 'border-border-subtle'"
+                  class="h-16 w-16 shrink-0 overflow-hidden rounded-sf border focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass"
+                  :class="activeIndex === index ? 'border-sf-brass' : 'border-sf-line'"
                 >
                   <img :src="image.thumb" alt="" width="64" height="64" class="h-full w-full object-cover" />
                 </button>
@@ -112,7 +113,7 @@
           </div>
         </template>
         <template x-if="!images.length">
-          <div class="flex aspect-square w-full items-center justify-center rounded border border-border-subtle bg-paper text-text-muted">
+          <div class="flex aspect-square w-full items-center justify-center rounded-sf border border-sf-line bg-sf-surface text-sf-caption text-sf-fg-dim">
             No image
           </div>
         </template>
@@ -122,7 +123,7 @@
           x-show="lightboxOpen"
           @click.self="closeLightbox()"
           @keydown.tab="trapFocus($event)"
-          class="fixed inset-0 z-50 flex items-center justify-center bg-ink/90 p-4"
+          class="fixed inset-0 z-50 flex items-center justify-center bg-sf-ink-deep/95 p-4"
           role="dialog"
           aria-modal="true"
           aria-label="Product image, full size"
@@ -132,14 +133,14 @@
             x-ref="lightboxClose"
             @click="closeLightbox()"
             aria-label="Close"
-            class="absolute right-4 top-4 flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-xl text-white hover:bg-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            class="absolute right-4 top-4 flex h-11 w-11 items-center justify-center rounded-full border border-sf-fg/30 text-xl text-sf-fg hover:border-sf-brass hover:text-sf-brass focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass"
           >&times;</button>
           <button
             type="button"
             x-show="images.length > 1"
             @click="prevImage()"
             aria-label="Previous image"
-            class="absolute left-4 flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-xl text-white hover:bg-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            class="absolute left-4 flex h-11 w-11 items-center justify-center rounded-full border border-sf-fg/30 text-xl text-sf-fg hover:border-sf-brass hover:text-sf-brass focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass"
           >&lsaquo;</button>
           <img
             :src="images.length ? images[activeIndex].full : ''"
@@ -152,7 +153,7 @@
             x-show="images.length > 1"
             @click="nextImage()"
             aria-label="Next image"
-            class="absolute right-4 flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-xl text-white hover:bg-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            class="absolute right-4 flex h-11 w-11 items-center justify-center rounded-full border border-sf-fg/30 text-xl text-sf-fg hover:border-sf-brass hover:text-sf-brass focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass"
           >&rsaquo;</button>
         </div>
       </div>
@@ -161,19 +162,22 @@
       <div x-data="{
         variantId: {{ default_variant.pk|default:'null' }},
         variants: JSON.parse(document.getElementById('variant-data').textContent),
+        qty: 1,
         get variant() { return this.variants.find(v => v.id === this.variantId) },
+        incQty() { this.qty += 1 },
+        decQty() { this.qty = Math.max(1, this.qty - 1) },
       }">
-        {% if product.brand %}<p class="text-sm text-text-muted">{{ product.brand.name }}</p>{% endif %}
-        <h1 class="mt-1 text-2xl font-semibold text-ink">{{ product.name }}</h1>
-        <p class="mt-2 font-mono text-xl text-ink" x-text="'Rs. ' + variant.price"></p>
+        {% if product.brand %}<p class="text-sf-eyebrow uppercase text-sf-brass">{{ product.brand.name }}</p>{% endif %}
+        <h1 class="mt-2 font-display text-sf-d-lg font-light leading-tight text-sf-fg">{{ product.name }}</h1>
+        <p class="mt-3 text-sf-d-sm text-sf-cream" x-text="'Rs. ' + variant.price"></p>
 
         {% if variant_options|length > 1 %}
-          <div class="mt-4">
-            <label for="variant-select" class="text-sm font-semibold text-ink">Options</label>
+          <div class="mt-6">
+            <label for="variant-select" class="text-sf-eyebrow uppercase text-sf-fg-dim">Options</label>
             <select
               id="variant-select"
               x-model.number="variantId"
-              class="mt-2 w-full rounded border-border-interactive text-sm"
+              class="min-h-sf-ctrl mt-2 w-full rounded-sf border border-sf-line bg-sf-surface px-3 text-sf-sm text-sf-fg focus:outline-none focus-visible:border-sf-brass focus-visible:ring-2 focus-visible:ring-sf-brass"
             >
               {% for option in variant_options %}
                 <option value="{{ option.id }}">{{ option.label }}</option>
@@ -184,19 +188,23 @@
 
         <div class="mt-4">
           <template x-if="variant.available_quantity > 0">
-            <p class="text-sm text-success">In stock</p>
+            <p class="text-sf-sm text-sf-ok">In stock</p>
           </template>
           <template x-if="variant.available_quantity <= 0">
-            <p class="text-sm text-danger">Out of stock — this option is currently unavailable.</p>
+            <p class="text-sf-sm text-sf-danger">Out of stock — this option is currently unavailable.</p>
           </template>
         </div>
 
-        <div class="mt-4 flex items-center gap-3">
-          <label for="quantity" class="text-sm text-text-muted">Quantity</label>
-          <input
-            id="quantity" name="quantity" type="number" min="1" value="1"
-            class="w-20 rounded border-border-interactive text-sm"
-          />
+        <div class="mt-6 flex items-center gap-3">
+          <span class="text-sf-eyebrow uppercase text-sf-fg-dim">Quantity</span>
+          <div class="flex items-center gap-1 rounded-sf border border-sf-line">
+            <button type="button" @click="decQty()" aria-label="Decrease quantity" class="flex h-11 w-11 items-center justify-center text-sf-fg hover:text-sf-brass focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass">&minus;</button>
+            <input
+              id="quantity" name="quantity" type="number" min="1" x-model.number="qty"
+              class="h-11 w-12 border-0 bg-transparent text-center text-sf-sm text-sf-fg [appearance:textfield] focus:outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            />
+            <button type="button" @click="incQty()" aria-label="Increase quantity" class="flex h-11 w-11 items-center justify-center text-sf-fg hover:text-sf-brass focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass">&plus;</button>
+          </div>
         </div>
 
         <input type="hidden" id="add-to-cart-variant-id" name="variant_id" :value="variantId" />
@@ -207,15 +215,15 @@
           hx-target="#cart-drawer-content"
           hx-swap="innerHTML"
           :disabled="variant.available_quantity <= 0"
-          class="mt-6 w-full rounded bg-accent px-4 py-3 text-sm font-semibold text-white hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          class="min-h-sf-ctrl mt-6 w-full rounded-sf bg-sf-brass px-4 text-sf-caption font-semibold uppercase tracking-[0.1em] text-sf-fg-onbrass transition-colors duration-200 hover:bg-sf-brass-press disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass focus-visible:ring-offset-2 focus-visible:ring-offset-sf-ink"
         >
-          <span x-show="variant.available_quantity > 0">Add to Cart</span>
-          <span x-show="variant.available_quantity <= 0">Out of Stock</span>
+          <span x-show="variant.available_quantity > 0">Add to cart</span>
+          <span x-show="variant.available_quantity <= 0">Out of stock</span>
         </button>
-        <div id="pdp-add-error"></div>
+        <div id="pdp-add-error" class="text-sf-sm text-sf-danger"></div>
 
         {% if product.description %}
-          <div class="mt-8 border-t border-border-subtle pt-6 text-sm text-text-muted">
+          <div class="mt-8 border-t border-sf-line pt-6 text-sf-sm leading-relaxed text-sf-fg-muted">
             {{ product.description|linebreaks }}
           </div>
         {% endif %}
