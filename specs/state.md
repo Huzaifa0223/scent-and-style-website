@@ -10,21 +10,23 @@ disagree, the code is right and this file is stale — fix it.
 
 ## Current position
 
-**Stage:** 13 — Hardening and go-live readiness (not started)
-**Status:** Stage 12 is complete — see the Stage 12 log entry below for the full acceptance-gate
-and quality-gate record. SEO (per-object meta defaults, OG/Twitter tags, canonical URLs, Product +
-BreadcrumbList JSON-LD, sitemap.xml, robots.txt, old-slug 301 redirects via a new
-`ProductSlugRedirect` model), image `srcset`/dimensions, and an accessibility pass
-(`aria-describedby`, `StyledFieldMixin`/`AriaDescribedByMixin`) are all live. Re-running the Stage 6
-`assertNumQueries` guards after wiring in per-card JSON-LD caught a real N+1 (`StoreSettings.load()`
-called once per card — this project's cache is the database cache backend, so that's a real query,
-not a free hit) before this stage was reported done; fixed by passing `currency` through explicitly
-instead of loading it per call. Two `assertNumQueries` guards named by roadmap gate 4 since Stage 6/
-Stage 10 but never actually written (the PDP, the portal order list) were added. §36's static-asset
-HTTP caching half is deferred to Stage 13's own `Caddyfile` (nothing exists yet for it to configure);
-the media half (`Cache-Control` on R2 uploads) is done. `WHATSAPP_MESSAGE_MAX_CHARS`'s real-device
-measurement, the confirmation page's visual no-JS check, and now the JSON-LD external-validator
-check all remain outstanding, real-infrastructure-gated human tasks — see *Human tasks* below.
+**Stage:** 13 — Hardening and go-live readiness (**complete — P0 complete**)
+**Status:** Stage 13 is complete — see the Stage 13 log entry below for the full per-gate record
+(each of the 6 acceptance gates marked done-and-shown, with what's genuinely blocked on
+infrastructure honestly separated out rather than stubbed). Before any design work, the human was
+asked explicitly which gates need infrastructure not yet provided (R2 credentials, hosting, domain,
+SMTP — all confirmed empty first) versus which are fully buildable against local Postgres alone;
+the answer shaped the whole stage. Highlights: a shared DB-backed rate limiter
+(`core.ratelimit`) now covers login/checkout/search (order tracking keeps its own Stage 11
+mechanism, deliberately not migrated); a real `pg_dump`/`pg_restore`/verify cycle was executed
+against local Postgres with matching checksums shown, not just scripted; a least-privilege Postgres
+role was created and *proven* live (a real `CREATE TABLE` attempt failed under it) then torn back
+down; Django's built-in `mail_admins` error-monitoring hook was restored after finding it had been
+silently disabled by this project's own `LOGGING` config since Stage 1; and wiring that hook up
+surfaced (and fixed, with a test) a real customer-PII leak risk into admin exception emails via
+checkout's POST data. Per CLAUDE.md, P0 is now complete — **the next session should stop and wait
+for the human to confirm P1 priorities (Stage 14 dashboard/analytics onward) before starting**, not
+proceed automatically.
 **Last updated:** 2026-08-14
 **CI:** workflow committed (`.github/workflows/ci.yml`), never executed — no push has been made
 to any remote (the human pushes, per CLAUDE.md). Everything it runs has been run locally instead;
@@ -66,7 +68,15 @@ new `core.context_processors.canonical_url`), a repo-wide `<img>` width/height g
 (`tests/test_image_dimensions.py`), and `core/forms.py`'s `StyledFieldMixin`/`AriaDescribedByMixin`
 (applied to every portal `ModelForm` plus `CheckoutForm`/`OrderTrackingForm`, retroactively fixing a
 real gap — those two forms had rendered completely unstyled, sub-44px inputs since Stage 8/11).
-Stages 1-12 are fully built; Stage 13 (hardening and go-live readiness) is next and not started.
+Stage 13 adds hardening and go-live readiness: `core.ratelimit` (a shared rate limiter behind
+login/checkout/search), `core/validators.py`'s image size cap (content-check was already real, via
+Django's own `ImageField`), `core/backup.py` (nightly dump + media mirror, dump/restore/verify
+proven live against local Postgres), `deploy/create_app_role.sql` (a least-privilege runtime DB
+role, proven live), a restored `mail_admins` error-monitoring hook plus the `sensitive_post_parameters`
+fix that keeps checkout PII out of it, `SECURE_PROXY_SSL_HEADER`/`TRUST_X_FORWARDED_FOR` (resolving
+Stage 11's open question about a trusted reverse proxy), and `deploy/Caddyfile` + `docs/deploy.md`
+(completing §36's static-caching half Stage 12 deferred here). Stages 1-13 are fully built; **P0 is
+complete.** P1 (Stage 14 onward) needs the human's explicit go-ahead per CLAUDE.md before starting.
 
 ---
 
@@ -2111,6 +2121,183 @@ unlike the PDP/checkout's interactive elements.
 
 ---
 
+### Stage 13 — Hardening and go-live readiness
+Completed: 2026-08-14
+Commits: (this stage's commits — see the two-commit-per-stage pattern below)
+Acceptance gates: all passed — see per-gate detail below (done vs. blocked-on-infrastructure,
+literally, not just asserted)
+Coverage: core 99% · store 100% · catalog 97% · accounts 100% · portal 97% · inventory 97% ·
+search 100% · storefront 99% · cart 100% · customers 97% · shipping 99% · orders 99% ·
+notifications 100% — every CI floor (`.github/workflows/ci.yml`) cleared with margin. 597 tests
+passed, 0 failed, full sequential run with `--create-db`.
+Notes:
+
+**Before any design work, the human was asked explicitly which Stage 13 gates need
+infrastructure not yet provided (R2 credentials, hosting, domain, SMTP) — confirmed empty in
+`.env` — and which are fully buildable/verifiable against local Postgres alone. Answer, and what
+actually happened:**
+
+1. **`manage.py check --deploy` clean with production settings and a realistic env — DONE, shown.**
+   Run with `DJANGO_SETTINGS_MODULE=config.settings.prod` and ephemeral, non-persisted fake env
+   values (a properly-generated-but-throwaway `SECRET_KEY`, placeholder R2 values) — nothing
+   written to any file. Result: `System check identified no issues (0 silenced)`. Fixed two real
+   gaps this same check surfaced indirectly (see below): `SECURE_PROXY_SSL_HEADER` and
+   `TRUST_X_FORWARDED_FOR` were both missing from `config/settings/prod.py` before this stage.
+   `tests/test_prod_settings.py` (subprocess-based, pre-existing from Stage 1) extended with a test
+   asserting both are actually set; `manage.py check --deploy` re-run clean after every change.
+
+2. **A dump is taken and restored into a scratch database, and the restored data verifies — DONE,
+   shown, for real, per the human's explicit instruction that this gate could not be a
+   script-that-would-work.** `pg_dump -Fc` of the live local `ecommerce` database (5 products, 1
+   admin user, real schema including every deferred constraint trigger and `pg_trgm`), restored via
+   `pg_restore` into a scratch database (`ecommerce_restore_verify`) created for this purpose.
+   Verification was two-layer, not just "the restore command exited 0": table row counts compared
+   identical across both databases (`catalog_product`, `catalog_productvariant`, `orders_order`,
+   `auth_user`, etc.), **and** an md5 checksum over every product row's `id‖slug‖name` matched
+   byte-for-byte between source and restored database
+   (`383b1998c78331b4002d7ae3c519f7f8` both times), **and** a live Django ORM connection to the
+   restored database read back the real product rows directly. Scratch database and the local dump
+   file were both dropped/deleted immediately after — nothing from this verification persists.
+   `core/backup.py`'s `dump_database()`/`apply_local_dump_retention()`/`upload_dump_to_r2()`/
+   `apply_r2_dump_retention()`/`sync_media_backup_mirror()` (the nightly-job service layer this
+   proof mirrors) are separately unit-tested (`core/tests/test_backup.py`, 13 tests) using
+   `MagicMock(spec=S3Boto3Storage)` for the R2 branches — real content-bearing logic tested, no
+   live R2 credentials involved or needed, since none exist yet. **Media sync to real R2 is not
+   executed** — no credentials to execute it with; this is the one honest gap, recorded as a Human
+   task.
+
+3. **Every rate limit has a test — DONE.** Login, checkout, and search were unrated before this
+   stage; only order tracking (Stage 11) had one, its own dedicated mechanism. Generalised Stage
+   11's DB-backed sliding-window design into `core.ratelimit` (`RateLimitPolicy`, `RateLimitAttempt`
+   — a new shared model, `core/migrations/0004`) rather than writing three more one-off trackers.
+   `orders.tracking` deliberately keeps its own separate `OrderTrackingAttempt` table rather than
+   migrating onto the shared one — already shipped, already tested, and rewriting working Stage 11
+   code one stage later would be churn nobody asked for; its `client_ip()` now delegates to
+   `core.ratelimit.client_ip()` since that function grew real logic (see gate 1's proxy-header fix)
+   worth sharing rather than duplicating a second time. `LOGIN_RATE_LIMIT_POLICY` (5/min, lockout
+   after 10 failed/hour), `CHECKOUT_RATE_LIMIT_POLICY` (10/min, lockout after 20 failed/hour),
+   `SEARCH_RATE_LIMIT_POLICY` (30/min, **no lockout tier** — a search has no meaningful notion of
+   "failed," so the policy omits that tier rather than faking it with an arbitrarily high
+   threshold). Tests: `core/tests/test_ratelimit.py` (10, including scope/IP isolation and the new
+   `client_ip()` trusted-proxy behaviour), plus scope-specific HTTP-level tests in
+   `accounts/tests/test_views.py`, `orders/tests/test_views.py`, `search/tests/test_views.py`
+   (rate-limited response, lockout response, and outcome-recording for each of the three).
+
+4. **A file with a `.jpg` extension but a non-image payload is rejected — DONE, and the mechanism
+   was already partly there.** Investigated `ProductImageUploadForm` before writing anything: Django's
+   own `forms.ImageField` (auto-derived by every `ModelForm` exposing an `ImageField`) already opens
+   an upload with Pillow and calls `.verify()` — a real content/magic-byte check, not an extension
+   check — and already rejected a fake `.jpg` cleanly, before this stage. What was missing: a size
+   cap (nothing capped how large a *genuinely valid* image could be, risking memory/CPU exhaustion
+   during `core/images.py`'s synchronous derivative generation) and an explicit test proving the
+   fake-extension case, since nothing exercised it. Added `core.validators.validate_image_upload_size`
+   (`MAX_IMAGE_UPLOAD_BYTES = 8 MB`, `core/config.py`), applied via `validators=[...]` to
+   `Brand.logo`, `Category.image`, `ProductImage.image` (`catalog/migrations/0010` — Django *does*
+   serialise a plain top-level validator function into a migration by dotted path; confirmed by
+   reading the generated file, not assumed). Filename sanitisation is Django's own
+   `Storage.get_valid_name()` (strips path separators/unsafe characters) — verified with a direct
+   test (`core/tests/test_validators.py`) rather than reimplemented. `portal/tests/test_image_management.py`
+   gained two gate-4 tests: a `.jpg`-named plain-text payload rejected end-to-end through the real
+   upload view (0 images created), and an oversized-but-otherwise-valid image rejected — the latter
+   tested directly against `ProductImageUploadForm` rather than through the HTTP test client, because
+   the Django test client re-serialises an uploaded file to real multipart bytes and the server
+   re-derives `.size` from that wire content, so a client-side `.size` override (the standard trick
+   for this) has no effect through a full HTTP round-trip.
+
+5. **No secret, credential, or customer PII appears in any log line or error page — DONE, and this
+   stage's own new work introduced a real risk here that was caught and fixed before it shipped.**
+   Audited every `logger.*` call site in the project (`grep` across every non-test `.py` file) —
+   none log phone numbers, emails, addresses, or credentials; `orders.tracking`/`core.ratelimit`'s
+   own failed-attempt logging was already deliberately IP-and-scope-only (documented since Stage 11).
+   `templates/404.html`/`500.html` are static, render zero request context, confirmed by reading
+   both. **The actual finding:** wiring up gate-1's/§41's "error monitoring hook" (below) means an
+   unhandled 500 now emails a full exception report to `ADMINS` — and Django's default POST-parameter
+   redaction only strips fields matching `API|AUTH|TOKEN|KEY|SECRET|PASS|SIGNATURE` by name, which
+   does **not** cover `name`, `mobile_number`, `email`, or `address` — meaning a 500 mid-checkout
+   would, without a fix, have emailed a merchant's own inbox a customer's full PII from the POST
+   body. Fixed by applying `@method_decorator(sensitive_post_parameters())` to `CheckoutView.post`
+   and `OrderTrackingView.post` (`orders/views.py`) — this strips *all* POST values from any
+   exception report for those two views specifically. **Proven, not just applied:** a new test
+   (`test_gate5_a_checkout_error_report_does_not_leak_customer_pii`) forces an unhandled exception
+   mid-checkout with `Client(raise_request_exception=False)`, asserts a 500 and exactly one admin
+   email were produced, and asserts the customer's real name/phone/email/address are absent from
+   the email body. `config/settings/test.py` gained `EMAIL_BACKEND = "...locmem.EmailBackend"` so
+   this (and any future email-sending test) can never attempt a real SMTP connection.
+
+6. **Quality gate green across the whole project — DONE, shown.** `ruff check .`: all checks
+   passed. `ruff format --check .`: 223 files already formatted. `mypy --strict` (project-wide,
+   213 source files): no issues. `manage.py makemigrations --check --dry-run`: no changes detected.
+   `pytest --create-db --cov`: 597 passed, 0 failed. Every per-app coverage floor from
+   `.github/workflows/ci.yml` re-run individually and cleared (see the header above).
+
+**Other Stage 13 deliverables, beyond the six numbered gates:**
+
+- **`deploy/create_app_role.sql`** — a least-privilege Postgres role (`ecommerce_app`) for the
+  running application, separate from whatever owner role runs `manage.py migrate`. **Executed for
+  real against local Postgres, not just written**: created the role, granted DML-only privileges
+  (`SELECT/INSERT/UPDATE/DELETE` on every table, `USAGE/SELECT` on every sequence,
+  `ALTER DEFAULT PRIVILEGES` so future migrations' tables are covered automatically), then connected
+  Django to the database *as that role* and proved, live: `Product.objects.count()` (read),
+  creating/updating/deleting a scratch `Category` row (write), `StoreSettings.load()` (the
+  DB-cache-backed singleton read), and both `search.backends.get_search_backend().search()` and
+  `.suggest()` (the `pg_trgm`-dependent code path) all worked correctly under the restricted role —
+  and a direct `CREATE TABLE` attempt failed with `permission denied for schema public`, proving the
+  restriction is real, not just declared. Role, its grants, and the scratch row were all
+  reverted/dropped afterward; the dev database was confirmed back to its exact prior state.
+- **`core/backup.py` + `core/management/commands/backup.py`** — nightly `pg_dump` (custom format),
+  local 30-day retention, upload to R2 under `backups/db/` with matching R2-side retention, and a
+  media mirror (`backups/media-mirror/`, or a dedicated `AWS_BACKUP_BUCKET_NAME` bucket if
+  configured — optional, since Stage 12 already made media off-box via R2; a second bucket adds
+  protection against corrupting the *live* bucket specifically, not against having no off-box copy
+  at all). 13 unit tests, all logic exercised except the parts that need real R2 credentials (the
+  actual network call inside `boto3`'s own client, which is Amazon/Cloudflare's code to test, not
+  this project's).
+- **§41's "error monitoring hook"** — Django's own built-in `mail_admins`, deliberately not a new
+  dependency (Sentry etc. aren't in the approved list). Found and fixed a real, pre-existing bug in
+  the process: `django.utils.log.DEFAULT_LOGGING` already wires the `"django"` logger to a
+  `mail_admins` `AdminEmailHandler` out of the box, but `config/settings/base.py`'s own `LOGGING`
+  dict was redefining the `"django"` logger's handler list without re-listing `"mail_admins"` —
+  silently dropping it, confirmed via `logging.getLogger("django").handlers` showing only a
+  console `StreamHandler` before the fix, on every settings module including prod. Fixed by
+  re-declaring the `mail_admins` handler and its `require_debug_false` filter explicitly, with a
+  regression test (`tests/test_logging.py`) asserting the handler is actually attached. `ADMINS`
+  defaults to empty (no real recipients configured — nothing sends until a human fills in real
+  SMTP credentials, a Human task below); an empty `ADMINS` list makes `AdminEmailHandler` a no-op,
+  not an error, confirmed by reading Django's own source before relying on it.
+- **The Stage 11 open question about a trusted `X-Forwarded-For` — resolved.** `core.ratelimit.client_ip()`
+  now honours the last hop of `X-Forwarded-For` when `settings.TRUST_X_FORWARDED_FOR` is `True`
+  (set only by `config.settings.prod`), safe specifically because `docs/deploy.md`'s gunicorn is
+  bound to a unix socket Caddy alone reaches — a single trusted hop, not an arbitrary spoofable
+  chain. Outside that setting (dev, test), `REMOTE_ADDR` alone is used, exactly as before. Tested
+  directly (`core/tests/test_ratelimit.py`).
+- **`deploy/Caddyfile` + `docs/deploy.md`** — written with the human's explicit instruction to use
+  "obvious placeholders that fail loudly rather than values that look configured": the Caddyfile's
+  domain is the literal string `example.com` (Caddy will refuse to obtain a TLS certificate for it,
+  a loud failure), and every credential-shaped value in `docs/deploy.md`'s example `.env` block is
+  an angle-bracketed placeholder (`<R2_ACCESS_KEY>`, `<SMTP_PASSWORD>`, ...), never a fake value
+  that looks real. The Caddyfile sets `X-Forwarded-Proto: https` explicitly (pairs with
+  `SECURE_PROXY_SSL_HEADER`, gate 1) and serves `/static/*` directly from disk with a one-year
+  `Cache-Control` — the static-asset half of §36 that Stage 12 explicitly deferred to "Stage 13's
+  Caddyfile, which doesn't exist yet." It exists now; §36 is fully delivered as of this stage (media
+  half: Stage 12's `R2MediaStorage`; static half: this Caddyfile).
+- **`.env.example`** completed with every new var this stage introduces (`AWS_BACKUP_BUCKET_NAME`,
+  `BACKUP_DIR`, `BACKUP_PG_DUMP_PATH`, `ECOMMERCE_APP_DB_PASSWORD`, `ADMINS`/`SERVER_EMAIL`/
+  `EMAIL_*`) — all blank or safe defaults, none a real value.
+
+**What is genuinely blocked on infrastructure the human hasn't provided, honestly recorded rather
+than stubbed or faked — see Human tasks below for the full list:**
+- Actually running `core/backup.py`'s media sync / dump upload against real R2 (credentials are
+  empty in `.env` — confirmed before starting, not assumed).
+- Actually deploying via Caddy on a real domain/server (`deploy/Caddyfile`'s placeholder domain is
+  not real; nothing to deploy to yet).
+- Actually delivering a `mail_admins` email anywhere (no real SMTP host configured — `ADMINS`/
+  `EMAIL_HOST` are blank).
+- Running the restore drill against a *production* backup specifically (§55's own wording) — the
+  local proof (gate 2 above) is real and thorough, but is not a substitute for the same drill
+  against whatever the production host actually produces, once one exists.
+
+---
+
 ## Deviations from spec
 
 Anything built differently from `requirements.md` or `roadmap.md`, with the reason. An empty
@@ -2323,7 +2510,8 @@ Questions that did not block progress but need an answer eventually.
   Not wired this stage — the roadmap's Stage 10 deliverables list doesn't mention the sweeper, and
   inventing an automatic order-status side effect on a background job wasn't asked for. Revisit
   either as a small Stage 10 follow-up or explicitly assigned to a future stage.
-- [Stage 11] `orders.tracking.client_ip()` reads only `REMOTE_ADDR` — it does not honour
+- [Stage 11] **Resolved by Stage 13.** `orders.tracking.client_ip()` (now delegating to
+  `core.ratelimit.client_ip()`) reads only `REMOTE_ADDR` by default — it does not honour
   `X-Forwarded-For` or any other proxy header. Behind this project's actual front door (Caddy,
   per CLAUDE.md), every request in production will arrive from Caddy's own address unless Caddy is
   explicitly configured to forward the real client IP and Django is explicitly configured to trust
@@ -2331,7 +2519,10 @@ Questions that did not block progress but need an answer eventually.
   production would see one IP (Caddy's) for every visitor, either rate-limiting all customers
   together or none of them meaningfully. Assumed in the meantime: fine for dev/test, where
   `REMOTE_ADDR` is the real client; must be revisited as part of Stage 13's own deployment
-  configuration, not silently assumed to already work.
+  configuration, not silently assumed to already work. **Stage 13:** `TRUST_X_FORWARDED_FOR`
+  (`config/settings/prod.py`, `True` only there) makes `client_ip()` honour the last hop of
+  `X-Forwarded-For`, safe specifically because `deploy/Caddyfile` binds gunicorn to a unix socket
+  Caddy alone reaches — a single trusted hop. Tested in `core/tests/test_ratelimit.py`.
 - [Stage 11] The public status timeline never renders `OrderStatusEvent.note`, including the
   friendly "Order placed by customer." text `create_order()` itself writes into the very first
   event — a blanket exclusion (see the Stage 11 Notes above for why) that trades away a small
@@ -2372,8 +2563,6 @@ decisions. Not blockers unless a stage's acceptance gate depends on one.
       engine switched off — the Chrome extension this agent's browser automation runs through
       cannot reach chrome://settings or DevTools to toggle that (a capability limit, confirmed by
       trying three approaches before giving up, not skipped)
-- [ ] Cloudflare R2 bucket and credentials (needed for stage 13, not before)
-- [ ] Domain and hosting decision (stage 13)
 - [ ] Merchant's real WhatsApp Business number for store settings
 - [ ] Decide whether existing product data needs migrating — affects whether CSV import (stage 16)
       moves earlier
@@ -2383,6 +2572,21 @@ decisions. Not blockers unless a stage's acceptance gate depends on one.
       documented Product/Offer/BreadcrumbList requirements, for a product with and without a price
       range, including a real JSON round-trip through this project's escaping filter (see the
       Stage 12 log entry). What's not verified: acceptance by the actual external validators.
+- [ ] Provide real Cloudflare R2 credentials (stage 13) — confirmed empty in .env before this stage
+      started. What's already verified without them: core/backup.py's R2 upload/retention/mirror
+      logic against MagicMock(spec=S3Boto3Storage) (13 tests, core/tests/test_backup.py); the
+      dump/restore/verify cycle itself against real local Postgres (see the Stage 13 log entry for
+      the actual commands and output). What's not verified: an actual dump or media object landing
+      in a real R2 bucket.
+- [ ] Provision a real server + domain and deploy per docs/deploy.md (stage 13) — deploy/Caddyfile's
+      domain is the literal placeholder "example.com"; nothing has been deployed anywhere.
+- [ ] Provide real SMTP credentials for ADMINS/EMAIL_* (stage 13) — the mail_admins error-monitoring
+      hook is wired and proven to redact customer PII correctly (see the Stage 13 log entry), but
+      with no real SMTP host configured it currently sends nothing.
+- [ ] Run the restore drill (docs/deploy.md §8) against the real production backup at least once,
+      per §55's explicit wording — the local proof this stage produced (real commands, real
+      checksums, see the Stage 13 log entry) is necessary but §55 asks for it against the thing
+      that actually ships.
 ```
 
 ---
