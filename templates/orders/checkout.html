@@ -7,6 +7,18 @@
   <div class="mx-auto max-w-3xl px-4 py-6">
     <h1 class="text-xl font-semibold text-ink">Checkout</h1>
 
+    {% if locked_out %}
+      <div class="mt-4 rounded border border-danger bg-danger-soft px-4 py-3 text-sm text-danger">
+        Too many attempts. Try again later.
+      </div>
+    {% elif rate_limited %}
+      <div class="mt-4 rounded border border-danger bg-danger-soft px-4 py-3 text-sm text-danger">
+        Too many attempts. Wait a moment and try again.
+      </div>
+    {% endif %}
+
+    {% if not locked_out and not rate_limited %}
+
     {% if checkout_errors %}
       <div class="mt-4 rounded border border-danger bg-danger-soft px-4 py-3 text-sm text-danger">
         <p class="font-medium">Some items in your cart changed since you added them:</p>
@@ -118,5 +130,7 @@
         <p class="mt-1 text-xs text-text-muted">Delivery is calculated after you place your order.</p>
       </div>
     </div>
+
+    {% endif %}
   </div>
 {% endblock %}

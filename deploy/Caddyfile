@@ -1,0 +1,40 @@
+# Caddyfile — production front door (§36, §41, roadmap Stage 13).
+#
+# REPLACE example.com BELOW WITH THE REAL DOMAIN BEFORE DEPLOYING.
+# Left as an obvious, unmistakably-fake placeholder rather than an env-
+# var indirection that would silently look "configured" — Caddy will
+# refuse to obtain a TLS certificate for "example.com" (this server
+# doesn't control it), which is a loud, immediate failure instead of a
+# server quietly listening on the wrong host with no certificate. See
+# docs/deploy.md for the full deploy checklist this file is one step of.
+
+example.com {
+	encode gzip zstd
+
+	# §36's static-asset half (the media half — R2 object Cache-Control —
+	# is already done: core/storage.py's R2MediaStorage, Stage 12).
+	# Served straight from disk, never proxied to gunicorn.
+	handle_path /static/* {
+		root * /srv/ecommerce/staticfiles
+		file_server
+		header Cache-Control "public, max-age=31536000, immutable"
+	}
+
+	# Everything else goes to gunicorn over a unix socket — never a public
+	# TCP port of its own, so gunicorn is reachable *only* through this
+	# Caddy instance. That single-trusted-hop property is what makes
+	# config/settings/prod.py's TRUST_X_FORWARDED_FOR safe: reverse_proxy
+	# sets X-Forwarded-For to the real connecting client's address
+	# automatically, and nothing else can inject a competing value.
+	# X-Forwarded-Proto is set explicitly to match SECURE_PROXY_SSL_HEADER
+	# — without it, request.is_secure() is always False behind this proxy
+	# (SECURE_SSL_REDIRECT redirect-loops; every build_absolute_uri() call
+	# — canonical/OG tags, the sitemap — emits http:// instead of https://).
+	reverse_proxy unix//run/ecommerce/gunicorn.sock {
+		header_up X-Forwarded-Proto https
+	}
+
+	log {
+		output file /var/log/caddy/ecommerce-access.log
+	}
+}

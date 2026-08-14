@@ -32,6 +32,7 @@ from datetime import timedelta
 from django.http import HttpRequest
 from django.utils import timezone
 
+from core import ratelimit as core_ratelimit
 from core.phone import normalize_pk_mobile
 
 from .models import Order, OrderTrackingAttempt
@@ -57,14 +58,13 @@ class LockedOutError(Exception):
 
 
 def client_ip(request: HttpRequest) -> str:
-    """``REMOTE_ADDR`` only. This deployment's front door (Caddy) is not
-    yet configured to add or strip a trusted ``X-Forwarded-For`` header
-    — that's Stage 13 hardening's job — so honouring one here would let
-    a client simply claim a different rate-limit identity for itself.
-    Recorded as an open question in state.md, not silently assumed
-    solved."""
-    ip_address: str = request.META.get("REMOTE_ADDR", "")
-    return ip_address
+    """Delegates to ``core.ratelimit.client_ip`` — see that function for
+    the full reasoning (``REMOTE_ADDR`` by default; a trusted
+    ``X-Forwarded-For`` in production only, resolved by Stage 13). Kept
+    as its own import path since every caller in this module already
+    goes through ``tracking.client_ip``, not ``core.ratelimit`` directly.
+    """
+    return core_ratelimit.client_ip(request)
 
 
 def check_rate_limit(*, ip_address: str) -> None:

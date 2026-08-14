@@ -8,6 +8,8 @@ from unittest.mock import patch
 import pytest
 
 from catalog.factories import ProductFactory
+from core.models import RateLimitAttempt, RateLimitScope
+from core.ratelimit import CHECKOUT_RATE_LIMIT_POLICY, record_attempt
 from orders.models import Order
 from orders.services import EmptyCartError
 from store.models import DeliveryStrategy, StoreSettings
@@ -320,3 +322,81 @@ def test_checkout_post_with_a_distinct_whatsapp_number_uses_it_not_the_mobile_nu
     order = Order.objects.get()
     assert order.customer_phone == "+923001234567"
     assert order.customer_whatsapp_number == "+923019876543"
+
+
+@pytest.mark.django_db
+def test_gate3_repeated_checkout_submissions_are_rate_limited(client) -> None:  # type: ignore[no-untyped-def]
+    variant = _variant_with_stock(5)
+    client.post("/cart/add/", {"variant_id": variant.pk, "quantity": 1})
+    for _ in range(CHECKOUT_RATE_LIMIT_POLICY.max_attempts):
+        record_attempt(scope=RateLimitScope.CHECKOUT, ip_address="127.0.0.1", succeeded=True)
+
+    response = client.post(CHECKOUT_URL, _checkout_post_data())
+
+    assert response.status_code == 429
+    assert Order.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_repeated_invalid_checkout_submissions_lock_out_further_attempts(client) -> None:  # type: ignore[no-untyped-def]
+    variant = _variant_with_stock(5)
+    client.post("/cart/add/", {"variant_id": variant.pk, "quantity": 1})
+    for _ in range(CHECKOUT_RATE_LIMIT_POLICY.lockout_failure_threshold):  # type: ignore[arg-type]
+        record_attempt(scope=RateLimitScope.CHECKOUT, ip_address="127.0.0.1", succeeded=False)
+
+    response = client.post(CHECKOUT_URL, _checkout_post_data())
+
+    assert response.status_code == 429
+    assert Order.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_a_validation_failure_at_checkout_is_recorded_as_a_failed_ratelimit_attempt(
+    client,
+) -> None:  # type: ignore[no-untyped-def]
+    variant = _variant_with_stock(5)
+    client.post("/cart/add/", {"variant_id": variant.pk, "quantity": 1})
+
+    client.post(CHECKOUT_URL, _checkout_post_data(mobile_number="not-a-phone-number"))
+
+    attempt = RateLimitAttempt.objects.get(scope=RateLimitScope.CHECKOUT)
+    assert attempt.succeeded is False
+
+
+@pytest.mark.django_db
+def test_a_successful_checkout_is_recorded_as_a_succeeded_ratelimit_attempt(client) -> None:  # type: ignore[no-untyped-def]
+    variant = _variant_with_stock(5)
+    client.post("/cart/add/", {"variant_id": variant.pk, "quantity": 1})
+
+    client.post(CHECKOUT_URL, _checkout_post_data())
+
+    attempt = RateLimitAttempt.objects.get(scope=RateLimitScope.CHECKOUT)
+    assert attempt.succeeded is True
+
+
+@pytest.mark.django_db
+def test_gate5_a_checkout_error_report_does_not_leak_customer_pii(
+    client, mailoutbox, settings
+) -> None:  # type: ignore[no-untyped-def]
+    """§41: "customer PII never appears in logs or error pages". Stage
+    13's mail_admins handler (config/settings/base.py) emails the admin
+    an exception report on any unhandled 500 — sensitive_post_parameters()
+    on CheckoutView.post (orders/views.py) must keep the customer's name,
+    phone, email, and address out of that report's POST-parameters
+    section, not just out of the customer-facing response.
+    """
+    settings.ADMINS = [("Test Admin", "admin@example.com")]
+    variant = _variant_with_stock(5)
+    client.post("/cart/add/", {"variant_id": variant.pk, "quantity": 1})
+    client.raise_request_exception = False
+
+    with patch("orders.views.create_order", side_effect=RuntimeError("boom")):
+        response = client.post(CHECKOUT_URL, _checkout_post_data())
+
+    assert response.status_code == 500
+    assert len(mailoutbox) == 1
+    body = mailoutbox[0].body
+    assert "Ayesha Khan" not in body
+    assert "03001234567" not in body
+    assert "ayesha@example.com" not in body
+    assert "House 1, Street 2" not in body

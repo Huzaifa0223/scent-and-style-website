@@ -9,10 +9,15 @@ from typing import Any
 from django.contrib import messages
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils.decorators import method_decorator
+from django.views.decorators.debug import sensitive_post_parameters
 from django.views.generic import View
 
 from cart import services as cart_services
 from cart.services import CartLine
+from core import ratelimit
+from core.models import RateLimitScope
+from core.ratelimit import CHECKOUT_RATE_LIMIT_POLICY
 from notifications.whatsapp.channel import WhatsAppLinkChannel
 from notifications.whatsapp.message_builder import build_order_confirmation_message
 from store.models import StoreSettings
@@ -24,6 +29,14 @@ from .services import CheckoutInput, CheckoutValidationError, EmptyCartError, cr
 
 
 class CheckoutView(View):
+    """§41: "customer PII never appears in logs or error pages". The POST
+    body here is a customer's name, phone, WhatsApp number, email, and
+    address — ``sensitive_post_parameters()`` keeps every one of those
+    values out of the exception report the new mail_admins handler
+    (config/settings/base.py, Stage 13) would otherwise email in full on
+    a 500 mid-checkout.
+    """
+
     def get(self, request: HttpRequest) -> HttpResponse:
         cart = cart_services.get_cart(request)
         lines = cart_services.cart_lines(cart) if cart is not None else []
@@ -32,7 +45,20 @@ class CheckoutView(View):
             return redirect("storefront:product_list")
         return self._render(request, CheckoutForm(), lines)
 
+    @method_decorator(sensitive_post_parameters())
     def post(self, request: HttpRequest) -> HttpResponse:
+        ip_address = ratelimit.client_ip(request)
+        try:
+            ratelimit.check_rate_limit(
+                scope=RateLimitScope.CHECKOUT,
+                ip_address=ip_address,
+                policy=CHECKOUT_RATE_LIMIT_POLICY,
+            )
+        except ratelimit.LockedOutError:
+            return render(request, "orders/checkout.html", {"locked_out": True}, status=429)
+        except ratelimit.RateLimitedError:
+            return render(request, "orders/checkout.html", {"rate_limited": True}, status=429)
+
         cart = cart_services.get_cart(request)
         lines = cart_services.cart_lines(cart) if cart is not None else []
         if cart is None or not lines:
@@ -41,6 +67,9 @@ class CheckoutView(View):
 
         form = CheckoutForm(request.POST)
         if not form.is_valid():
+            ratelimit.record_attempt(
+                scope=RateLimitScope.CHECKOUT, ip_address=ip_address, succeeded=False
+            )
             return self._render(request, form, lines)
 
         checkout_input = CheckoutInput(
@@ -61,10 +90,16 @@ class CheckoutView(View):
             messages.info(request, "Your cart is empty.")
             return redirect("storefront:product_list")
         except CheckoutValidationError as exc:
+            ratelimit.record_attempt(
+                scope=RateLimitScope.CHECKOUT, ip_address=ip_address, succeeded=False
+            )
             return self._render(
                 request, form, cart_services.cart_lines(cart), checkout_errors=exc.errors
             )
 
+        ratelimit.record_attempt(
+            scope=RateLimitScope.CHECKOUT, ip_address=ip_address, succeeded=True
+        )
         request.session["last_order_id"] = order.pk
         return redirect("orders:confirmation", order_number=order.order_number)
 
@@ -161,6 +196,7 @@ class OrderTrackingView(View):
             request, "orders/order_tracking.html", {"form": OrderTrackingForm(initial=initial)}
         )
 
+    @method_decorator(sensitive_post_parameters())
     def post(self, request: HttpRequest) -> HttpResponse:
         form = OrderTrackingForm(request.POST)
         if not form.is_valid():

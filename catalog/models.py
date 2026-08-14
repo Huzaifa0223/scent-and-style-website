@@ -35,12 +35,15 @@ from django.db.models.functions import Coalesce, Now
 from core.config import DEFAULT_LOW_STOCK_THRESHOLD
 from core.models import TimeStampedModel
 from core.slugs import unique_slugify
+from core.validators import validate_image_upload_size
 
 
 class Brand(TimeStampedModel):
     name = models.CharField(max_length=150)
     slug = models.SlugField(max_length=160, unique=True)
-    logo = models.ImageField(upload_to="brands/", blank=True)
+    logo = models.ImageField(
+        upload_to="brands/", blank=True, validators=[validate_image_upload_size]
+    )
     is_published = models.BooleanField(default=False)
 
     class Meta:
@@ -69,7 +72,9 @@ class Category(TimeStampedModel):
         "self", null=True, blank=True, on_delete=models.PROTECT, related_name="subcategories"
     )
     description = models.TextField(blank=True, default="")
-    image = models.ImageField(upload_to="categories/", blank=True)
+    image = models.ImageField(
+        upload_to="categories/", blank=True, validators=[validate_image_upload_size]
+    )
     position = models.PositiveIntegerField(default=0)
     is_published = models.BooleanField(default=False)
     meta_title = models.CharField(max_length=70, blank=True, default="")
@@ -401,7 +406,9 @@ class ProductImage(TimeStampedModel):
     """
 
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="images")
-    image = models.ImageField(upload_to="products/originals/")
+    image = models.ImageField(
+        upload_to="products/originals/", validators=[validate_image_upload_size]
+    )
     alt_text = models.CharField(max_length=255, blank=True, default="")
     position = models.PositiveIntegerField(default=0)
     is_primary = models.BooleanField(default=False)

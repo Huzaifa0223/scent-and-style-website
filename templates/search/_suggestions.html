@@ -4,6 +4,9 @@ Type-ahead suggestion dropdown (§15). Each row links to the storefront PDP
 (storefront:product_detail), wired in once Stage 6 built that page.
 {% endcomment %}
 <ul class="divide-y divide-border-subtle rounded border border-border-subtle bg-paper shadow-lg">
+  {% if rate_limited %}
+    <li class="px-3 py-2 text-sm text-text-muted">Too many searches. Wait a moment and try again.</li>
+  {% endif %}
   {% for product in products %}
     <li>
       <a

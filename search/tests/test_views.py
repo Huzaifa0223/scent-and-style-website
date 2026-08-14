@@ -11,6 +11,8 @@ import pytest
 
 from catalog.factories import ProductFactory
 from catalog.models import Product
+from core.models import RateLimitAttempt, RateLimitScope
+from core.ratelimit import SEARCH_RATE_LIMIT_POLICY, record_attempt
 
 
 def _imports_postgres_search_backend(py_file: Path) -> bool:
@@ -71,6 +73,26 @@ def test_suggest_rejects_post() -> None:
     response = Client().post("/search/suggest/", {"q": "afnan"})
 
     assert response.status_code == 405
+
+
+@pytest.mark.django_db
+def test_gate3_repeated_search_requests_are_rate_limited(client) -> None:  # type: ignore[no-untyped-def]
+    ProductFactory(name="Afnan 9PM Eau de Parfum", status=Product.Status.PUBLISHED)
+    for _ in range(SEARCH_RATE_LIMIT_POLICY.max_attempts):
+        record_attempt(scope=RateLimitScope.SEARCH, ip_address="127.0.0.1", succeeded=True)
+
+    response = client.get("/search/suggest/", {"q": "afnan"})
+
+    assert response.status_code == 429
+    assert b"Afnan 9PM Eau de Parfum" not in response.content
+
+
+@pytest.mark.django_db
+def test_a_search_request_under_the_limit_is_recorded(client) -> None:  # type: ignore[no-untyped-def]
+    client.get("/search/suggest/", {"q": "afnan"})
+
+    attempt = RateLimitAttempt.objects.get(scope=RateLimitScope.SEARCH)
+    assert attempt.succeeded is True
 
 
 def test_no_view_module_imports_postgressearchbackend_directly() -> None:

@@ -23,6 +23,8 @@ from PIL import Image as PILImage
 
 from catalog.factories import ProductFactory, ProductImageFactory, ProductVariantFactory
 from catalog.models import ProductImage
+from core.config import MAX_IMAGE_UPLOAD_BYTES
+from portal.image_forms import ProductImageUploadForm
 
 
 def _login_owner(client, django_user_model):  # type: ignore[no-untyped-def]
@@ -88,6 +90,53 @@ def test_upload_adds_an_image(client, django_user_model) -> None:  # type: ignor
 
     assert response.status_code == 302
     assert product.images.filter(alt_text="A new gallery shot").exists()
+
+
+@pytest.mark.django_db
+def test_gate4_a_jpg_named_file_with_a_non_image_payload_is_rejected(
+    client, django_user_model
+) -> None:  # type: ignore[no-untyped-def]
+    """§41 / roadmap Stage 13 gate 4. Django's ``forms.ImageField``
+    (auto-derived from ``ProductImage.image``'s ``models.ImageField`` by
+    ``ProductImageUploadForm``) opens the upload with Pillow and calls
+    ``.verify()`` — a real content check, not an extension check — so a
+    plain-text payload with a ``.jpg`` name is rejected here, not because
+    of its extension but because Pillow can't decode it as an image.
+    """
+    _login_owner(client, django_user_model)
+    product = ProductFactory()
+    fake_image = SimpleUploadedFile(
+        "totally-a-photo.jpg", b"this is not image data, just text", content_type="image/jpeg"
+    )
+
+    response = client.post(
+        f"/admin-portal/products/{product.pk}/images/upload/",
+        {"image": fake_image, "alt_text": "Should not be saved"},
+    )
+
+    assert response.status_code == 302
+    assert not product.images.exists()
+
+
+def test_gate4_an_oversized_image_is_rejected() -> None:
+    """§41: a size cap alongside the content check — a large-but-genuine
+    image must not reach synchronous derivative generation
+    (core/images.py) uncapped.
+
+    Exercised directly against the form (not the HTTP endpoint): the
+    Django test client re-serializes an uploaded file to real multipart
+    bytes and the server re-derives ``.size`` from that wire content, so
+    a client-side ``.size`` override has no effect on it — this is the
+    standard way Django's own test suite proves a size-validator fires,
+    without actually generating an 8 MB+ payload.
+    """
+    oversized = _make_upload()
+    oversized.size = MAX_IMAGE_UPLOAD_BYTES + 1
+
+    form = ProductImageUploadForm(data={"alt_text": "Too big"}, files={"image": oversized})
+
+    assert not form.is_valid()
+    assert "image" in form.errors
 
 
 @pytest.mark.django_db

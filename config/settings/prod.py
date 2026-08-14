@@ -30,6 +30,28 @@ SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_REFERRER_POLICY = "same-origin"
 X_FRAME_OPTIONS = "DENY"
 
+# Caddy (the only front door, per CLAUDE.md) terminates TLS and reverse-
+# proxies to gunicorn over plain HTTP — without this, request.is_secure()
+# is always False behind that proxy, which both breaks SECURE_SSL_REDIRECT
+# (a redirect loop: Django redirects to https, the proxied request still
+# looks like http, Django redirects again) and makes every
+# request.build_absolute_uri() call (core.context_processors.canonical_url,
+# storefront.seo's JSON-LD, storefront.sitemaps) emit http:// URLs in
+# production. docs/deploy.md's Caddyfile sets X-Forwarded-Proto on every
+# proxied request to match.
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+# core.ratelimit.client_ip() / orders.tracking.client_ip() read this to
+# decide whether to trust X-Forwarded-For over REMOTE_ADDR (which, behind
+# a reverse proxy, is otherwise always Caddy's own address — every
+# customer would share one rate-limit bucket). Safe specifically because
+# Caddy is the *only* process gunicorn accepts connections from
+# (docs/deploy.md binds gunicorn to a loopback/unix socket Caddy alone
+# reaches) — a single trusted hop appending the real client address as
+# X-Forwarded-For's last entry, not an arbitrary, spoofable proxy chain.
+# Resolves the open question recorded in specs/state.md's Stage 11 notes.
+TRUST_X_FORWARDED_FOR = True
+
 # Cloudflare R2 (S3-compatible) object storage — selected here, by settings
 # module, never by an `if DEBUG` branch inside storage code (CLAUDE.md).
 STORAGES["default"] = {"BACKEND": "core.storage.R2MediaStorage"}
@@ -42,3 +64,8 @@ AWS_S3_REGION_NAME = env.str("AWS_S3_REGION_NAME", default="auto")
 AWS_S3_ADDRESSING_STYLE = "virtual"
 AWS_DEFAULT_ACL = None
 AWS_QUERYSTRING_AUTH = False
+
+# core/backup.py's media mirror target. Optional: a second bucket gives
+# real off-box protection; left unset, the mirror lives under a prefix in
+# the same bucket instead (see core/backup.py's module docstring).
+AWS_BACKUP_BUCKET_NAME = env.str("AWS_BACKUP_BUCKET_NAME", default="")

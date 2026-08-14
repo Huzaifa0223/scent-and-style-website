@@ -32,6 +32,24 @@ SEARCH_TSVECTOR_CONFIG: Final[str] = "simple"
 SEARCH_RESULTS_LIMIT: Final[int] = 20
 SEARCH_SUGGESTIONS_LIMIT: Final[int] = 8
 
+# core/validators.py (§41, roadmap Stage 13). Django's ImageField already
+# rejects a non-image payload via Pillow (a real content check, not an
+# extension check) — this is the one thing that check doesn't cover: a
+# hard cap so a large-but-genuine image can't be used to exhaust memory
+# or CPU during derivative generation (core/images.py). 8 MB comfortably
+# fits any real product photo a merchant would upload from a phone.
+MAX_IMAGE_UPLOAD_BYTES: Final[int] = 8 * 1024 * 1024
+
+# core/backup.py (§55, roadmap Stage 13): how long a nightly pg_dump (local
+# file and its R2 copy) survives before the next run's retention pass
+# deletes it. "30-day retention" is the roadmap's own number.
+BACKUP_RETENTION_DAYS: Final[int] = 30
+
+# R2 key prefixes for core/backup.py's two artifact kinds, kept apart so
+# retention (dump-only) never touches the media mirror and vice versa.
+BACKUP_DB_DUMP_PREFIX: Final[str] = "backups/db/"
+BACKUP_MEDIA_MIRROR_PREFIX: Final[str] = "backups/media-mirror/"
+
 # pg_trgm.word_similarity_threshold (core/migrations/0003) — locked in
 # explicitly rather than left at Postgres's own default (also 0.6), per
 # CLAUDE.md's Traps note: "Do not rely on the default... Set it in a
