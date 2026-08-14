@@ -204,6 +204,31 @@ def test_cart_widget_renders_on_a_storefront_page_with_no_cart_yet(client) -> No
 
 
 @pytest.mark.django_db
+def test_gate_the_drawer_links_to_checkout_when_it_has_items(client) -> None:  # type: ignore[no-untyped-def]
+    """The drawer is the only cart UI this project has (cart/urls.py has
+    no standalone "view cart" page) — if it doesn't link to /checkout/,
+    there is no way to reach checkout from the storefront at all. Real
+    regression: this link was missing entirely until caught in live
+    testing."""
+    variant = _variant_with_stock(5)
+    client.post(ADD_URL, {"variant_id": variant.pk, "quantity": 1})
+
+    response = client.get("/")
+
+    body = response.content.decode()
+    assert 'href="/checkout/"' in body
+    assert "Checkout" in body
+
+
+@pytest.mark.django_db
+def test_gate_the_drawer_does_not_link_to_checkout_when_empty(client) -> None:  # type: ignore[no-untyped-def]
+    response = client.get("/")
+
+    body = response.content.decode()
+    assert 'href="/checkout/"' not in body
+
+
+@pytest.mark.django_db
 def test_query_count_stays_flat_as_item_count_grows_from_2_to_20(client) -> None:  # type: ignore[no-untyped-def]
     """Same discipline as every other list-rendering view in this project
     (storefront's own gate 5), applied here even though Stage 7's own gate
