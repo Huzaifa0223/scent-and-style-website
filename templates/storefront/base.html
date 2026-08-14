@@ -19,8 +19,14 @@ partial that would couple their designs together.
     `fixed inset-y-0` sizing (it resolved against this ~68px header instead
     of the viewport). Confirmed live before landing on this fix — see
     cart/_widget.html's own note on the drawer for the debugging trail.
+
+    shadow-sf-lift on top of the (now real 3:1+, see tailwind.config.js)
+    border — a contrast audit found the header had no perceivable
+    separation from scrolled content, since its background is otherwise
+    byte-identical to the page background by design (this is the same
+    dark surface, not a distinct one).
     {% endcomment %}
-    <header class="sticky top-0 z-40 border-b border-sf-line bg-sf-ink">
+    <header class="sticky top-0 z-40 border-b border-sf-line bg-sf-ink shadow-sf-lift">
       <div class="mx-auto flex max-w-sf-shell flex-wrap items-center gap-3 px-4 py-3 sm:gap-6 sm:px-8">
         <a
           href="/"

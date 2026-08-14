@@ -46,14 +46,28 @@ module.exports = {
         // an "sf-" class; storefront templates must never use an unprefixed
         // one. See docs/design.md's "Two systems" section.
         "sf-ink": { DEFAULT: "#14100E", deep: "#0E0B0A" },
-        "sf-surface": { DEFAULT: "#1E1917", raised: "#2A2321" },
-        "sf-line": { DEFAULT: "#332B27", strong: "#4A403A" },
+        // Corrected post-launch, against a real contrast audit of the
+        // shipped page (docs/design.md's "Storefront (redesign)" section
+        // has the full before/after table). The original spec's fill/
+        // border values (#1E1917/#332B27) measured 1.09:1 / 1.37:1 against
+        // #14100E — WCAG 1.4.11 needs 3:1 for a UI component boundary, and
+        // at those ratios cards and inputs were genuinely imperceptible
+        // outside their text. `sf-line` now clears 3:1 with real margin
+        // and carries the boundary requirement; `sf-surface` gets a
+        // smaller lift (a real fill needn't itself hit 3:1 when a
+        // compliant border already marks the boundary — every consumer of
+        // sf-surface in this codebase pairs it with an sf-line border).
+        "sf-surface": { DEFAULT: "#2C2621", raised: "#3A322B" },
+        "sf-line": { DEFAULT: "#786755", strong: "#8F7C67" },
         "sf-paper": "#F4EFE9",
         // The spec (docs/design.md) verifies sf-paper pairs with #1A1512
         // text at 14.6:1 but names no token for that text color — added
         // here rather than an inline hex in a template (project rule:
-        // never a raw hex in a template).
-        "sf-paper-fg": { DEFAULT: "#1A1512", muted: "#7A6A56" },
+        // never a raw hex in a template). `muted` corrected from the
+        // spec's #7A6A56 (4.57:1 — barely above AA's 4.5:1 floor, the
+        // most fragile pairing on the site at 11px) to #6B5C4A (5.64:1)
+        // for real headroom, same audit as sf-surface/sf-line above.
+        "sf-paper-fg": { DEFAULT: "#1A1512", muted: "#6B5C4A" },
         "sf-brass": { DEFAULT: "#D8A448", hover: "#E8BE6C", press: "#BE8C32" },
         "sf-cream": "#E8D9C3",
         "sf-fg": { DEFAULT: "#F4EFE9", muted: "#BDB2A8", dim: "#8E837A", onbrass: "#14100E" },

@@ -284,6 +284,15 @@ HOME_SECTION_SIZE = 8
 divides evenly with no partial final row, same reasoning as
 STOREFRONT_PAGE_SIZE."""
 
+HOME_CATEGORY_LIMIT = 8
+"""A live contrast/content audit of the redesigned home page found the
+category grid rendering every published category (80 in the dev database,
+a mix of real rows and leftover test fixtures) — over two-thirds of the
+page's total height, mostly duplicate-looking empty tiles. Capped here,
+not just visually truncated in the template: an un-rendered row costs
+nothing, a rendered-then-hidden one still costs the query, the markup,
+and the download."""
+
 
 class HomeView(ListView[Product]):
     """Featured products, new arrivals, and category tiles on the home page
@@ -320,9 +329,11 @@ class HomeView(ListView[Product]):
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
-        context["categories"] = Category.objects.filter(
-            parent__isnull=True, is_published=True
-        ).order_by("position", "name")
+        all_categories = Category.objects.filter(parent__isnull=True, is_published=True).order_by(
+            "position", "name"
+        )
+        context["categories"] = list(all_categories[:HOME_CATEGORY_LIMIT])
+        context["has_more_categories"] = all_categories.count() > HOME_CATEGORY_LIMIT
         new_arrivals: ProductQuerySet = Product.objects.filter(status=Product.Status.PUBLISHED)
         context["featured_products"] = list(context["featured_products"])
         context["new_arrivals"] = list(

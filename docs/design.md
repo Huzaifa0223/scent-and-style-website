@@ -226,10 +226,10 @@ palette can't. Two different jobs, two different systems, on purpose.
 |---|---|---|---|
 | `sf-ink-deep` | `#0E0B0A` | App shell background | — |
 | `sf-ink` | `#14100E` | Page background | — |
-| `sf-surface` | `#1E1917` | Cards, inputs, filter tray | — |
-| `sf-surface-raised` | `#2A2321` | Hover / elevated rows | — |
-| `sf-line` | `#332B27` | Borders, dividers | non-text, no ratio requirement |
-| `sf-line-strong` | `#4A403A` | Secondary button borders | 3.1:1 vs `sf-ink` — UI only |
+| `sf-surface` | `#2C2621` | Cards, inputs, filter tray | 1.27:1 vs `sf-ink` — see note below |
+| `sf-surface-raised` | `#3A322B` | Hover / elevated rows | 1.51:1 vs `sf-ink` |
+| `sf-line` | `#786755` | Borders, dividers, input/component boundaries | 3.49:1 vs `sf-ink` — AA (non-text) |
+| `sf-line-strong` | `#8F7C67` | Secondary button borders | 4.73:1 vs `sf-ink` |
 | `sf-fg` | `#F4EFE9` | Primary text | 15.1:1 on `sf-ink` — AAA |
 | `sf-fg-muted` | `#BDB2A8` | Body / secondary text | 8.3:1 on `sf-ink` — AAA |
 | `sf-fg-dim` | `#8E837A` | Meta, captions, 14px+ only | 4.6:1 on `sf-ink` — AA |
@@ -237,6 +237,7 @@ palette can't. Two different jobs, two different systems, on purpose.
 | `sf-brass-press` | `#BE8C32` | CTA hover / pressed | 6.7:1 on `sf-ink` — AA |
 | `sf-cream` | `#E8D9C3` | Prices, italic display accents | 12.1:1 on `sf-ink` — AAA |
 | `sf-paper` | `#F4EFE9` | Light editorial band background | pairs with `#1A1512` at 14.6:1 |
+| `sf-paper-fg-muted` | `#6B5C4A` | Eyebrow labels on `sf-paper` | 5.64:1 — see note below |
 | `sf-ok` | `#7FBF9A` | Success, in stock | 8.0:1 on `sf-ink` — AAA |
 | `sf-warn` | `#E3B45C` | Low stock, delivery notes | 10.3:1 on `sf-ink` — AAA |
 | `sf-danger` | `#E88178` | Form errors, removal | 7.1:1 on `sf-ink` — AAA |
@@ -244,6 +245,19 @@ palette can't. Two different jobs, two different systems, on purpose.
 
 `sf-fg-dim` is never used below 14px, and only for meta/caption text — that's what keeps its AA
 (not AAA) ratio acceptable; anything more prominent than a caption uses `sf-fg-muted` or `sf-fg`.
+
+**Corrected post-launch, against a real contrast audit of the shipped Home page** — `sf-surface`
+and `sf-line` originally shipped at the design brief's own values (`#1E1917` / `#332B27`), which
+measured **1.09:1** and **1.37:1** against `sf-ink`, computed with the same sRGB relative-luminance
+formula used everywhere else in this file, not eyeballed. WCAG 1.4.11 requires 3:1 for a UI
+component's visual boundary; at those ratios, cards, tiles, and the search input were genuinely
+imperceptible outside the text sitting inside them. `sf-line` is corrected to a real 3:1+ (3.49:1)
+and now carries the boundary requirement on its own; `sf-surface` gets a smaller lift to 1.27:1
+rather than chasing 3:1 on the fill too — a fill doesn't independently need 3:1 when a compliant
+border already marks the component boundary, and every consumer of `sf-surface` in this codebase
+pairs it with an `sf-line` border (confirmed by reading every template that uses it, not assumed).
+`sf-paper-fg-muted` is corrected from the brief's `#7A6A56` (4.57:1 — the most fragile pairing on
+the site, 11px caps text 0.07 above AA's 4.5:1 floor) to `#6B5C4A` (5.64:1) for real headroom.
 
 ### Typography
 
