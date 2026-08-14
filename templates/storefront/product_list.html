@@ -57,7 +57,7 @@
           {% if current_sort %}<input type="hidden" name="sort" value="{{ current_sort }}" />{% endif %}
           {% if brand_facets %}
             <fieldset class="border-b border-sf-line pb-6">
-              <legend class="text-sf-eyebrow uppercase text-sf-fg-dim">Brand</legend>
+              <legend class="eyebrow">Brand</legend>
               <div class="mt-3 space-y-2.5">
                 {% for facet in brand_facets %}
                   <label class="flex min-h-sf-tap items-center justify-between gap-2 text-sf-sm text-sf-fg-muted">
@@ -79,16 +79,16 @@
           {% endif %}
 
           <fieldset class="border-b border-sf-line pb-6">
-            <legend class="text-sf-eyebrow uppercase text-sf-fg-dim">Price</legend>
+            <legend class="eyebrow">Price</legend>
             <div class="mt-3 flex items-center gap-2">
               <input
                 type="number" name="price_min" placeholder="Min" value="{{ current_price_min }}"
-                class="min-h-sf-tap w-full rounded-sf border border-sf-line bg-sf-surface px-2.5 text-sf-sm text-sf-fg placeholder:text-sf-fg-dim focus:outline-none focus-visible:border-sf-brass focus-visible:ring-2 focus-visible:ring-sf-brass"
+                class="field min-h-sf-tap px-2.5"
               />
               <span class="text-sf-fg-dim">–</span>
               <input
                 type="number" name="price_max" placeholder="Max" value="{{ current_price_max }}"
-                class="min-h-sf-tap w-full rounded-sf border border-sf-line bg-sf-surface px-2.5 text-sf-sm text-sf-fg placeholder:text-sf-fg-dim focus:outline-none focus-visible:border-sf-brass focus-visible:ring-2 focus-visible:ring-sf-brass"
+                class="field min-h-sf-tap px-2.5"
               />
             </div>
           </fieldset>
@@ -96,7 +96,7 @@
           {% for group in attribute_facets %}
             {% if group.values %}
               <fieldset class="border-b border-sf-line pb-6">
-                <legend class="text-sf-eyebrow uppercase text-sf-fg-dim">{{ group.definition.name }}</legend>
+                <legend class="eyebrow">{{ group.definition.name }}</legend>
                 <div class="mt-3 space-y-2.5">
                   {% for entry in group.values %}
                     <label class="flex min-h-sf-tap items-center justify-between gap-2 text-sf-sm text-sf-fg-muted">
@@ -120,7 +120,7 @@
 
           <button
             type="submit"
-            class="min-h-sf-ctrl w-full rounded-sf bg-sf-brass px-4 text-sf-caption font-semibold uppercase tracking-[0.1em] text-sf-fg-onbrass transition-colors duration-200 hover:bg-sf-brass-press focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass focus-visible:ring-offset-2 focus-visible:ring-offset-sf-ink"
+            class="btn-primary w-full px-4"
           >
             Apply filters
           </button>
@@ -144,7 +144,7 @@
             <label for="sort" class="text-sf-caption uppercase tracking-[0.1em] text-sf-fg-dim">Sort</label>
             <select
               id="sort" name="sort" onchange="this.form.submit()"
-              class="min-h-sf-tap rounded-sf border border-sf-line bg-sf-surface px-2.5 text-sf-sm text-sf-fg focus:outline-none focus-visible:border-sf-brass focus-visible:ring-2 focus-visible:ring-sf-brass"
+              class="field min-h-sf-tap w-auto px-2.5"
             >
               <option value="newest" {% if current_sort == "newest" %}selected{% endif %}>Newest</option>
               <option value="price_asc" {% if current_sort == "price_asc" %}selected{% endif %}>Price: Low to High</option>

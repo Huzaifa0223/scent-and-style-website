@@ -7,7 +7,14 @@
  * changing any value below. Core Tailwind utilities only: no plugins.
  */
 module.exports = {
-  content: ["./templates/**/*.html", "./*/templates/**/*.html"],
+  // forms.py is scanned as well as templates: core/forms.py assigns Tailwind
+  // class strings to widgets for every form in the project, and those files
+  // were previously invisible to the scanner. Every class they used happened
+  // to appear in some template too, so nothing was purged — but only by
+  // coincidence, and "placeholder:text-sf-fg-dim" was down to two templates.
+  // Deleting the last template that used one would have silently stripped
+  // styling from every form field, with nothing failing to point at why.
+  content: ["./templates/**/*.html", "./*/templates/**/*.html", "./*/forms.py"],
   theme: {
     extend: {
       colors: {

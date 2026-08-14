@@ -51,7 +51,7 @@
           {% for field in form.visible_fields %}
             {% if field.name == "mobile_number" %}
               <div>
-                <label for="{{ field.id_for_label }}" class="text-sf-eyebrow uppercase text-sf-fg-dim">
+                <label for="{{ field.id_for_label }}" class="eyebrow">
                   {{ field.label }}
                 </label>
                 {{ field }}
@@ -74,7 +74,7 @@
                 <div x-show="!sameAsMobile">
                   <label
                     for="{{ form.whatsapp_number.id_for_label }}"
-                    class="text-sf-eyebrow uppercase text-sf-fg-dim"
+                    class="eyebrow"
                   >
                     {{ form.whatsapp_number.label }}
                   </label>
@@ -86,7 +86,7 @@
               </div>
             {% elif field.name != "same_as_mobile" and field.name != "whatsapp_number" %}
               <div>
-                <label for="{{ field.id_for_label }}" class="text-sf-eyebrow uppercase text-sf-fg-dim">
+                <label for="{{ field.id_for_label }}" class="eyebrow">
                   {{ field.label }}
                 </label>
                 {{ field }}
@@ -103,7 +103,7 @@
 
           <button
             type="submit"
-            class="min-h-sf-ctrl w-full rounded-sf bg-sf-brass px-4 text-sf-caption font-semibold uppercase tracking-[0.1em] text-sf-fg-onbrass transition-colors duration-200 hover:bg-sf-brass-press focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass focus-visible:ring-offset-2 focus-visible:ring-offset-sf-ink"
+            class="btn-primary w-full px-4"
           >
             Place order
           </button>
@@ -111,7 +111,7 @@
       </div>
 
       <div class="h-fit rounded-sf border border-sf-line bg-sf-surface p-5">
-        <h2 class="text-sf-eyebrow uppercase text-sf-fg-dim">Order review</h2>
+        <h2 class="eyebrow">Order review</h2>
         <ul class="mt-3 divide-y divide-sf-line text-sf-sm">
           {% for line in cart_lines %}
             <li class="flex items-start justify-between gap-3 py-2.5">

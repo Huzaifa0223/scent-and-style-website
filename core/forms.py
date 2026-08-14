@@ -24,15 +24,18 @@ CHECKBOX_CSS: Final[str] = (
 # separate rather than parameterising FIELD_CSS/CHECKBOX_CSS because the
 # two token systems don't share values (see docs/design.md's Tailwind
 # config section) and portal forms must never pick up storefront colours.
-SF_FIELD_CSS: Final[str] = (
-    "mt-1 block min-h-sf-ctrl w-full rounded-sf border border-sf-line bg-sf-surface px-3 "
-    "text-sf-sm text-sf-fg placeholder:text-sf-fg-dim focus:outline-none "
-    "focus-visible:border-sf-brass focus-visible:ring-2 focus-visible:ring-sf-brass"
-)
-SF_CHECKBOX_CSS: Final[str] = (
-    "h-5 w-5 rounded-sm border-sf-line accent-sf-brass focus:outline-none "
-    "focus-visible:ring-2 focus-visible:ring-sf-brass"
-)
+#
+# These name .field/.checkbox component classes (static/css/input.css)
+# rather than spelling out the utility strings, so a widget rendered by
+# Django and a control written by hand in a template cannot drift apart.
+# mt-1 stays here rather than inside .field: it is the gap between a label
+# and its input, which only applies where a label precedes the field, and
+# .field is also used by the filter rail's inline price inputs, which sit
+# in a flex row with no label above them.
+#
+# tailwind.config.js scans this file — see the note on `content` there.
+SF_FIELD_CSS: Final[str] = "field mt-1"
+SF_CHECKBOX_CSS: Final[str] = "checkbox"
 
 
 class StyledFieldMixin(forms.BaseForm):

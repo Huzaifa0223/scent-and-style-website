@@ -5,7 +5,7 @@
 
 {% block content %}
   <div class="shell max-w-2xl py-10 text-center">
-    <p class="text-sf-eyebrow uppercase text-sf-ok">Order placed</p>
+    <p class="eyebrow text-sf-ok">Order placed</p>
     <h1 class="mt-2 font-display text-sf-d-lg font-light text-sf-fg">Thank you, {{ order.customer_name }}</h1>
     <p class="mt-2 text-sf-sm text-sf-fg-muted">
       Your order number is
@@ -73,7 +73,7 @@
     </div>
 
     <div class="mt-8 rounded-sf border border-sf-line bg-sf-surface p-5 text-left">
-      <h2 class="text-sf-eyebrow uppercase text-sf-fg-dim">Order summary</h2>
+      <h2 class="eyebrow">Order summary</h2>
       <ul class="mt-3 divide-y divide-sf-line text-sf-sm">
         {% for item in order.items.all %}
           <li class="flex items-start justify-between gap-3 py-2.5">
@@ -110,7 +110,7 @@
 
     <a
       href="{% url 'storefront:home' %}"
-      class="min-h-sf-ctrl mt-8 inline-flex items-center justify-center rounded-sf bg-sf-brass px-5 text-sf-caption font-semibold uppercase tracking-[0.1em] text-sf-fg-onbrass transition-colors duration-200 hover:bg-sf-brass-press focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass focus-visible:ring-offset-2 focus-visible:ring-offset-sf-ink"
+      class="btn-primary mt-8 px-5"
     >
       Continue shopping
     </a>

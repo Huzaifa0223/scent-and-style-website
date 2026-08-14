@@ -168,6 +168,71 @@
   .grid-stagger > .p-card:nth-of-type(10) { animation-delay: 360ms; }
   .grid-stagger > .p-card:nth-of-type(11) { animation-delay: 400ms; }
   .grid-stagger > .p-card:nth-of-type(12) { animation-delay: 440ms; }
+
+  /* ---- Controls -------------------------------------------------------
+     Storefront only. The portal keeps its own light-theme field/button
+     styling (core/forms.py's FIELD_CSS, unprefixed tokens); these are the
+     sf- counterparts and must never be used on a portal screen.
+
+     No border-radius opinion is enforced by .btn-primary beyond a default:
+     several buttons are deliberately pills (rounded-full, added for the
+     cart drawer and order tracking so they read as pressable), and a
+     utility beats a component class, so those keep overriding it.
+
+     M7: colour and a 2% press only. Buttons do not lift or zoom — that
+     vocabulary belongs to the product tile, and reusing it here would
+     make every control feel like a card. */
+  .btn-primary {
+    @apply inline-flex min-h-sf-ctrl items-center justify-center rounded-sf bg-sf-brass px-5
+           text-sf-caption font-semibold uppercase tracking-[0.1em] text-sf-fg-onbrass
+           transition-[background-color,transform] duration-fast ease-sf-editorial
+           hover:bg-sf-brass-hover active:bg-sf-brass-press active:scale-[0.98]
+           focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass
+           focus-visible:ring-offset-2 focus-visible:ring-offset-sf-ink
+           disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100;
+  }
+  .field {
+    @apply block min-h-sf-ctrl w-full rounded-sf border border-sf-line bg-sf-surface px-3
+           text-sf-sm text-sf-fg placeholder:text-sf-fg-dim
+           transition-colors duration-fast hover:border-sf-line-strong
+           focus:outline-none focus-visible:border-sf-brass focus-visible:ring-2
+           focus-visible:ring-sf-brass;
+  }
+  .checkbox {
+    @apply h-5 w-5 rounded-sm border-sf-line accent-sf-brass
+           focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass;
+  }
+  .eyebrow {
+    @apply text-sf-eyebrow uppercase text-sf-fg-dim;
+  }
+}
+
+/* ---------------------------------------------------------------------
+   Focus ring, one rule for the whole storefront.
+
+   Scoped under .sf-root (set on <body> by storefront/base.html) rather
+   than applied globally, because this project runs two token systems from
+   one stylesheet: a global rule painting ring-offset-sf-ink (#14100E)
+   would put a near-black halo around every focused control on the
+   portal's light screens. The portal keeps its own accent-coloured focus
+   styling.
+
+   :where() keeps the whole selector at zero specificity, so this is a
+   floor and never a ceiling — any element that wants a different ring
+   still wins with a plain utility, and @tailwind utilities is emitted
+   after this in any case. Elements that already carry explicit
+   focus-visible utilities are unaffected; the value here is that a
+   control added later cannot ship with no focus indicator at all.
+
+   The brief's version also set rounded-[1px]. Dropped deliberately: a
+   focus indicator should not restyle the shape of the thing it is
+   indicating, and several controls here are deliberately pills.
+   --------------------------------------------------------------------- */
+@layer base {
+  .sf-root
+    :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+    @apply outline-none ring-2 ring-sf-brass ring-offset-2 ring-offset-sf-ink;
+  }
 }
 
 /* Storefront redesign motion (docs/design.md's "Motion" section — animation

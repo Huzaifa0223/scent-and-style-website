@@ -8,7 +8,13 @@ diverge from the root shell independently rather than sharing a "site chrome"
 partial that would couple their designs together.
 {% endcomment %}
 
-{% block body_class %}bg-sf-ink text-sf-fg{% endblock %}
+{% comment %}
+sf-root is the scoping hook for the storefront focus ring (see the
+"Focus ring" block in static/css/input.css). It carries no visual styling
+of its own — it exists so one base rule can cover every storefront
+control without leaking dark-theme ring offsets onto the portal.
+{% endcomment %}
+{% block body_class %}sf-root bg-sf-ink text-sf-fg{% endblock %}
 
 {% block body %}
   <div class="flex min-h-full flex-col">
