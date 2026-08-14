@@ -17,6 +17,7 @@ import pytest
 from django.contrib.auth.models import Group
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
+from django.utils import timezone
 
 from cart.factories import CartFactory, CartItemFactory
 from catalog.factories import ProductFactory, ProductVariantFactory
@@ -289,7 +290,14 @@ def test_tracking_update_via_http(client, django_user_model) -> None:  # type: i
 def test_order_list_filters_by_date_range(client, django_user_model) -> None:  # type: ignore[no-untyped-def]
     _login_owner(client, django_user_model)
     order = _pending_order()
-    today = order.created_at.date().isoformat()
+    # localtime() first: created_at is UTC-aware, so a bare .date() yields the
+    # *UTC* date, while the view filters with created_at__date, which Django
+    # evaluates in the active timezone (TIME_ZONE = Asia/Karachi, UTC+5). The
+    # two agree for 19 hours a day and disagree between 19:00 and 24:00 UTC —
+    # i.e. 00:00-05:00 in Karachi — so the bare version passed continuously
+    # until the clock crossed local midnight and then failed for five hours.
+    # Mirroring the view's own timezone handling makes this hold at any hour.
+    today = timezone.localtime(order.created_at).date().isoformat()
 
     response = client.get("/admin-portal/orders/", {"from": today, "to": today})
 
