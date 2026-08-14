@@ -24,7 +24,7 @@
     <link rel="stylesheet" href="{% static 'css/app.css' %}" />
     {% block extra_head %}{% endblock %}
   </head>
-  <body class="h-full bg-paper font-sans text-base text-ink antialiased">
+  <body class="h-full font-sans text-base antialiased {% block body_class %}bg-paper text-ink{% endblock %}">
     <a
       href="#main-content"
       class="sr-only rounded focus:not-sr-only focus:absolute focus:z-50 focus:m-2

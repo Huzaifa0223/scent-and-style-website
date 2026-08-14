@@ -12,7 +12,7 @@ doesn't fire a request per character.
     name="q"
     placeholder="Search products…"
     autocomplete="off"
-    class="w-full max-w-md rounded border border-border-subtle px-3 py-1.5 text-sm"
+    class="min-h-sf-tap w-full max-w-md rounded-sf border border-sf-line bg-sf-surface px-3 py-1.5 text-sf-sm text-sf-fg placeholder:text-sf-fg-dim focus:outline-none focus-visible:border-sf-brass focus-visible:ring-2 focus-visible:ring-sf-brass"
     hx-get="{% url 'search:suggest' %}"
     hx-trigger="keyup changed delay:200ms, search"
     hx-target="#search-suggestions"

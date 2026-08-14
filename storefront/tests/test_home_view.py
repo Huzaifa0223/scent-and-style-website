@@ -36,7 +36,7 @@ def test_home_new_arrivals_includes_every_published_product_newest_first(client)
     arrivals = list(response.context["new_arrivals"])
     assert arrivals.index(newer) < arrivals.index(older)
     assert "Draft Product" not in [p.name for p in arrivals]
-    assert b"New Arrivals" in response.content
+    assert b"New arrivals" in response.content  # storefront redesign uses sentence case
 
 
 @pytest.mark.django_db

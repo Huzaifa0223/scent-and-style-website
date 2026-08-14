@@ -6,32 +6,71 @@ every cart mutation (including the PDP's Add to Cart button, which lives
 outside this subtree entirely but targets it by id) — so the drawer's
 open/closed state survives every mutation instead of snapping shut.
 {% endcomment %}
-<div id="cart-widget" x-data="{ cartOpen: false }" class="relative">
+<div
+  id="cart-widget"
+  x-data="{ cartOpen: false, bump: false }"
+  @cart-bumped.window="bump = true; setTimeout(() => (bump = false), 230)"
+  class="relative"
+>
   <button
     type="button"
-    @click="cartOpen = !cartOpen"
+    @click="cartOpen = true"
     aria-label="Cart"
     aria-haspopup="true"
     :aria-expanded="cartOpen"
-    class="flex items-center gap-1.5 rounded px-2 py-1.5 text-sm font-medium text-ink hover:bg-paper focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+    class="min-h-sf-tap flex items-center gap-1.5 rounded-sf px-2 text-sf-sm font-medium text-sf-fg hover:text-sf-brass focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass focus-visible:ring-offset-2 focus-visible:ring-offset-sf-ink"
   >
     <span aria-hidden="true">Cart</span>
     <span
       id="cart-badge-count"
-      class="flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1 text-xs font-semibold text-white"
+      class="flex h-5 min-w-5 items-center justify-center rounded-full bg-sf-brass px-1 text-xs font-semibold text-sf-fg-onbrass transition-transform duration-200"
+      :class="bump ? 'scale-125' : 'scale-100'"
     >{{ cart_item_count }}</span>
   </button>
+
+  {% comment %}
+  Not teleported to <body> — tried x-teleport first, but it left the
+  template's content un-rendered in this build for reasons that weren't
+  worth chasing further (confirmed live: the template's content stayed
+  inert, `document.body` never received the clone, no console error to go
+  on). Fixed at the real root cause instead: storefront/base.html's
+  <header> no longer uses backdrop-blur, specifically because
+  backdrop-filter (like filter) makes its element a CSS containing block
+  for `position: fixed` descendants — with it, this drawer's `inset-y-0`
+  resolved against the ~68px header box instead of the viewport, collapsing
+  the drawer to header height. Confirmed live via getBoundingClientRect()
+  before landing on this fix, not guessed.
+  {% endcomment %}
+  <div
+    x-show="cartOpen"
+    x-transition:enter="transition-opacity duration-300 ease-out"
+    x-transition:enter-start="opacity-0"
+    x-transition:enter-end="opacity-100"
+    x-transition:leave="transition-opacity duration-300 ease-out"
+    x-transition:leave-start="opacity-100"
+    x-transition:leave-end="opacity-0"
+    @click="cartOpen = false"
+    class="fixed inset-0 z-50 bg-sf-ink-deep/70 backdrop-blur-[2px]"
+    style="display: none;"
+  ></div>
 
   <div
     id="cart-drawer"
     x-show="cartOpen"
-    @click.outside="cartOpen = false"
+    x-transition:enter="transition duration-420 ease-sf-editorial"
+    x-transition:enter-start="translate-x-full"
+    x-transition:enter-end="translate-x-0"
+    x-transition:leave="transition duration-300 ease-sf-editorial"
+    x-transition:leave-start="translate-x-0"
+    x-transition:leave-end="translate-x-full"
     @keydown.escape.window="cartOpen = false"
-    class="absolute right-0 top-full z-50 mt-2 w-80 rounded border border-border-subtle bg-surface shadow-card"
+    class="fixed inset-y-0 right-0 z-50 flex w-[calc(100vw-50px)] flex-col border-l border-sf-line bg-sf-ink shadow-sf-drawer sm:w-[420px]"
+    style="display: none;"
     role="dialog"
+    aria-modal="true"
     aria-label="Cart"
   >
-    <div id="cart-drawer-content">
+    <div id="cart-drawer-content" class="flex flex-1 flex-col overflow-hidden">
       {% include "cart/_drawer_content.html" %}
     </div>
   </div>

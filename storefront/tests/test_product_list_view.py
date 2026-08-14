@@ -42,14 +42,19 @@ def test_product_card_renders_a_skeleton_placeholder_behind_the_image(client) ->
     """Gate 6 — every product card has a defined skeleton loader, not just
     an empty state. This is a minimal source-level smoke check only — the
     actual toggle against Alpine's loaded state was verified live in a
-    real browser; see the Stage 6 log entry in specs/state.md."""
+    real browser; see the Stage 6 log entry in specs/state.md.
+
+    Asserts ``sf-animate-shimmer`` (the storefront redesign's sweep
+    animation, docs/design.md's "Skeleton loading" spec), not the plain
+    ``animate-pulse`` this card used before that redesign — the class name
+    changed, the underlying gate (a real skeleton element exists) did not."""
     product = ProductFactory(status=Product.Status.PUBLISHED)
     ProductImageFactory(product=product, is_primary=True)
 
     response = client.get(LIST_URL)
 
     assert response.status_code == 200
-    assert b"animate-pulse" in response.content
+    assert b"sf-animate-shimmer" in response.content
 
 
 @pytest.mark.django_db

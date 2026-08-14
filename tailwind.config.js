@@ -49,6 +49,11 @@ module.exports = {
         "sf-surface": { DEFAULT: "#1E1917", raised: "#2A2321" },
         "sf-line": { DEFAULT: "#332B27", strong: "#4A403A" },
         "sf-paper": "#F4EFE9",
+        // The spec (docs/design.md) verifies sf-paper pairs with #1A1512
+        // text at 14.6:1 but names no token for that text color — added
+        // here rather than an inline hex in a template (project rule:
+        // never a raw hex in a template).
+        "sf-paper-fg": { DEFAULT: "#1A1512", muted: "#7A6A56" },
         "sf-brass": { DEFAULT: "#D8A448", hover: "#E8BE6C", press: "#BE8C32" },
         "sf-cream": "#E8D9C3",
         "sf-fg": { DEFAULT: "#F4EFE9", muted: "#BDB2A8", dim: "#8E837A", onbrass: "#14100E" },

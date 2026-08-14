@@ -3,39 +3,51 @@
 The swappable part of the cart drawer — everything inside #cart-drawer-content.
 Rendered on first page load (via storefront/base.html's include) and
 returned as-is by every cart mutation view, so both paths render from the
-exact same context shape (cart_lines/cart_subtotal).
+exact same context shape (cart_lines/cart_subtotal). @click="cartOpen =
+false" below relies on the ancestor #cart-widget's Alpine scope, which
+this fragment is always swapped inside of — never rendered standalone.
 {% endcomment %}
+<div class="flex items-center justify-between border-b border-sf-line px-5 py-4">
+  <span class="font-display text-xl text-sf-fg">Your cart</span>
+  <button
+    type="button"
+    @click="cartOpen = false"
+    aria-label="Close cart"
+    class="flex h-11 w-11 items-center justify-center text-sf-fg-dim hover:text-sf-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass"
+  >&times;</button>
+</div>
+
 {% if cart_lines %}
-  <ul class="max-h-80 divide-y divide-border-subtle overflow-y-auto">
+  <ul class="flex-1 divide-y divide-sf-line overflow-y-auto px-1">
     {% for line in cart_lines %}
       {% include "cart/_line_item.html" %}
     {% endfor %}
   </ul>
-  <div class="border-t border-border-subtle p-3 text-sm">
+  <div class="border-t border-sf-line p-5 text-sf-sm">
     <div class="flex items-center justify-between">
-      <span class="text-text-muted">Subtotal</span>
-      <span class="font-mono text-ink">{{ cart_subtotal|money }}</span>
+      <span class="text-sf-fg-dim">Subtotal</span>
+      <span class="text-sf-fg">{{ cart_subtotal|money }}</span>
     </div>
-    <div class="mt-1 flex items-center justify-between">
-      <span class="text-text-muted">Delivery</span>
-      <span class="text-text-muted">Calculated at checkout</span>
+    <div class="mt-1.5 flex items-center justify-between">
+      <span class="text-sf-fg-dim">Delivery</span>
+      <span class="text-sf-fg-dim">Calculated at checkout</span>
     </div>
-    <div class="mt-2 flex items-center justify-between border-t border-border-subtle pt-2 font-semibold">
-      <span class="text-ink">Total</span>
-      <span class="font-mono text-ink">{{ cart_subtotal|money }}</span>
+    <div class="mt-3 flex items-center justify-between border-t border-sf-line pt-3">
+      <span class="text-sf-caption uppercase tracking-[0.14em] text-sf-fg-muted">Total</span>
+      <span class="font-display text-sf-d-sm text-sf-fg">{{ cart_subtotal|money }}</span>
     </div>
     <a
       href="{% url 'orders:checkout' %}"
-      class="mt-3 block w-full rounded bg-accent px-3 py-2 text-center text-sm font-semibold text-white hover:bg-accent-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      class="min-h-sf-ctrl mt-4 flex w-full items-center justify-center rounded-sf bg-sf-brass px-3 text-center text-sf-caption font-semibold uppercase tracking-[0.1em] text-sf-fg-onbrass transition-colors duration-200 hover:bg-sf-brass-press focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass focus-visible:ring-offset-2 focus-visible:ring-offset-sf-ink"
     >Checkout</a>
     <button
       type="button"
       hx-post="{% url 'cart:clear' %}"
       hx-target="#cart-drawer-content"
       hx-swap="innerHTML"
-      class="mt-2 w-full rounded border border-border-interactive px-3 py-2 text-sm text-ink hover:bg-paper focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      class="min-h-sf-tap mt-2 w-full rounded-sf text-sf-caption uppercase tracking-[0.1em] text-sf-fg-dim hover:text-sf-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass"
     >Clear cart</button>
   </div>
 {% else %}
-  <p class="p-4 text-sm text-text-muted">Your cart is empty.</p>
+  <p class="p-5 text-sf-sm text-sf-fg-dim">Your cart is empty.</p>
 {% endif %}

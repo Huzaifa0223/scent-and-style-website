@@ -3,26 +3,26 @@
 Type-ahead suggestion dropdown (§15). Each row links to the storefront PDP
 (storefront:product_detail), wired in once Stage 6 built that page.
 {% endcomment %}
-<ul class="divide-y divide-border-subtle rounded border border-border-subtle bg-paper shadow-lg">
+<ul class="divide-y divide-sf-line rounded-sf border border-sf-line bg-sf-surface shadow-sf-float">
   {% if rate_limited %}
-    <li class="px-3 py-2 text-sm text-text-muted">Too many searches. Wait a moment and try again.</li>
+    <li class="px-3 py-2 text-sf-sm text-sf-fg-dim">Too many searches. Wait a moment and try again.</li>
   {% endif %}
   {% for product in products %}
     <li>
       <a
         href="{% url 'storefront:product_detail' product.slug %}"
-        class="flex items-center gap-3 px-3 py-2 hover:bg-surface focus:outline-none focus-visible:bg-surface"
+        class="flex items-center gap-3 px-3 py-2 hover:bg-sf-surface-raised focus:outline-none focus-visible:bg-sf-surface-raised"
       >
         {% with product.primary_image_list.0 as image %}
           {% if image %}
-            <img src="{{ image.thumb_webp.url }}" alt="" width="32" height="32" class="h-8 w-8 rounded object-cover" />
+            <img src="{{ image.thumb_webp.url }}" alt="" width="32" height="32" class="h-8 w-8 rounded-sf object-cover" />
           {% else %}
-            <span class="h-8 w-8 rounded bg-paper"></span>
+            <span class="h-8 w-8 rounded-sf bg-sf-surface-raised"></span>
           {% endif %}
         {% endwith %}
-        <span class="flex-1 text-sm text-ink">{{ product.name }}</span>
+        <span class="flex-1 text-sf-sm text-sf-fg">{{ product.name }}</span>
         {% if product.display_price is not None %}
-          <span class="text-sm text-text-muted">
+          <span class="text-sf-sm text-sf-cream">
             {{ product.display_price|money }}{% if product.has_price_range %}+{% endif %}
           </span>
         {% endif %}
@@ -30,7 +30,7 @@ Type-ahead suggestion dropdown (§15). Each row links to the storefront PDP
     </li>
   {% empty %}
     {% if query %}
-      <li class="px-3 py-2 text-sm text-text-muted">No products match "{{ query }}".</li>
+      <li class="px-3 py-2 text-sf-sm text-sf-fg-dim">No products match "{{ query }}".</li>
     {% endif %}
   {% endfor %}
 </ul>

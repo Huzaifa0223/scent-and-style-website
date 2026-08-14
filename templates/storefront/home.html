@@ -4,57 +4,86 @@
 {% block og_description %}{% block twitter_description %}Shop {{ store_settings.name }} online — browse the full catalog, place your order, and track it every step of the way.{% endblock %}{% endblock %}
 
 {% block content %}
-  <section class="border-b border-border-subtle bg-surface">
-    <div class="mx-auto max-w-7xl px-4 py-16 text-center">
-      <h1 class="text-3xl font-semibold text-ink">{{ store_settings.name }}</h1>
-      <a
-        href="{% url 'storefront:product_list' %}"
-        class="mt-6 inline-block rounded bg-accent px-6 py-3 text-sm font-semibold text-white hover:bg-accent-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-      >
-        Shop All Products
-      </a>
+  <section class="relative overflow-hidden bg-gradient-to-br from-[#4A3B2C] via-[#2A211C] to-[#17120F]">
+    <div class="pointer-events-none absolute inset-0" style="background: radial-gradient(120% 70% at 72% 22%, rgba(216,164,72,.18), transparent 62%);"></div>
+    <div class="relative mx-auto max-w-sf-shell px-4 py-20 sm:px-8 sm:py-28">
+      <div class="max-w-xl">
+        <p data-reveal class="text-sf-eyebrow uppercase text-sf-brass">{{ store_settings.name }}</p>
+        <h1 data-reveal class="mt-3 font-display text-sf-d-xl font-light leading-[1.05] text-sf-fg sm:text-sf-d-2xl">
+          Fragrance, worn<br /><em class="italic text-sf-cream">close to you</em>
+        </h1>
+        <p data-reveal class="mt-4 max-w-[30ch] text-sf-lede text-sf-fg-muted">
+          Browse the full catalog, order in a few taps, and confirm on WhatsApp — no card needed.
+        </p>
+        <div data-reveal class="mt-6 flex flex-wrap gap-3">
+          <a
+            href="{% url 'storefront:product_list' %}"
+            class="min-h-sf-ctrl inline-flex items-center rounded-sf bg-sf-brass px-6 text-sf-caption font-semibold uppercase tracking-[0.1em] text-sf-fg-onbrass transition-colors duration-200 hover:bg-sf-brass-press focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass focus-visible:ring-offset-2 focus-visible:ring-offset-sf-ink"
+          >
+            Shop all products
+          </a>
+        </div>
+      </div>
     </div>
   </section>
 
   {% if categories %}
-    <section class="mx-auto max-w-7xl px-4 py-10">
-      <h2 class="text-lg font-semibold text-ink">Shop by Category</h2>
-      <div class="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+    <section class="mx-auto max-w-sf-shell px-4 py-16 sm:px-8">
+      <h2 class="font-display text-sf-d-md font-normal text-sf-fg">Shop by category</h2>
+      <div class="mt-6 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
         {% for category in categories %}
           <a
             href="{% url 'storefront:category_product_list' category.slug %}"
-            class="rounded border border-border-subtle bg-surface p-4 text-center text-sm font-medium text-ink hover:shadow-card"
+            data-reveal
+            class="group relative flex aspect-square items-end overflow-hidden rounded-sf border border-sf-line bg-sf-surface p-3.5 transition-transform duration-200 ease-out hover:-translate-y-0.5"
           >
-            {{ category.name }}
+            <span class="pointer-events-none absolute inset-0 bg-gradient-to-t from-sf-ink/85 via-sf-ink/10 to-transparent"></span>
+            <span class="relative font-display text-sf-d-sm text-sf-fg">{{ category.name }}</span>
           </a>
         {% endfor %}
       </div>
     </section>
   {% endif %}
 
-  <section class="mx-auto max-w-7xl px-4 py-10">
-    <h2 class="text-lg font-semibold text-ink">Featured Products</h2>
+  <section class="mx-auto max-w-sf-shell px-4 py-16 sm:px-8">
+    <div class="flex items-baseline justify-between">
+      <div>
+        <p class="text-sf-eyebrow uppercase text-sf-brass">Featured</p>
+        <h2 class="mt-2 font-display text-sf-d-md font-normal text-sf-fg">Quietly best-selling</h2>
+      </div>
+      <a
+        href="{% url 'storefront:product_list' %}"
+        class="hidden text-sf-caption uppercase tracking-[0.12em] text-sf-brass hover:text-sf-brass-hover sm:inline focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass"
+      >View all</a>
+    </div>
     {% if featured_products %}
-      <div class="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+      <div class="mt-6 grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 lg:grid-cols-4">
         {% for product in featured_products %}
-          {% include "storefront/_product_card.html" %}
+          <div data-reveal>{% include "storefront/_product_card.html" %}</div>
         {% endfor %}
       </div>
     {% else %}
-      <p class="mt-4 text-sm text-text-muted">No featured products yet — check back soon.</p>
+      <p class="mt-6 text-sf-sm text-sf-fg-dim">No featured products yet — check back soon.</p>
     {% endif %}
   </section>
 
-  <section class="mx-auto max-w-7xl px-4 py-10">
-    <h2 class="text-lg font-semibold text-ink">New Arrivals</h2>
+  <section class="mx-auto max-w-sf-shell px-4 py-16 sm:px-8">
+    <h2 class="font-display text-sf-d-md font-normal text-sf-fg">New arrivals</h2>
     {% if new_arrivals %}
-      <div class="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+      <div class="mt-6 grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 lg:grid-cols-4">
         {% for product in new_arrivals %}
-          {% include "storefront/_product_card.html" %}
+          <div data-reveal>{% include "storefront/_product_card.html" %}</div>
         {% endfor %}
       </div>
     {% else %}
-      <p class="mt-4 text-sm text-text-muted">No products yet — check back soon.</p>
+      <p class="mt-6 text-sf-sm text-sf-fg-dim">No products yet — check back soon.</p>
     {% endif %}
+  </section>
+
+  <section data-reveal class="mt-4 bg-sf-paper px-6 py-16 text-center sm:py-20">
+    <p class="text-sf-eyebrow uppercase text-sf-paper-fg-muted">Our house</p>
+    <p class="mx-auto mt-4 max-w-2xl font-display text-sf-d-md font-light leading-snug text-sf-paper-fg">
+      Every order is confirmed by hand on WhatsApp — no call centre, just the merchant on the other end.
+    </p>
   </section>
 {% endblock %}

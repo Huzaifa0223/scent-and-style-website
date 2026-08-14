@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% comment %}
 Storefront shell. Deliberately does not share markup with portal/base.html —
@@ -7,15 +8,28 @@ diverge from the root shell independently rather than sharing a "site chrome"
 partial that would couple their designs together.
 {% endcomment %}
 
+{% block body_class %}bg-sf-ink text-sf-fg{% endblock %}
+
 {% block body %}
   <div class="flex min-h-full flex-col">
-    <header class="border-b border-border-subtle">
-      <div class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3">
-        <a href="/" class="text-lg font-semibold tracking-tight text-ink">{{ store_settings.name }}</a>
-        <div class="order-3 w-full sm:order-none sm:w-auto sm:flex-1 sm:px-4">
+    {% comment %}
+    bg-sf-ink (fully opaque), not a translucent bg-sf-ink/90 + backdrop-blur
+    — backdrop-filter makes its element a CSS containing block for
+    `position: fixed` descendants, which broke the cart drawer's
+    `fixed inset-y-0` sizing (it resolved against this ~68px header instead
+    of the viewport). Confirmed live before landing on this fix — see
+    cart/_widget.html's own note on the drawer for the debugging trail.
+    {% endcomment %}
+    <header class="sticky top-0 z-40 border-b border-sf-line bg-sf-ink">
+      <div class="mx-auto flex max-w-sf-shell flex-wrap items-center gap-3 px-4 py-3 sm:gap-6 sm:px-8">
+        <a
+          href="/"
+          class="font-display text-lg uppercase tracking-[0.12em] text-sf-fg hover:text-sf-brass focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass focus-visible:ring-offset-2 focus-visible:ring-offset-sf-ink"
+        >{{ store_settings.name }}</a>
+        <div class="order-3 w-full sm:order-none sm:w-auto sm:flex-1">
           {% block storefront_search %}{% include "search/_search_input.html" %}{% endblock %}
         </div>
-        <nav class="flex items-center gap-4 text-sm">
+        <nav class="flex items-center gap-4 text-sf-sm">
           {% block storefront_nav %}{% endblock %}
           {% include "cart/_widget.html" %}
         </nav>
@@ -26,12 +40,15 @@ partial that would couple their designs together.
       {% block content %}{% endblock %}
     </main>
 
-    <footer class="border-t border-border-subtle bg-paper">
-      <div class="mx-auto max-w-7xl px-4 py-8 text-sm text-text-muted">
+    <footer class="border-t border-sf-line">
+      <div class="mx-auto max-w-sf-shell px-4 py-10 text-sf-sm text-sf-fg-dim sm:px-8">
         {% block storefront_footer %}
           <div class="flex flex-wrap items-center justify-between gap-3">
-            <span>&copy; {{ store_settings.name }}</span>
-            <a href="{% url 'orders:tracking' %}" class="text-ink hover:text-accent">
+            <span class="font-display text-base uppercase tracking-[0.14em] text-sf-fg">{{ store_settings.name }}</span>
+            <a
+              href="{% url 'orders:tracking' %}"
+              class="min-h-sf-tap inline-flex items-center text-sf-brass hover:text-sf-brass-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass focus-visible:ring-offset-2 focus-visible:ring-offset-sf-ink"
+            >
               Track your order
             </a>
           </div>
@@ -39,4 +56,8 @@ partial that would couple their designs together.
       </div>
     </footer>
   </div>
+{% endblock %}
+
+{% block extra_body %}
+  <script src="{% static 'js/storefront-reveal.js' %}" defer></script>
 {% endblock %}
