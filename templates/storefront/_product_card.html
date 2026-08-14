@@ -11,15 +11,17 @@ reach into product.variants.all()/product.images.all() itself: it's
 already been fed a prefetched queryset shaped differently on the listing
 page than on the home page's rails, and the caller is the only one who
 knows which shape it actually is this render.
+
+Presentation lives in .p-card* (static/css/input.css), not as utility
+strings here, because this markup renders in two different grids and the
+tile must look identical in both. `group` stays inline: Tailwind cannot
+@apply a marker class, so it can't live in .p-card.
 {% endcomment %}
 {% if product.json_ld %}
   <script type="application/ld+json">{{ product.json_ld|ld_json }}</script>
 {% endif %}
-<a
-  href="{% url 'storefront:product_detail' product.slug %}"
-  class="group block"
->
-  <div class="relative aspect-[3/4] overflow-hidden rounded-sf border border-sf-line bg-sf-surface transition-transform duration-200 ease-out group-hover:-translate-y-0.5" x-data="{ loaded: false }">
+<a href="{% url 'storefront:product_detail' product.slug %}" class="p-card group">
+  <div class="p-card__media" x-data="{ loaded: false }">
     {% with product.primary_image_list.0 as image %}
       {% if image %}
         <div class="sf-animate-shimmer absolute inset-0" x-show="!loaded"></div>
@@ -33,7 +35,7 @@ knows which shape it actually is this render.
           x-show="loaded"
           x-init="loaded = $el.complete"
           @load="loaded = true"
-          class="h-full w-full object-cover"
+          class="p-card__img"
         />
       {% else %}
         <div class="flex h-full w-full items-center justify-center text-sf-caption text-sf-fg-dim">
@@ -42,12 +44,12 @@ knows which shape it actually is this render.
       {% endif %}
     {% endwith %}
   </div>
-  <div class="mt-3 px-0.5">
+  <div class="p-card__body">
     {% if product.brand %}
-      <p class="text-sf-caption uppercase tracking-[0.14em] text-sf-fg-dim">{{ product.brand.name }}</p>
+      <p class="p-card__eyebrow">{{ product.brand.name }}</p>
     {% endif %}
-    <p class="mt-1 line-clamp-2 font-display text-sf-d-sm leading-tight text-sf-fg">{{ product.name }}</p>
-    <p class="mt-1.5 text-sf-sm text-sf-cream">
+    <p class="p-card__title">{{ product.name }}</p>
+    <p class="p-card__price">
       {% if product.display_price is not None %}
         {{ product.display_price|money }}{% if product.has_price_range %}+{% endif %}
       {% else %}

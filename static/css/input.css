@@ -88,6 +88,44 @@
   .rule-t {
     @apply border-t border-sf-line;
   }
+
+  /* Product tile. The caption used to sit outside the bordered image box
+     ("image, then text below"), which is a real editorial convention but
+     needs strong photography to hold together — with placeholder tiles it
+     read as a caption floating under an empty rectangle. Boxing the media
+     and the body into one bordered surface gives the grid figure/ground
+     separation that survives a catalogue only partway through having
+     photography shot.
+
+     `group` is deliberately NOT applied here: it is a marker class with no
+     declarations of its own and Tailwind cannot @apply it, so it stays in
+     the template markup alongside .p-card. */
+  .p-card {
+    @apply block overflow-hidden rounded-sf border border-sf-line bg-sf-surface;
+  }
+  /* aspect-[3/4] is what actually locks tile height: derivatives are
+     generated with Pillow's thumbnail(), which preserves each source's own
+     ratio, so without a fixed box the grid's row height would follow
+     whatever the merchant happened to upload. object-cover on the image
+     crops to this box rather than letterboxing it. */
+  .p-card__media {
+    @apply relative aspect-[3/4] w-full overflow-hidden bg-sf-surface-raised;
+  }
+  .p-card__img {
+    @apply h-full w-full object-cover;
+  }
+  .p-card__body {
+    @apply border-t border-sf-line px-3.5 py-3;
+  }
+  .p-card__eyebrow {
+    @apply text-sf-caption uppercase tracking-[0.14em] text-sf-fg-dim;
+  }
+  .p-card__title {
+    @apply mt-1 line-clamp-2 font-display text-sf-d-sm leading-tight text-sf-fg;
+  }
+  .p-card__price {
+    @apply mt-1.5 text-sf-sm text-sf-cream;
+  }
 }
 
 /* Storefront redesign motion (docs/design.md's "Motion" section — animation
