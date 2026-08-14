@@ -1,9 +1,30 @@
 {% extends "storefront/base.html" %}
+{% load jsonld %}
 
-{% block title %}{% if category %}{{ category.name }}{% else %}All Products{% endif %} — {{ store_settings.name }}{% endblock %}
+{% block title %}{% if category %}{{ category.effective_meta_title }}{% else %}All Products{% endif %} — {{ store_settings.name }}{% endblock %}
+{% block meta_description %}{% if category %}{{ category.effective_meta_description }}{% else %}Browse the full {{ store_settings.name }} catalog.{% endif %}{% endblock %}
+{% block og_title %}{% if category %}{{ category.effective_meta_title }}{% else %}All Products{% endif %}{% endblock %}
+{% block og_description %}{% if category %}{{ category.effective_meta_description }}{% else %}Browse the full {{ store_settings.name }} catalog.{% endif %}{% endblock %}
+{% block twitter_title %}{% if category %}{{ category.effective_meta_title }}{% else %}All Products{% endif %}{% endblock %}
+{% block twitter_description %}{% if category %}{{ category.effective_meta_description }}{% else %}Browse the full {{ store_settings.name }} catalog.{% endif %}{% endblock %}
+
+{% block extra_head %}
+  <script type="application/ld+json">{{ breadcrumb_jsonld|ld_json }}</script>
+{% endblock %}
 
 {% block content %}
   <div class="mx-auto max-w-7xl px-4 py-6">
+    <nav aria-label="Breadcrumb" class="mb-2 text-sm text-text-muted">
+      <ol class="flex flex-wrap items-center gap-1">
+        <li><a href="{% url 'storefront:home' %}" class="hover:text-accent">Home</a></li>
+        <li aria-hidden="true">&rsaquo;</li>
+        {% if category %}
+          <li aria-current="page" class="text-ink">{{ category.name }}</li>
+        {% else %}
+          <li aria-current="page" class="text-ink">All Products</li>
+        {% endif %}
+      </ol>
+    </nav>
     <h1 class="text-xl font-semibold text-ink">
       {% if category %}{{ category.name }}{% else %}All Products{% endif %}
     </h1>

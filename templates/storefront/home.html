@@ -1,5 +1,8 @@
 {% extends "storefront/base.html" %}
 
+{% block meta_description %}Shop {{ store_settings.name }} online — browse the full catalog, place your order, and track it every step of the way.{% endblock %}
+{% block og_description %}{% block twitter_description %}Shop {{ store_settings.name }} online — browse the full catalog, place your order, and track it every step of the way.{% endblock %}{% endblock %}
+
 {% block content %}
   <section class="border-b border-border-subtle bg-surface">
     <div class="mx-auto max-w-7xl px-4 py-16 text-center">

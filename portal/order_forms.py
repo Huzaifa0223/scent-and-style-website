@@ -7,9 +7,10 @@ from decimal import Decimal
 from django import forms
 
 from catalog.models import ProductVariant
+from core.forms import FIELD_CSS as _FIELD_CSS
 from orders.models import Order
 
-from .forms import _FIELD_CSS, _StyledModelForm
+from .forms import _StyledModelForm
 
 
 class OrderStatusTransitionForm(forms.Form):

@@ -1,10 +1,20 @@
 {% load money %}
+{% load jsonld %}
 {% comment %}
 One product tile — grid on the listing page, featured rail on the home
 page. `product` needs `display_price`/`has_price_range` (with_pricing())
 and `primary_image_list` (the Prefetch(to_attr=...) pattern) already
-annotated by the caller's queryset.
+annotated by the caller's queryset. `product.json_ld` is attached by the
+calling view (ProductListView/HomeView), not computed here — see the
+module docstring in storefront/seo.py for why this partial must never
+reach into product.variants.all()/product.images.all() itself: it's
+already been fed a prefetched queryset shaped differently on the listing
+page than on the home page's rails, and the caller is the only one who
+knows which shape it actually is this render.
 {% endcomment %}
+{% if product.json_ld %}
+  <script type="application/ld+json">{{ product.json_ld|ld_json }}</script>
+{% endif %}
 <a
   href="{% url 'storefront:product_detail' product.slug %}"
   class="group block overflow-hidden rounded border border-border-subtle bg-surface transition-shadow hover:shadow-card"
@@ -15,6 +25,8 @@ annotated by the caller's queryset.
         <div class="absolute inset-0 animate-pulse bg-border-subtle" x-show="!loaded"></div>
         <img
           src="{{ image.card_webp.url }}"
+          srcset="{{ image.thumb_webp.url }} 200w, {{ image.card_webp.url }} 600w"
+          sizes="(min-width: 1024px) 25vw, (min-width: 640px) 33vw, 50vw"
           alt="{{ image.alt_text|default:product.name }}"
           width="400"
           height="400"

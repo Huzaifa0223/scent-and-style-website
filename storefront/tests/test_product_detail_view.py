@@ -9,6 +9,8 @@ from __future__ import annotations
 from decimal import Decimal
 
 import pytest
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 
 from catalog.factories import (
     AttributeDefinitionFactory,
@@ -135,3 +137,113 @@ def test_pdp_gallery_renders_a_skeleton_placeholder_and_a_lightbox_dialog(client
     assert response.status_code == 200
     assert b"animate-pulse" in response.content
     assert b'role="dialog"' in response.content
+
+
+@pytest.mark.django_db
+def test_gate3_renaming_a_products_slug_301_redirects_the_old_one(client) -> None:  # type: ignore[no-untyped-def]
+    """Roadmap Stage 12 gate 3."""
+    product = ProductFactory(name="Original Name", status=Product.Status.PUBLISHED)
+    old_slug = product.slug
+    product.slug = "a-brand-new-slug"
+    product.save()
+
+    response = client.get(f"/product/{old_slug}/")
+
+    assert response.status_code == 301
+    assert response.url == f"/product/{product.slug}/"
+
+
+@pytest.mark.django_db
+def test_the_redirect_target_page_itself_renders_normally(client) -> None:  # type: ignore[no-untyped-def]
+    product = ProductFactory(name="Original Name", status=Product.Status.PUBLISHED)
+    old_slug = product.slug
+    product.slug = "a-brand-new-slug"
+    product.save()
+
+    response = client.get(f"/product/{old_slug}/", follow=True)
+
+    assert response.status_code == 200
+    assert b"Original Name" in response.content
+
+
+@pytest.mark.django_db
+def test_an_old_slug_for_a_since_unpublished_product_404s_rather_than_redirecting(
+    client,
+) -> None:  # type: ignore[no-untyped-def]
+    """A stale link to a product that's since gone back to Draft (or been
+    archived) must not leak that the product still exists by redirecting
+    to it — a plain 404, the same as any other unknown slug."""
+    product = ProductFactory(name="Original Name", status=Product.Status.PUBLISHED)
+    old_slug = product.slug
+    product.slug = "a-brand-new-slug"
+    product.save()
+    product.status = Product.Status.DRAFT
+    product.save()
+
+    response = client.get(f"/product/{old_slug}/")
+
+    assert response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_a_slug_that_was_never_a_real_product_404s(client) -> None:  # type: ignore[no-untyped-def]
+    response = client.get("/product/never-existed/")
+
+    assert response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_gate4_query_count_stays_flat_as_the_products_own_variant_and_image_count_grows(
+    client,
+) -> None:  # type: ignore[no-untyped-def]
+    """Roadmap Stage 12 gate 4 ("assertNumQueries bounded on... the
+    PDP") — Stage 6 gate 5 named this same requirement but no test ever
+    actually measured it for the PDP specifically (only the listing
+    page's own guard existed). A single-object detail page has no
+    "fixture count" to grow the way a list does; what "flat" means here
+    is that the query count doesn't grow with *this product's own*
+    variant/image count — the exact shape Stage 12's own Product JSON-LD
+    and gallery/variant-selector data all iterate over.
+    """
+    size = AttributeDefinitionFactory(is_variant_option=True)
+    product = ProductFactory(status=Product.Status.PUBLISHED)
+    default_variant = product.variants.get()
+    ProductImageFactory(product=product, is_primary=True)
+    # The default variant gets an attribute value *before* either
+    # measurement, not just in the "large" case — prefetch_related()'s
+    # nested "variants__variant_attribute_values__value__definition"
+    # issues its value/definition-level queries only when there's at
+    # least one VariantAttributeValue row to resolve at all. Giving the
+    # "small" fixture zero attribute values isn't a smaller version of
+    # the same shape the "large" fixture has — it's missing two whole
+    # prefetch levels, which would make this test measure "does having
+    # any attributes at all cost 2 fixed queries" (yes, correctly) rather
+    # than "does the count of attributes/variants/images cost more
+    # queries" (the actual thing this guard exists to catch).
+    VariantAttributeValueFactory(
+        variant=default_variant, value=AttributeValueFactory(definition=size, value="Default size")
+    )
+    client.get(f"/product/{product.slug}/")  # warm up StoreSettings.load(), session/cache tables
+
+    with CaptureQueriesContext(connection) as captured_small:
+        response = client.get(f"/product/{product.slug}/")
+    assert response.status_code == 200
+    queries_small = len(captured_small)
+
+    for i in range(9):
+        value = AttributeValueFactory(definition=size, value=f"Size {i}")
+        variant = ProductVariantFactory(product=product)
+        VariantAttributeValueFactory(variant=variant, value=value)
+        ProductImageFactory(product=product)
+    assert product.variants.count() == 10
+    assert product.images.count() == 10
+
+    with CaptureQueriesContext(connection) as captured_large:
+        response = client.get(f"/product/{product.slug}/")
+    assert response.status_code == 200
+    queries_large = len(captured_large)
+
+    assert queries_large == queries_small, (
+        f"query count grew with the product's own variant/image count: {queries_small} at 1 "
+        f"variant/image, {queries_large} at 10 — likely an N+1"
+    )

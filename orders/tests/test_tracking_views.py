@@ -228,3 +228,12 @@ def test_incomplete_submission_re_renders_the_form_with_an_error(client) -> None
 
     assert response.status_code == 400
     assert b"required" in response.content.lower() or b"field" in response.content.lower()
+
+
+@pytest.mark.django_db
+def test_gate37_an_incomplete_submission_links_the_error_via_aria_describedby(client) -> None:  # type: ignore[no-untyped-def]
+    response = client.post(TRACK_URL, {"order_number": "", "mobile_number": ""})
+
+    body = response.content.decode()
+    assert 'aria-describedby="id_order_number-error"' in body
+    assert 'id="id_order_number-error"' in body

@@ -23,8 +23,9 @@ from django import forms
 from django.forms import BaseInlineFormSet, inlineformset_factory
 
 from catalog.models import AttributeValue, Product, ProductVariant
+from core.forms import FIELD_CSS as _FIELD_CSS
 
-from .forms import _FIELD_CSS, _StyledModelForm
+from .forms import _StyledModelForm
 
 CREATE_VARIANT_EXTRA_FORMS = 3
 """Blank variant rows shown on the product *create* page. 3 matches
@@ -43,6 +44,7 @@ class ProductForm(_StyledModelForm[Product]):
         model = Product
         fields = [
             "name",
+            "slug",
             "brand",
             "category",
             "subcategory",
@@ -65,6 +67,19 @@ class ProductForm(_StyledModelForm[Product]):
         assert isinstance(subcategory_field, forms.ModelChoiceField)
         assert subcategory_field.queryset is not None
         subcategory_field.queryset = subcategory_field.queryset.filter(parent__isnull=False)
+
+        # Opt-in (§34: "slug changes are opt-in") — blank on create means
+        # "auto-generate from the name" (Product.save()'s own behaviour,
+        # unchanged). Changing it on an existing product is exactly the
+        # roadmap Stage 12 scenario a redirect must survive:
+        # Product.save() records the old value in ProductSlugRedirect
+        # itself, so this form doesn't need to know that mechanism exists
+        # at all — it only needs to let the merchant submit a new value.
+        self.fields["slug"].required = False
+        self.fields["slug"].help_text = (
+            "Leave blank to auto-generate from the name. Changing the slug on an existing "
+            "product keeps the old link working — it 301-redirects to the new one."
+        )
 
 
 class ProductVariantForm(_StyledModelForm[ProductVariant]):

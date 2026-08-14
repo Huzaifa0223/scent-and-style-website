@@ -11,13 +11,23 @@ from __future__ import annotations
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
+from django.contrib.sitemaps.views import sitemap
 from django.urls import URLPattern, URLResolver, include, path
 
-from core.views import healthz
+from core.views import healthz, robots_txt
+from storefront.sitemaps import CategorySitemap, ProductSitemap, StaticViewSitemap
+
+sitemaps = {
+    "products": ProductSitemap,
+    "categories": CategorySitemap,
+    "static": StaticViewSitemap,
+}
 
 urlpatterns: list[URLPattern | URLResolver] = [
     path("django-admin/", admin.site.urls),
     path("healthz/", healthz, name="healthz"),
+    path("sitemap.xml", sitemap, {"sitemaps": sitemaps}, name="sitemap"),
+    path("robots.txt", robots_txt, name="robots_txt"),
     path("accounts/", include("accounts.urls")),
     path("search/", include("search.urls")),
     path("cart/", include("cart.urls")),

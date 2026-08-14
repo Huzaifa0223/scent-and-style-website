@@ -5,6 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{% block title %}{{ store_settings.name }}{% endblock %}</title>
     <meta name="description" content="{% block meta_description %}{% endblock %}" />
+    <link rel="canonical" href="{{ canonical_url }}" />
+    {% comment %}
+    §34: Open Graph and Twitter Card tags on every page, storefront and
+    portal alike — harmless defaults on portal pages nobody shares, real
+    per-object content on the storefront pages that matter (PDP, category,
+    home), each overriding og_title/og_description/og_image below.
+    {% endcomment %}
+    <meta property="og:site_name" content="{{ store_settings.name }}" />
+    <meta property="og:type" content="{% block og_type %}website{% endblock %}" />
+    <meta property="og:title" content="{% block og_title %}{{ store_settings.name }}{% endblock %}" />
+    <meta property="og:description" content="{% block og_description %}{% endblock %}" />
+    <meta property="og:url" content="{{ canonical_url }}" />
+    {% block og_image %}{% endblock %}
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="{% block twitter_title %}{{ store_settings.name }}{% endblock %}" />
+    <meta name="twitter:description" content="{% block twitter_description %}{% endblock %}" />
     <link rel="stylesheet" href="{% static 'css/app.css' %}" />
     {% block extra_head %}{% endblock %}
   </head>

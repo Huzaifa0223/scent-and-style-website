@@ -12,7 +12,7 @@ Type-ahead suggestion dropdown (§15). Each row links to the storefront PDP
       >
         {% with product.primary_image_list.0 as image %}
           {% if image %}
-            <img src="{{ image.thumb_webp.url }}" alt="" class="h-8 w-8 rounded object-cover" />
+            <img src="{{ image.thumb_webp.url }}" alt="" width="32" height="32" class="h-8 w-8 rounded object-cover" />
           {% else %}
             <span class="h-8 w-8 rounded bg-paper"></span>
           {% endif %}

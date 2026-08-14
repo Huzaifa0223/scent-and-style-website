@@ -15,6 +15,8 @@ from decimal import Decimal
 
 import pytest
 from django.contrib.auth.models import Group
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 
 from cart.factories import CartFactory, CartItemFactory
 from catalog.factories import ProductFactory, ProductVariantFactory
@@ -465,3 +467,37 @@ def test_staff_cannot_transition_an_order_status(client, django_user_model) -> N
     assert response.status_code == 403
     order.refresh_from_db()
     assert order.status == Status.PENDING_CONFIRMATION
+
+
+@pytest.mark.django_db
+def test_gate4_order_list_query_count_stays_flat_as_fixture_count_grows_from_5_to_50(
+    client, django_user_model
+) -> None:  # type: ignore[no-untyped-def]
+    """Roadmap Stage 12 gate 4 ("assertNumQueries bounded on... order
+    list") — Stage 10 shipped this list view without a flat-query guard
+    at all; added here rather than assumed, the same "measure it, don't
+    just claim it" discipline every other list view in this project
+    already follows."""
+    _login_owner(client, django_user_model)
+    list_url = "/admin-portal/orders/"
+    client.get(list_url)  # warm up StoreSettings.load(), session/cache tables
+
+    for _ in range(5):
+        _pending_order()
+    with CaptureQueriesContext(connection) as captured_at_5:
+        response = client.get(list_url)
+    assert response.status_code == 200
+    queries_at_5 = len(captured_at_5)
+
+    for _ in range(45):
+        _pending_order()
+    assert Order.objects.count() == 50
+    with CaptureQueriesContext(connection) as captured_at_50:
+        response = client.get(list_url)
+    assert response.status_code == 200
+    queries_at_50 = len(captured_at_50)
+
+    assert queries_at_50 == queries_at_5, (
+        f"query count grew with fixture count: {queries_at_5} at 5 orders, "
+        f"{queries_at_50} at 50 — likely an N+1"
+    )

@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /admin-portal/
+Disallow: /django-admin/
+Disallow: /accounts/
+Disallow: /cart/
+Disallow: /checkout/
+
+Sitemap: {{ sitemap_url }}

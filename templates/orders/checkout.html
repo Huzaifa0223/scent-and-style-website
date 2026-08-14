@@ -43,9 +43,9 @@
                   {{ field.label }}
                 </label>
                 {{ field }}
-                {% if field.errors %}
-                  <p class="mt-1 text-xs text-danger">{{ field.errors|striptags }}</p>
-                {% endif %}
+                <p id="{{ field.id_for_label }}-error" class="mt-1 text-xs text-danger">
+                  {% if field.errors %}{{ field.errors|striptags }}{% endif %}
+                </p>
               </div>
               <div
                 x-data="{ sameAsMobile: {{ form.same_as_mobile.value|yesno:'true,false' }} }"
@@ -67,11 +67,9 @@
                     {{ form.whatsapp_number.label }}
                   </label>
                   {{ form.whatsapp_number }}
-                  {% if form.whatsapp_number.errors %}
-                    <p class="mt-1 text-xs text-danger">
-                      {{ form.whatsapp_number.errors|striptags }}
-                    </p>
-                  {% endif %}
+                  <p id="{{ form.whatsapp_number.id_for_label }}-error" class="mt-1 text-xs text-danger">
+                    {% if form.whatsapp_number.errors %}{{ form.whatsapp_number.errors|striptags }}{% endif %}
+                  </p>
                 </div>
               </div>
             {% elif field.name != "same_as_mobile" and field.name != "whatsapp_number" %}
@@ -83,9 +81,9 @@
                 {% if field.help_text %}
                   <p class="mt-1 text-xs text-text-muted">{{ field.help_text }}</p>
                 {% endif %}
-                {% if field.errors %}
-                  <p class="mt-1 text-xs text-danger">{{ field.errors|striptags }}</p>
-                {% endif %}
+                <p id="{{ field.id_for_label }}-error" class="mt-1 text-xs text-danger">
+                  {% if field.errors %}{{ field.errors|striptags }}{% endif %}
+                </p>
               </div>
             {% endif %}
           {% endfor %}

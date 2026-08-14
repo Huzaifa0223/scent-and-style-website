@@ -103,9 +103,9 @@
               {{ field.label }}
             </label>
             {{ field }}
-            {% if field.errors %}
-              <p class="mt-1 text-xs text-danger">{{ field.errors|striptags }}</p>
-            {% endif %}
+            <p id="{{ field.id_for_label }}-error" class="mt-1 text-xs text-danger">
+              {% if field.errors %}{{ field.errors|striptags }}{% endif %}
+            </p>
           </div>
         {% endfor %}
         <button

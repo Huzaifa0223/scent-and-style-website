@@ -138,6 +138,23 @@ def test_checkout_post_with_an_invalid_mobile_number_re_renders_with_an_error(cl
 
 
 @pytest.mark.django_db
+def test_gate37_an_invalid_field_is_linked_to_its_error_via_aria_describedby(client) -> None:  # type: ignore[no-untyped-def]
+    """§37: "Error messages associated with their inputs via
+    aria-describedby." The input's own aria-describedby value must match
+    a real element id actually present in the response — not just that
+    the attribute exists somewhere, and not just that the error text is
+    rendered somewhere on the page."""
+    variant = _variant_with_stock(5)
+    client.post("/cart/add/", {"variant_id": variant.pk, "quantity": 1})
+
+    response = client.post(CHECKOUT_URL, _checkout_post_data(mobile_number="not-a-number"))
+
+    body = response.content.decode()
+    assert 'aria-describedby="id_mobile_number-error"' in body
+    assert 'id="id_mobile_number-error"' in body
+
+
+@pytest.mark.django_db
 def test_checkout_post_without_same_as_mobile_requires_a_whatsapp_number(client) -> None:  # type: ignore[no-untyped-def]
     variant = _variant_with_stock(5)
     client.post("/cart/add/", {"variant_id": variant.pk, "quantity": 1})

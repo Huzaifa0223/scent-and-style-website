@@ -83,6 +83,19 @@ class Category(TimeStampedModel):
     def __str__(self) -> str:
         return self.name
 
+    @property
+    def effective_meta_title(self) -> str:
+        return self.meta_title or self.name
+
+    @property
+    def effective_meta_description(self) -> str:
+        return (self.meta_description or self.description)[:160]
+
+    def get_absolute_url(self) -> str:
+        from django.urls import reverse
+
+        return reverse("storefront:category_product_list", kwargs={"category_slug": self.slug})
+
     def clean(self) -> None:
         super().clean()
         parent = self.parent
@@ -252,6 +265,18 @@ class Product(TimeStampedModel):
     def __str__(self) -> str:
         return self.name
 
+    @property
+    def effective_meta_title(self) -> str:
+        """§34's "sensible generated default" — the merchant-set
+        ``meta_title`` if there is one, else the product name. Never
+        blank, so every PDP has a real ``<title>``/``og:title`` without
+        every product needing its SEO fields hand-filled first."""
+        return self.meta_title or self.name
+
+    @property
+    def effective_meta_description(self) -> str:
+        return (self.meta_description or self.short_description or self.description)[:160]
+
     def clean(self) -> None:
         super().clean()
         subcategory = self.subcategory
@@ -261,11 +286,95 @@ class Product(TimeStampedModel):
                     {"subcategory": "Subcategory must be a child of the selected category."}
                 )
 
+    def get_absolute_url(self) -> str:
+        from django.urls import reverse
+
+        return reverse("storefront:product_detail", kwargs={"slug": self.slug})
+
+    @property
+    def default_variant(self) -> ProductVariant | None:
+        """The variant §34's Product JSON-LD prices its ``offers`` off —
+        ``is_default`` if one exists, else the first by position. Reads
+        ``self.variants.all()``, which returns the ``prefetch_related()``
+        cache when the caller prefetched ``"variants"`` first (every
+        current caller does — the PDP and the product-listing cards, both
+        proven flat by ``assertNumQueries``) and issues a fresh query
+        otherwise, the same N+1 contract every "one related object per
+        parent" property in this codebase relies on prefetching for.
+        """
+        variants = list(self.variants.all())
+        return next((v for v in variants if v.is_default), variants[0] if variants else None)
+
     def save(self, *args: Any, **kwargs: Any) -> None:
+        # Read before either branch below decides the new slug value, so
+        # both "merchant typed a new slug" and "merchant cleared it to
+        # force regeneration" are captured uniformly — see the class-level
+        # ProductSlugRedirect docstring for why this lives here rather
+        # than in the portal view: save() is the one path every caller
+        # (portal, Django admin, a future bulk script) already goes
+        # through, the same reasoning slug auto-generation itself uses.
+        previous_slug: str | None = None
+        if self.pk is not None:
+            previous_slug = (
+                type(self)
+                ._default_manager.filter(pk=self.pk)
+                .values_list("slug", flat=True)
+                .first()
+            )
+
         if not self.slug:
-            self.slug = unique_slugify(self, self.name)
+            self.slug = unique_slugify(
+                self,
+                self.name,
+                extra_taken_slugs=lambda: set(
+                    ProductSlugRedirect.objects.values_list("old_slug", flat=True)
+                ),
+            )
+
+        if previous_slug and previous_slug != self.slug:
+            ProductSlugRedirect.objects.get_or_create(
+                old_slug=previous_slug, defaults={"product": self}
+            )
+
         self.clean()
         super().save(*args, **kwargs)
+
+
+class ProductSlugRedirect(TimeStampedModel):
+    """Old slug -> current product (§34, roadmap Stage 12): a merchant-
+    initiated slug change must not break a link someone already has.
+    Written automatically by ``Product.save()`` whenever an existing
+    product's slug actually changes — never by a portal view directly,
+    so a slug change made through the sanctioned edit path can't happen
+    without a matching redirect also being created.
+
+    ``product`` is an FK, not a snapshotted "current slug" string — so a
+    product renamed twice needs no bookkeeping to keep older redirect
+    rows pointing at the *latest* slug: ``storefront.views.
+    ProductDetailView`` resolves ``old_slug`` to ``product.slug`` at
+    lookup time, which is always wherever the product's slug is *now*,
+    not whatever it was at the moment this row was written. ``old_slug``
+    is unique — one historical slug can only ever mean one product, or a
+    redirect would be ambiguous about which product to send a visitor to.
+    ``on_delete=CASCADE``: a redirect to a product that no longer exists
+    at all has nothing left to redirect to.
+    """
+
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="slug_redirects")
+    # max_length matches Product.slug exactly (220) — a mismatch here
+    # would silently truncate or reject a capture for a product whose
+    # slug is long enough to hit the difference; a dedicated test proves
+    # a max-length slug round-trips, not just that the numbers match on
+    # paper. unique=True alone already creates the index Postgres needs
+    # for the redirect lookup — no separate db_index=True, the same
+    # choice Product.slug itself makes.
+    old_slug = models.SlugField(max_length=220, unique=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.old_slug} -> {self.product.slug}"
 
 
 class ProductImage(TimeStampedModel):

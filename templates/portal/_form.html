@@ -20,9 +20,9 @@ have its own template.
       {% if field.help_text %}
         <p class="mt-1 text-xs text-text-muted">{{ field.help_text }}</p>
       {% endif %}
-      {% if field.errors %}
-        <p class="mt-1 text-xs text-danger">{{ field.errors|striptags }}</p>
-      {% endif %}
+      <p id="{{ field.id_for_label }}-error" class="mt-1 text-xs text-danger">
+        {% if field.errors %}{{ field.errors|striptags }}{% endif %}
+      </p>
     </div>
   {% endfor %}
   {% for field in form.hidden_fields %}{{ field }}{% endfor %}

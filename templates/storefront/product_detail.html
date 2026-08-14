@@ -1,16 +1,39 @@
 {% extends "storefront/base.html" %}
 {% load money %}
+{% load jsonld %}
 
-{% block title %}{{ product.name }} — {{ store_settings.name }}{% endblock %}
-{% block meta_description %}{{ product.short_description|default:product.meta_description }}{% endblock %}
+{% block title %}{{ product.effective_meta_title }} — {{ store_settings.name }}{% endblock %}
+{% block meta_description %}{{ product.effective_meta_description }}{% endblock %}
+{% block og_type %}product{% endblock %}
+{% block og_title %}{{ product.effective_meta_title }}{% endblock %}
+{% block og_description %}{{ product.effective_meta_description }}{% endblock %}
+{% block twitter_title %}{{ product.effective_meta_title }}{% endblock %}
+{% block twitter_description %}{{ product.effective_meta_description }}{% endblock %}
+{% block og_image %}
+  {% if primary_image_url %}
+    <meta property="og:image" content="{{ primary_image_url }}" />
+  {% endif %}
+{% endblock %}
+
+{% block extra_head %}
+  {% if product_jsonld %}
+    <script type="application/ld+json">{{ product_jsonld|ld_json }}</script>
+  {% endif %}
+  <script type="application/ld+json">{{ breadcrumb_jsonld|ld_json }}</script>
+{% endblock %}
 
 {% block content %}
   <div class="mx-auto max-w-5xl px-4 py-6">
-    <nav class="text-sm text-text-muted">
-      <a href="{% url 'storefront:product_list' %}" class="hover:text-accent">All Products</a>
-      {% if product.category %}
-        &rsaquo; <a href="{% url 'storefront:category_product_list' product.category.slug %}" class="hover:text-accent">{{ product.category.name }}</a>
-      {% endif %}
+    <nav aria-label="Breadcrumb" class="text-sm text-text-muted">
+      <ol class="flex flex-wrap items-center gap-1">
+        <li><a href="{% url 'storefront:product_list' %}" class="hover:text-accent">All Products</a></li>
+        {% if product.category %}
+          <li aria-hidden="true">&rsaquo;</li>
+          <li><a href="{% url 'storefront:category_product_list' product.category.slug %}" class="hover:text-accent">{{ product.category.name }}</a></li>
+        {% endif %}
+        <li aria-hidden="true">&rsaquo;</li>
+        <li aria-current="page" class="text-ink">{{ product.name }}</li>
+      </ol>
     </nav>
 
     <div class="mt-4 grid gap-8 lg:grid-cols-2">
@@ -61,7 +84,9 @@
             >
               <div class="absolute inset-0 animate-pulse bg-border-subtle" x-show="!heroLoaded"></div>
               <img
-                :src="images[activeIndex].full"
+                :src="images[activeIndex].card"
+                :srcset="images[activeIndex].card + ' 600w, ' + images[activeIndex].full + ' 1400w'"
+                sizes="(min-width: 1024px) 50vw, 100vw"
                 :alt="images[activeIndex].alt"
                 x-show="heroLoaded"
                 x-init="heroLoaded = $el.complete"
@@ -80,7 +105,7 @@
                   class="h-16 w-16 shrink-0 overflow-hidden rounded border focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                   :class="activeIndex === index ? 'border-accent' : 'border-border-subtle'"
                 >
-                  <img :src="image.thumb" alt="" class="h-full w-full object-cover" />
+                  <img :src="image.thumb" alt="" width="64" height="64" class="h-full w-full object-cover" />
                 </button>
               </template>
             </div>
@@ -119,6 +144,7 @@
           <img
             :src="images.length ? images[activeIndex].full : ''"
             :alt="images.length ? images[activeIndex].alt : ''"
+            width="1400" height="1400"
             class="max-h-full max-w-full object-contain"
           />
           <button

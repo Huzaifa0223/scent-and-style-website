@@ -7,7 +7,9 @@ from __future__ import annotations
 from typing import Any
 
 from django.db.models import Prefetch, QuerySet
+from django.http import Http404, HttpRequest, HttpResponse, HttpResponsePermanentRedirect
 from django.shortcuts import get_object_or_404
+from django.urls import reverse
 from django.views.generic import DetailView, ListView
 
 from catalog.models import (
@@ -16,8 +18,11 @@ from catalog.models import (
     Product,
     ProductImage,
     ProductQuerySet,
+    ProductSlugRedirect,
     ProductVariant,
 )
+from store.models import StoreSettings
+from storefront import seo
 from storefront.filtering import (
     apply_filters,
     attribute_facet_counts,
@@ -36,6 +41,36 @@ _SORT_OPTIONS = {
     "featured": ("-is_featured", "-created_at"),
 }
 DEFAULT_SORT = "newest"
+
+
+def _attach_json_ld(products: list[Product], *, request: HttpRequest) -> None:
+    """Sets a plain, non-model ``.json_ld`` attribute on each product for
+    ``_product_card.html`` to render — the same idiom Django's own
+    ``Prefetch(to_attr=...)`` already uses on these exact querysets
+    (``primary_image_list``). Must run *after* the queryset is fully
+    evaluated (a paginated list, not a lazy queryset) so this is one pass
+    over already-fetched Python objects, not a trigger for N+1: each
+    product's ``.default_variant`` and ``.primary_image_list`` both read
+    prefetch caches the caller's own queryset already populated, per
+    ``storefront.seo``'s own module docstring.
+
+    ``StoreSettings.load()`` is called exactly once here, outside the
+    loop, for the same reason — this project's cache is the database
+    cache backend, so calling it per card would be a real query per
+    card, not a free hit. Caught by re-running the Stage 6 listing/home
+    ``assertNumQueries`` guards right after this function was first
+    wired in, not discovered later.
+    """
+    currency = StoreSettings.load().currency
+    for product in products:
+        # primary_image_list is Prefetch(to_attr=...)'s runtime-only
+        # attribute — django-stubs can't see it statically, same as every
+        # other to_attr access in this codebase.
+        image_list: list[ProductImage] = product.primary_image_list  # type: ignore[attr-defined]
+        primary_image = image_list[0] if image_list else None
+        product.json_ld = seo.product_json_ld(  # type: ignore[attr-defined]
+            product, request=request, primary_image=primary_image, currency=currency
+        )
 
 
 class ProductListView(ListView[Product]):
@@ -104,6 +139,18 @@ class ProductListView(ListView[Product]):
         context["current_brand"] = self.filters.brand_slug
         context["current_price_min"] = self.request.GET.get("price_min", "")
         context["current_price_max"] = self.request.GET.get("price_max", "")
+
+        _attach_json_ld(context["products"], request=self.request)
+        breadcrumb_items = [("Home", reverse("storefront:home"))]
+        if context["category"] is not None:
+            breadcrumb_items.append(
+                (context["category"].name, context["category"].get_absolute_url())
+            )
+        else:
+            breadcrumb_items.append(("All Products", reverse("storefront:product_list")))
+        context["breadcrumb_jsonld"] = seo.breadcrumb_json_ld(
+            request=self.request, items=breadcrumb_items
+        )
         return context
 
 
@@ -134,21 +181,59 @@ class ProductDetailView(DetailView[Product]):
             )
         )
 
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """§34: "old slugs 301-redirect." A slug that doesn't match any
+        *current* published product falls back to ``ProductSlugRedirect``
+        before giving up — resolved to ``product.slug`` at lookup time
+        (see that model's own docstring for why an FK, not a snapshotted
+        string, is what makes a twice-renamed product still resolve in
+        one hop). A redirect to a product that isn't published anymore
+        still 404s — a stale link shouldn't reveal that a draft/archived
+        product exists.
+
+        Every genuine 404 on this view — including one a scanner probing
+        random slugs generates, not just a stale real link — now costs
+        one extra query: a single indexed lookup on
+        ``ProductSlugRedirect.old_slug`` (``unique=True`` already gives
+        it the index; no join, no scan, bounded regardless of table
+        size). Acceptable for a normal visitor's occasional typo, but
+        this view has no rate limiting of its own — if 404 traffic here
+        is ever heavy enough for that one extra query per request to
+        matter, it needs the same treatment Stage 11 gave
+        ``orders.tracking`` (also noted in specs/state.md), not a
+        micro-optimisation of this lookup itself.
+        """
+        try:
+            return super().get(request, *args, **kwargs)
+        except Http404:
+            redirect_row = (
+                ProductSlugRedirect.objects.select_related("product")
+                .filter(old_slug=self.kwargs["slug"])
+                .first()
+            )
+            if redirect_row is not None and redirect_row.product.status == Product.Status.PUBLISHED:
+                return HttpResponsePermanentRedirect(
+                    reverse("storefront:product_detail", kwargs={"slug": redirect_row.product.slug})
+                )
+            raise
+
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
-        variants = list(self.object.variants.all())
-        default_variant = next(
-            (v for v in variants if v.is_default), variants[0] if variants else None
-        )
+        product = self.object
+        variants = list(product.variants.all())
+        default_variant = product.default_variant
+        images = list(product.images.all())
+        primary_image = next((image for image in images if image.is_primary), None)
 
         context["gallery_images"] = [
             {
                 "id": image.pk,
                 "full": image.full_webp.url,
+                "card": image.card_webp.url,
                 "thumb": image.thumb_webp.url,
-                "alt": image.alt_text or self.object.name,
+                "alt": image.alt_text or product.name,
             }
-            for image in self.object.images.all()
+            for image in images
         ]
         context["default_variant"] = default_variant
         context["variant_options"] = [
@@ -166,6 +251,31 @@ class ProductDetailView(DetailView[Product]):
             }
             for variant in variants
         ]
+
+        context["primary_image_url"] = (
+            self.request.build_absolute_uri(primary_image.full_webp.url)
+            if primary_image is not None
+            else ""
+        )
+
+        # §34: Product + BreadcrumbList JSON-LD. images/variants above are
+        # already fully evaluated Python lists by this point — passing
+        # primary_image explicitly (rather than letting product_json_ld()
+        # reach into product.images.all() itself) is what keeps this
+        # N+1-safe regardless of which prefetch shape a future caller uses.
+        context["product_jsonld"] = seo.product_json_ld(
+            product,
+            request=self.request,
+            primary_image=primary_image,
+            currency=StoreSettings.load().currency,
+        )
+        breadcrumb_items = [("Home", reverse("storefront:home"))]
+        if product.category is not None:
+            breadcrumb_items.append((product.category.name, product.category.get_absolute_url()))
+        breadcrumb_items.append((product.name, product.get_absolute_url()))
+        context["breadcrumb_jsonld"] = seo.breadcrumb_json_ld(
+            request=self.request, items=breadcrumb_items
+        )
         return context
 
 
@@ -187,12 +297,19 @@ class HomeView(ListView[Product]):
 
     @staticmethod
     def _with_primary_image(queryset: ProductQuerySet) -> ProductQuerySet:
+        # Also prefetches variants (with_available_quantity(), the same
+        # annotation the listing page uses) — needed for
+        # Product.default_variant, which _attach_json_ld() below reads
+        # per card. Added alongside Stage 12's JSON-LD work specifically
+        # so both rails on this page get the same per-card structured
+        # data the listing page does, not a silently inconsistent subset.
         return queryset.with_pricing().prefetch_related(
             Prefetch(
                 "images",
                 queryset=ProductImage.objects.filter(is_primary=True),
                 to_attr="primary_image_list",
-            )
+            ),
+            Prefetch("variants", queryset=ProductVariant.objects.with_available_quantity()),
         )
 
     def get_queryset(self) -> QuerySet[Product]:
@@ -207,7 +324,10 @@ class HomeView(ListView[Product]):
             parent__isnull=True, is_published=True
         ).order_by("position", "name")
         new_arrivals: ProductQuerySet = Product.objects.filter(status=Product.Status.PUBLISHED)
-        context["new_arrivals"] = self._with_primary_image(new_arrivals).order_by("-created_at")[
-            :HOME_SECTION_SIZE
-        ]
+        context["featured_products"] = list(context["featured_products"])
+        context["new_arrivals"] = list(
+            self._with_primary_image(new_arrivals).order_by("-created_at")[:HOME_SECTION_SIZE]
+        )
+        _attach_json_ld(context["featured_products"], request=self.request)
+        _attach_json_ld(context["new_arrivals"], request=self.request)
         return context

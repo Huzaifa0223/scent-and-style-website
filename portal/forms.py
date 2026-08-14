@@ -16,33 +16,19 @@ from django import forms
 from django.db.models import Model
 
 from catalog.models import AttributeDefinition, AttributeValue, Brand, Category
-
-_FIELD_CSS = (
-    "mt-1 block min-h-11 w-full rounded border border-border-interactive bg-surface px-3 py-2 "
-    "text-sm text-ink focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent"
-)
-_CHECKBOX_CSS = (
-    "h-5 w-5 rounded border-border-interactive text-accent focus:ring-2 focus:ring-accent"
-)
+from core.forms import AriaDescribedByMixin, StyledFieldMixin
 
 _M = TypeVar("_M", bound=Model)
 
 
-class _StyledModelForm(forms.ModelForm[_M], Generic[_M]):
-    """Applies the portal's one input style to every field automatically —
-    keeps each concrete form declaration free of repeated widget attrs.
-    Generic over the model, like ``catalog.models.ProductQuerySet`` is over
-    ``Product`` — each concrete form below binds its own (``CategoryForm``
-    is ``_StyledModelForm[Category]`` via its ``Meta.model``), so
-    ``form.save()`` keeps returning the specific model, not the base one."""
-
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        super().__init__(*args, **kwargs)
-        for field in self.fields.values():
-            if isinstance(field.widget, (forms.CheckboxInput,)):
-                field.widget.attrs.setdefault("class", _CHECKBOX_CSS)
-            else:
-                field.widget.attrs.setdefault("class", _FIELD_CSS)
+class _StyledModelForm(AriaDescribedByMixin, StyledFieldMixin, forms.ModelForm[_M], Generic[_M]):
+    """Generic over the model, like ``catalog.models.ProductQuerySet`` is
+    over ``Product`` — each concrete form below binds its own
+    (``CategoryForm`` is ``_StyledModelForm[Category]`` via its
+    ``Meta.model``), so ``form.save()`` keeps returning the specific
+    model, not the base one. Styling and aria wiring both come from
+    ``core.forms`` mixins now — neither is reimplemented here.
+    """
 
 
 class CategoryForm(_StyledModelForm[Category]):
