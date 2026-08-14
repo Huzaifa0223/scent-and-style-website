@@ -58,7 +58,13 @@ module.exports = {
         // compliant border already marks the boundary — every consumer of
         // sf-surface in this codebase pairs it with an sf-line border).
         "sf-surface": { DEFAULT: "#2C2621", raised: "#3A322B" },
-        "sf-line": { DEFAULT: "#786755", strong: "#8F7C67" },
+        // `gold` is the hover-state hairline only — a decorative accent on
+        // an element whose boundary is already carried by DEFAULT/strong at
+        // 3.49:1, so its own low alpha is not a WCAG 1.4.11 concern. Derived
+        // from the real sf-brass #D8A448 = rgb(216 164 72), not from the
+        // polish brief's #C9922F, which was sampled from a lossy screenshot
+        // and would have shifted the brand gold by ~7% on every hover.
+        "sf-line": { DEFAULT: "#786755", strong: "#8F7C67", gold: "rgb(216 164 72 / 0.28)" },
         "sf-paper": "#F4EFE9",
         // The spec (docs/design.md) verifies sf-paper pairs with #1A1512
         // text at 14.6:1 but names no token for that text color — added
@@ -121,6 +127,11 @@ module.exports = {
         "sf-float": "0 10px 30px rgba(0,0,0,0.50)",
         "sf-drawer": "-30px 0 60px rgba(0,0,0,0.50)",
         "sf-overlay": "0 24px 60px rgba(0,0,0,0.60)",
+        // Product-card hover elevation. Tight negative spread so the shadow
+        // reads as lift under the card rather than a halo around it — on a
+        // #14100E page a diffuse shadow is invisible anyway, only the
+        // occlusion directly beneath the tile registers.
+        "sf-card-hover": "0 12px 32px -12px rgb(0 0 0 / 0.7)",
       },
       transitionTimingFunction: {
         "sf-editorial": "cubic-bezier(0.16, 1, 0.30, 1)",
@@ -131,6 +142,13 @@ module.exports = {
         200: "200ms",
         420: "420ms",
         700: "700ms",
+        // Named steps for the polish pass's motion inventory. Semantic
+        // names, not new values: `fast` is control feedback (colour only),
+        // `base` is card hover, `slow` is the image zoom that has to feel
+        // slower than the lift it accompanies or the two read as one jerk.
+        fast: "160ms",
+        base: "240ms",
+        slow: "360ms",
       },
       minHeight: {
         "sf-tap": "44px",
@@ -139,6 +157,33 @@ module.exports = {
       maxWidth: {
         "sf-shell": "1240px",
         "sf-form": "560px",
+      },
+      spacing: {
+        // Named page-gutter steps so header, body, and footer can never
+        // drift apart. The storefront previously ran px-4 -> sm:px-8 and
+        // then held 32px all the way to the 1240px cap, which is why a
+        // ~1100px viewport looked edge-to-edge: correct container, but no
+        // gutter growth between the phone step and the cap.
+        gutter: "1.5rem",
+        "gutter-md": "2.5rem",
+        "gutter-lg": "4rem",
+      },
+      keyframes: {
+        "rise-in": {
+          "0%": { opacity: "0", transform: "translateY(12px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
+        },
+        "fade-in": {
+          "0%": { opacity: "0" },
+          "100%": { opacity: "1" },
+        },
+      },
+      animation: {
+        // `both` fill mode matters: the grid-entrance stagger relies on the
+        // 0% state holding during the delay, otherwise every card paints at
+        // full opacity first and then jumps back to hidden to animate in.
+        "rise-in": "rise-in 480ms cubic-bezier(0.16, 1, 0.30, 1) both",
+        "fade-in": "fade-in 200ms linear both",
       },
     },
   },
