@@ -10,19 +10,22 @@ disagree, the code is right and this file is stale — fix it.
 
 ## Current position
 
-**Stage:** 12 — SEO and performance pass (not started)
-**Status:** Stage 11 is complete — see the Stage 11 log entry below for the full acceptance-gate
-and quality-gate record. Public order tracking (`/track/`) is live with a two-tier, DB-backed rate
-limiter (no cache-based counter — `cache.incr()` on the database cache backend is genuinely racy,
-confirmed by reading Django's own source), and gate 1's byte-identical-response requirement is true
-by construction (one collapsed failure branch, not two templates). Proving that gate live surfaced
-and fixed a real, ten-stage-old, project-wide bug: `templates/base.html` had a stray live
-`{% csrf_token %}` invocation hiding inside a JS comment, silently embedding a random token on
-every page render since Stage 1 (harmless in practice, but it made any byte-for-byte page
-comparison impossible until fixed). The `WHATSAPP_MESSAGE_MAX_CHARS` real-device measurement and
-the confirmation page's visual no-JS check (both Stage 9 human tasks) remain outstanding — see
-*Human tasks* below.
-**Last updated:** 2026-08-13
+**Stage:** 13 — Hardening and go-live readiness (not started)
+**Status:** Stage 12 is complete — see the Stage 12 log entry below for the full acceptance-gate
+and quality-gate record. SEO (per-object meta defaults, OG/Twitter tags, canonical URLs, Product +
+BreadcrumbList JSON-LD, sitemap.xml, robots.txt, old-slug 301 redirects via a new
+`ProductSlugRedirect` model), image `srcset`/dimensions, and an accessibility pass
+(`aria-describedby`, `StyledFieldMixin`/`AriaDescribedByMixin`) are all live. Re-running the Stage 6
+`assertNumQueries` guards after wiring in per-card JSON-LD caught a real N+1 (`StoreSettings.load()`
+called once per card — this project's cache is the database cache backend, so that's a real query,
+not a free hit) before this stage was reported done; fixed by passing `currency` through explicitly
+instead of loading it per call. Two `assertNumQueries` guards named by roadmap gate 4 since Stage 6/
+Stage 10 but never actually written (the PDP, the portal order list) were added. §36's static-asset
+HTTP caching half is deferred to Stage 13's own `Caddyfile` (nothing exists yet for it to configure);
+the media half (`Cache-Control` on R2 uploads) is done. `WHATSAPP_MESSAGE_MAX_CHARS`'s real-device
+measurement, the confirmation page's visual no-JS check, and now the JSON-LD external-validator
+check all remain outstanding, real-infrastructure-gated human tasks — see *Human tasks* below.
+**Last updated:** 2026-08-14
 **CI:** workflow committed (`.github/workflows/ci.yml`), never executed — no push has been made
 to any remote (the human pushes, per CLAUDE.md). Everything it runs has been run locally instead;
 see the Stage 1 log entry for that output.
@@ -57,8 +60,13 @@ wrappers — so `orders/` never touches `StockReservation` directly), `OrderStat
 tracking (`/track/`, `orders/tracking.py`) — a two-tier, DB-backed rate limiter
 (`OrderTrackingAttempt`, no cache dependency) checked before every lookup, and a single collapsed
 not-found/phone-mismatch response path that makes the byte-identical-response requirement true by
-construction rather than by convention.
-Stages 1-11 are fully built; Stage 12 (SEO and performance pass) is next and not started.
+construction rather than by convention. Stage 12 adds SEO (`storefront/seo.py`'s JSON-LD builders,
+`ProductSlugRedirect` for old-slug 301s, `sitemap.xml`/`robots.txt`, canonical/OG/Twitter tags via a
+new `core.context_processors.canonical_url`), a repo-wide `<img>` width/height gate
+(`tests/test_image_dimensions.py`), and `core/forms.py`'s `StyledFieldMixin`/`AriaDescribedByMixin`
+(applied to every portal `ModelForm` plus `CheckoutForm`/`OrderTrackingForm`, retroactively fixing a
+real gap — those two forms had rendered completely unstyled, sub-44px inputs since Stage 8/11).
+Stages 1-12 are fully built; Stage 13 (hardening and go-live readiness) is next and not started.
 
 ---
 
@@ -1915,6 +1923,192 @@ pass (created that session, never deleted — `create_order()` clears cart *item
 row itself) was discovered and removed as part of this stage's fixture setup; recorded here since
 it means Stage 10's "fixtures cleaned up" claim was incomplete, not because Stage 11 owns that gap.
 
+### Stage 12 — SEO and performance pass
+Completed: 2026-08-14
+Commits: (feature commit follows this entry — see this stage's own note below)
+Acceptance gates: all passed
+  1. JSON-LD validates against a schema validator for a product with and without a price range —
+     `storefront/tests/test_seo.py::test_gate1_product_json_ld_validates_for_a_product_without_a_price_range`
+     and `test_gate1_product_json_ld_validates_for_a_product_with_a_price_range`, both checked
+     against schema.org's own documented `Product`/`Offer` requirements (every required property
+     present and correctly typed) plus a real `json.loads()` round-trip through this project's own
+     `ld_json` escaping filter. No offline schema.org/JSON-LD validator library is in this project's
+     approved dependency list, and a real external validator (Google's Rich Results Test,
+     schema.org's own validator) needs a publicly reachable URL this dev environment doesn't have —
+     the same class of check §35 already treats as a live, human task ("verify against Facebook's
+     sharing debugger"). Recorded under *Human tasks* below, not silently skipped.
+  2. `sitemap.xml` includes every published product and category, and excludes drafts —
+     `storefront/tests/test_sitemap_and_robots.py`, four dedicated gate-2 tests (published/draft
+     products, published/unpublished categories) plus one confirming the static pages (`/products/`,
+     `/track/`) are present.
+  3. Renaming a product 301-redirects the old slug — `storefront/tests/test_product_detail_view.py::
+     test_gate3_renaming_a_products_slug_301_redirects_the_old_one` and three companions (the
+     redirect target renders normally; an old slug for a since-unpublished product 404s instead of
+     leaking that the product still exists; a slug that was never real 404s). Model-level behaviour
+     (redirect capture, idempotency, the twice-renamed-product FK-resolution case, the auto-slugify
+     collision guard) is `catalog/tests/test_product_slug_redirect.py`, 8 tests. See Notes for the
+     design this required — a new model, per the human's explicit instruction to design it before
+     building the redirect.
+  4. `assertNumQueries` bounded on home, listing, PDP, cart, and order list — re-run, not just
+     present, per the human's explicit instruction. Re-running the Stage 6 home/listing guards
+     immediately after wiring in this stage's own JSON-LD work caught a real regression (5→24 and
+     16→35 queries as fixture count grew) before it was ever reported done — see Notes. Cart's two
+     existing guards (`cart/tests/test_services.py`, `cart/tests/test_views.py`) were re-run
+     unchanged (nothing in this stage touched cart templates) and stayed flat. Two guards that had
+     never existed at all were added: `storefront/tests/test_product_detail_view.py::
+     test_gate4_query_count_stays_flat_as_the_products_own_variant_and_image_count_grows` (Stage 6's
+     own gate 5 named the PDP but no test ever measured it) and `portal/tests/test_order_views.py::
+     test_gate4_order_list_query_count_stays_flat_as_fixture_count_grows_from_5_to_50` (Stage 10
+     shipped the portal order list with no flat-query guard at all).
+  5. No image renders without width and height attributes — `tests/test_image_dimensions.py`,
+     scanning every `<img>` tag in `templates/` (portal and storefront alike) for missing
+     `width`/`height`. A permanent, repo-wide grep test, not a one-time manual sweep — matches this
+     project's own established pattern (Stage 8's snapshot-leakage grep, Stage 10's internal-ID
+     grep). Verified to have teeth: temporarily stripped `width`/`height` from a real template,
+     confirmed the test failed naming that exact file and line, restored it. Found and fixed three
+     real, pre-existing violations before this stage added any new images of its own: the search
+     type-ahead dropdown's thumbnail, the portal product list's thumbnail, and the portal product
+     edit page's image-management thumbnail.
+  6. A keyboard-only pass reaches every interactive element on the PDP and checkout — live, in a
+     real browser, not asserted by any test (the same class of check as the lightbox focus trap,
+     per the human's explicit instruction). See Notes for exactly what was walked and what a
+     browser-automation quirk this session hit along the way.
+  7. Quality gate green — see numbers below.
+
+Quality gate, final numbers: `ruff check` — all checks passed. `ruff format --check` — all files
+formatted (212 files). `mypy .` (whole tree, unscoped) — no issues in 203 source files.
+`makemigrations --check --dry-run` — no changes detected. `pytest --create-db` — 554 passed, run
+alone (see Notes — two earlier coverage runs raced each other's `--create-db` against the same
+physical test database and produced spurious failures; re-run cleanly, sequentially, confirmed
+554/554 with zero failures). Coverage: `core` 100% (floor 80%), `catalog` 97% (floor 85%), `portal`
+97% (floor 80%), `storefront` 99% (floor 80%), `orders` 99% (floor 90%) — every floor already
+existed in `ci.yml` from prior stages; no new app, no new floor needed. `manage.py check --deploy`
+clean under `config.settings.prod` (DEBUG=False, ALLOWED_HOSTS set, a real random `SECRET_KEY`,
+placeholder R2 credentials). `manage.py check` clean under `config.settings.dev`.
+Coverage: core 100%, catalog 97%, portal 97%, storefront 99%, orders 99% (floors 80/85/80/80/90%)
+Notes:
+
+**Both of the human's two explicit design/process instructions for this stage caught real problems
+before they shipped — recorded here in the order they were given, not the order the underlying
+bugs were found.**
+
+1. *"Old-slug 301 redirects need somewhere to store old slugs... design it before building the
+   redirect."* `catalog.models.ProductSlugRedirect` — an FK to the live `Product`, not a
+   snapshotted "current slug" string, specifically so a product renamed twice still resolves its
+   *first* old slug in one hop: the redirect lookup reads `product.slug` live at request time,
+   which is always wherever the slug is *now*, regardless of how many renames happened since this
+   row was written. `Product.save()` captures the old value automatically whenever an *existing*
+   product's slug actually changes (compared against a fresh DB read at the top of `save()`, not
+   an in-memory "original value" tracked via `from_db`/`__init__` overrides — simpler, one extra
+   `SELECT` per update-save, and this project's own stated preference for simple/blunt over clever)
+   — so a slug change made through the sanctioned portal edit path can't happen without a matching
+   redirect. `unique_slugify()` gained an `extra_taken_slugs` callable parameter so a brand-new
+   product's *auto-generated* slug also avoids colliding with an existing redirect target — a real,
+   if narrow, correctness gap this design closes: without it, a second product's auto-slug could
+   silently claim a slug that's still promised to redirect an old link to a *different* product,
+   and the direct-lookup-first resolution order would then send that old link to the wrong page.
+   Two follow-up corrections from the human, both applied before this entry: `old_slug`'s
+   `max_length=220` was confirmed to actually match `Product.slug`'s own `max_length` (not just
+   asserted by eye) with a dedicated round-trip test using a 220-character slug, and a redundant
+   `db_index=True` was removed (`unique=True` alone already creates the index — the same choice
+   `Product.slug` itself makes, now matched instead of quietly duplicating it). The redirect lookup
+   adds one extra, bounded, indexed query to *every* 404 on the PDP now, including ones a scanner
+   generates — documented directly in `ProductDetailView.get()`'s own docstring as a known,
+   accepted cost with no rate limiting of its own; if 404 traffic here is ever heavy enough to
+   matter, it needs Stage 11's `orders.tracking` treatment, not a micro-optimisation of this one
+   lookup. `Category` does not get the same redirect treatment — gate 3's own wording names
+   "a product" specifically; recorded as an open question below, not silently extended or
+   silently skipped. `ProductForm` (portal) now exposes `slug` as an opt-in field (blank = keep
+   auto-generating from the name, unchanged from Stage 2) — without this, there was no way for a
+   merchant to ever trigger the scenario gate 3 tests at all.
+
+2. *"Re-run every existing `assertNumQueries` guard as you change templates... the guards only work
+   if they're re-run against the changed templates, not just present."* Re-running Stage 6's
+   home/listing guards immediately after wiring per-card `Product` JSON-LD into `_product_card.html`
+   caught a real regression before this stage was ever reported done: home went 18→24 queries and
+   listing went 16→35 as the fixture count grew from 5 to 50, both previously flat. The mechanism
+   was not the one named in the warning (`product.default_variant` was already N+1-safe — every
+   caller already prefetches `variants` via `with_available_quantity()`) but a different one with
+   the identical shape: `storefront.seo.product_json_ld()`'s first draft called
+   `StoreSettings.load()` internally to read `priceCurrency`, once per product. This project's
+   cache is the *database* cache backend (no Redis, per CLAUDE.md) — `cache.get()` is a real SQL
+   query against `django_cache_table`, not a free in-process hit, so calling `.load()` inside a
+   per-card loop reintroduced exactly the "N+1 hiding behind something that looks cached" bug the
+   warning predicted, just one call deeper than the obvious suspect. Fixed by making `currency` an
+   explicit parameter `product_json_ld()` takes rather than loads, with the caller
+   (`storefront.views._attach_json_ld()`, and `ProductDetailView.get_context_data()` for the PDP)
+   loading `StoreSettings` exactly once per request and passing the value through. Re-ran the
+   guards again after the fix: both flat. The home page's own `_with_primary_image()` queryset also
+   gained a `variants` prefetch it didn't have before (needed for `default_variant` on the featured
+   and new-arrivals rails, which didn't carry per-card JSON-LD before this stage) — otherwise the
+   two rails on the home page would have gotten Product JSON-LD on the listing page but not on
+   themselves, an inconsistent, silently-incomplete rollout of the same feature. Two guards that
+   had never existed at all — despite roadmap gate 4 naming exactly this list of five pages, and
+   Stage 6/Stage 10 each shipping one of them with no such test — were added this stage: the PDP's
+   own flat-query guard (scaled by *the product's own* variant/image count, since a detail page has
+   no catalog-size fixture to grow) and the portal order list's. Both pass cleanly on the code as it
+   already stood — the two-stages-old gap was in test coverage, not in a real N+1.
+
+**A real, previously-shipped accessibility gap, found and fixed while wiring §37's
+`aria-describedby` requirement, not scope creep from it.** `orders.forms.CheckoutForm` and
+`OrderTrackingForm` (Stage 8, Stage 11) were plain `forms.Form` subclasses with no widget styling
+at all — every field rendered as a bare, unstyled browser default input, well under the 44px
+touch-target floor §37 requires, and with no visible focus ring beyond whatever the browser
+supplies by default. `core/forms.py` now holds two mixins every form in the project can use:
+`StyledFieldMixin` (the `min-h-11`/`focus-visible:ring-2` styling `portal.forms._StyledModelForm`
+already had, extracted rather than duplicated) and `AriaDescribedByMixin` (new — sets
+`aria-describedby="<field id>-error"` unconditionally on every field, paired with a template change
+so the error element it points to is *always* rendered, empty when there's no error, rather than
+conditionally — avoiding a dangling `aria-describedby` reference on any render where a
+previously-erroring field no longer does). Both mixins now apply to `CheckoutForm`,
+`OrderTrackingForm`, and — via `_StyledModelForm` — every portal `ModelForm` (category, brand,
+attribute, product, variant) uniformly. Portal's smaller, hand-coded inline forms (the order-editing
+quick actions in `portal/order_forms.py` — quantity/price/add-line) were *not* given this treatment;
+recorded as an open question below, not silently claimed done, since accessibility compliance isn't
+gate-tested for the portal the way it is for the PDP/checkout specifically.
+
+**Gate 6's live keyboard pass — what was actually walked, and a real browser-automation quirk this
+session worked through rather than around.** PDP: skip-link → header nav (store name, search, cart)
+→ breadcrumbs → gallery hero (opened via `Enter`, focus moved to the dialog's Close button, `Tab`
+cycled Close→Previous→Next→wraps to Close confirming the trap, `Escape` closed it and restored
+focus to the trigger button exactly as Stage 6's own focus-trap design intended) → both thumbnails
+→ variant `<select>` (changed via arrow key, price updated live from Rs. 750 to Rs. 900 confirming
+gate 3's client-side reactivity works via keyboard too, not just mouse) → quantity input → Add to
+Cart (activated via `Enter`, a real HTMX round-trip updated the cart badge from 0 to 1). Checkout:
+skip-link → header nav → Name → Mobile number → "Same as mobile" checkbox (toggled via `Space`,
+correctly revealed the conditional WhatsApp field through Alpine's own reactivity) → WhatsApp
+number → Email → Address → City → Postal code → Instructions → Notes → Place Order — every field
+reached in the correct, logical order. Every state check here was read directly from
+`document.activeElement` via the browser's own JavaScript console, not inferred from a screenshot —
+this session's screenshot tool has an already-documented rendering-lag artifact (Stage 10/11 notes)
+that also turned out to affect real-time focus-ring visibility, not just post-submit page content.
+**A second, new browser-automation quirk surfaced and was worked around, not silently hit and
+ignored:** a synthetic `Tab` keypress sent to a page immediately after a click on empty page
+background (no focusable element under the cursor) intermittently failed to advance focus at all —
+reproduced on two separate tabs, ruling out one-off flakiness — while a `Tab` sent after clicking
+*directly into* a real focusable element (and, for inputs, typing into it) worked reliably every
+time. Switched to that technique partway through the checkout walkthrough and completed it
+cleanly. Recorded here as a technique note for whichever future stage next needs a live keyboard
+pass, not as a defect in this project's own pages — the DOM tab-order itself (queried directly,
+independent of whether synthetic keypresses were landing) was correct throughout.
+
+**§36's "aggressive HTTP caching on static assets and images" is only half delivered, and the other
+half is honestly out of reach this stage, not silently skipped.** `core.storage.R2MediaStorage` now
+sets `Cache-Control: max-age=31536000, immutable` on every object at upload time — safe for a full
+year because `file_overwrite=False` plus `ProductImage.save()`'s own change-detection mean a given
+media URL's bytes never change after that URL first exists. The *static* half (CSS/JS/fonts) is
+Stage 13's `Caddyfile` to configure — no Caddyfile exists yet, and Django itself doesn't serve
+static assets in production (Caddy does), so there's nothing this stage can attach a `Cache-Control`
+header to for that half. Recorded as a scope boundary, not a gap in what got built.
+
+**Live-verified the SEO surface end to end against the running dev server**, not just pytest:
+a real product's PDP rendered the breadcrumb `<nav>`, the `Product` and `BreadcrumbList` JSON-LD
+`<script>` tags, and canonical/OG/Twitter meta tags with real content (checked via the page's own
+`document.activeElement`/DOM queries during the same session as the keyboard pass, not a separate
+pass). `/sitemap.xml` and `/robots.txt` were not separately live-checked beyond the pytest suite —
+both are simple, fully server-rendered XML/text responses with no client-side behaviour to verify,
+unlike the PDP/checkout's interactive elements.
+
 ---
 
 ## Deviations from spec
@@ -1957,6 +2151,14 @@ being recorded. The second is far more likely.
   purpose-scoped model rather than waiting on the P1 audit app, doubling as the rate limiter's own
   source of truth rather than a separate cache-based counter (see the Stage 11 Notes for why a
   cache counter was rejected specifically). Reversible.
+- [Stage 12] `ProductSlugRedirect` is a model neither spec file names — gate 3 says only "changing
+  a product's slug creates a 301 redirect from the old slug," which needs somewhere to persist the
+  old slug to be true after the request that changed it ends. Small, purpose-scoped model (product
+  FK CASCADE, unique `old_slug`), same class of addition as `OrderEditEvent`/`OrderTrackingAttempt`
+  above rather than a field bolted onto `Product` itself (which has no history mechanism today).
+  Reversible; the FK-based one-hop design (redirect always resolves to `product.slug` live, never a
+  frozen string) means no migration would be needed even if a future stage wants to generalize this
+  into a shared redirect model for other slugged types.
 
 ---
 
@@ -2136,6 +2338,20 @@ Questions that did not block progress but need an answer eventually.
   amount of nice copy for not having to auto-classify which merchant-entered notes are
   customer-safe. Revisit if a curated, explicitly-customer-facing note field is ever wanted
   alongside the existing merchant-only one — a real feature, not a bug fix.
+- [Stage 12] `ProductSlugRedirect` covers `Product` only, not `Category`, matching gate 3's literal
+  wording ("changing a product's slug"). `Category.save()` regenerates its slug on a name change
+  the same way `Product.save()` did before this stage, with no redirect captured — a category
+  rename today 404s its old URL with no 301. Assumed in the meantime: acceptable since no gate
+  names `Category`; revisit if category URLs turn out to get external links/bookmarks the way
+  product URLs do.
+- [Stage 12] `AriaDescribedByMixin`/`StyledFieldMixin` (this stage's `core/forms.py`) were applied
+  to `CheckoutForm`, `OrderTrackingForm`, and `_StyledModelForm` (portal's main product/order/
+  category forms) but not to portal's ad-hoc quick-action forms (`portal/order_forms.py`'s
+  quantity/price/add-line forms), which remain plain `forms.Form` with no styling or
+  `aria-describedby` wiring. Assumed in the meantime: acceptable since those forms render inline
+  within an already-authenticated merchant's own portal, not the accessibility gate's actual scope
+  (PDP/checkout, both customer-facing). Revisit if a future portal accessibility pass widens scope
+  to merchant-side forms.
 
 ---
 
@@ -2161,6 +2377,12 @@ decisions. Not blockers unless a stage's acceptance gate depends on one.
 - [ ] Merchant's real WhatsApp Business number for store settings
 - [ ] Decide whether existing product data needs migrating — affects whether CSV import (stage 16)
       moves earlier
+- [ ] Validate a live product page's JSON-LD against Google's Rich Results Test and schema.org's
+      own validator (stage 12) — needs a publicly reachable URL this dev environment doesn't have.
+      What's already verified without this: a thorough structural check against schema.org's own
+      documented Product/Offer/BreadcrumbList requirements, for a product with and without a price
+      range, including a real JSON round-trip through this project's escaping filter (see the
+      Stage 12 log entry). What's not verified: acceptance by the actual external validators.
 ```
 
 ---
