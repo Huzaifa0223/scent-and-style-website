@@ -28,8 +28,14 @@ media/
 staticfiles/
 db.sqlite3
 
-# Tooling downloads (fetched by setup_dev, not checked in)
-tools/
+# Tooling downloads (fetched by setup_dev, not checked in). The directory is
+# ignored because the Tailwind standalone binary lands here; first-party
+# scripts that happen to live alongside it are source and are tracked.
+# "tools/" would exclude the directory itself, and git cannot re-include a
+# file whose parent directory is excluded - so the contents are ignored
+# instead, which leaves the negation below able to take effect.
+tools/*
+!tools/*.py
 
 
 # Tailwind build output — generated from static/css/input.css by setup_dev /
@@ -50,3 +56,7 @@ Thumbs.db
 *.sql
 *.dump
 backups/
+
+# Static storefront snapshot for design review (tools/snapshot_storefront.py).
+# Generated artefact, never a source of truth.
+/build/

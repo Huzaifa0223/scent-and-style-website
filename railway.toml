@@ -1,0 +1,25 @@
+# Railway service configuration.
+#
+# Migrations run as a release-phase command, not inside the start command:
+# gunicorn starts 3 workers, and running migrate from the start command
+# would race them all against the same schema. preDeployCommand runs once,
+# to completion, before any new instance takes traffic.
+#
+# The two cron jobs from docs/deploy.md are NOT defined here. Railway
+# schedules run as separate services sharing this repo, each with its own
+# cron expression and start command, created in the dashboard — see
+# docs/deploy-paas.md for the exact commands. They are listed there rather
+# than silently omitted, because release_expired_reservations is
+# load-bearing: without it, reserved stock is never released and the store
+# stops being able to sell.
+
+[build]
+builder = "nixpacks"
+
+[deploy]
+preDeployCommand = ["python manage.py migrate --noinput"]
+startCommand = ". /opt/venv/bin/activate && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 3 --timeout 60 --access-logfile - --error-logfile -"
+healthcheckPath = "/healthz/"
+healthcheckTimeout = 30
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3

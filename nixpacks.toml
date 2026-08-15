@@ -1,0 +1,37 @@
+# Railway build definition (Nixpacks). Not Docker: Railway resolves these
+# package names itself and produces the runtime image. CLAUDE.md forbids
+# "Docker in production" in the sense of hand-rolled containers as the
+# deployment model — a managed platform's own build step is the same
+# category as a buildpack, and there is no Dockerfile in this repo.
+#
+# postgresql is listed for exactly one reason: core/backup.py shells out to
+# pg_dump (BACKUP_PG_DUMP_PATH, defaulting to PATH). Without the client
+# binaries on the image, `manage.py backup` fails at runtime rather than at
+# deploy time — a backup job that looks scheduled and silently never
+# produces a dump is worse than one that was never configured.
+
+[phases.setup]
+nixPkgs = ["python311", "postgresql", "gcc"]
+
+[phases.install]
+cmds = [
+  "python -m venv --copies /opt/venv",
+  ". /opt/venv/bin/activate && pip install --upgrade pip",
+  ". /opt/venv/bin/activate && pip install -r requirements/prod.txt",
+]
+
+# Tailwind is fetched at build time rather than committed: static/css/app.css
+# is gitignored (it is a build artefact), so the bundle has to be produced
+# here or the deployed site ships no stylesheet at all. The version is pinned
+# to match setup_dev.sh / setup_dev.ps1 / CI.
+[phases.build]
+cmds = [
+  "mkdir -p tools",
+  "curl -sL -o tools/tailwindcss https://github.com/tailwindlabs/tailwindcss/releases/download/v3.4.19/tailwindcss-linux-x64",
+  "chmod +x tools/tailwindcss",
+  "./tools/tailwindcss -c tailwind.config.js -i static/css/input.css -o static/css/app.css --minify",
+  ". /opt/venv/bin/activate && python manage.py collectstatic --noinput",
+]
+
+[start]
+cmd = ". /opt/venv/bin/activate && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 3 --timeout 60 --access-logfile - --error-logfile -"

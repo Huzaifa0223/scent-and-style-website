@@ -69,3 +69,25 @@ AWS_QUERYSTRING_AUTH = False
 # real off-box protection; left unset, the mirror lives under a prefix in
 # the same bucket instead (see core/backup.py's module docstring).
 AWS_BACKUP_BUCKET_NAME = env.str("AWS_BACKUP_BUCKET_NAME", default="")
+
+# Static asset delivery. Off by default, which is the documented VPS
+# deployment: Caddy is the front door and serves STATIC_ROOT off disk,
+# which is faster than routing asset requests through Django and is what
+# docs/deploy.md's Caddyfile is written for.
+#
+# Managed platforms (Railway, Render — see docs/deploy-paas.md) have no
+# such front door: the app process is the only thing listening, and Django
+# does not serve static itself once DEBUG is False, so CSS, JS and the
+# self-hosted fonts would all 404. Setting SERVE_STATIC_FROM_R2=True
+# pushes collectstatic output to the R2 bucket already configured above
+# and serves assets from there.
+#
+# WhiteNoise is the more common answer to this and would let the app serve
+# its own static files. It is deliberately not used: it is a new runtime
+# dependency and CLAUDE.md's approved list is explicit, whereas
+# django-storages is already here for media. If WhiteNoise is preferred
+# later that is a dependency decision to take on its own merits, not a
+# side effect of choosing a host.
+SERVE_STATIC_FROM_R2 = env.bool("SERVE_STATIC_FROM_R2", default=False)
+if SERVE_STATIC_FROM_R2:
+    STORAGES["staticfiles"] = {"BACKEND": "core.storage.R2StaticStorage"}

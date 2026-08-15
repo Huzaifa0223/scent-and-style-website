@@ -32,3 +32,31 @@ class R2MediaStorage(S3Boto3Storage):  # type: ignore[misc]  # django-storages s
     file_overwrite = False
     default_acl = None
     object_parameters: ClassVar[dict[str, str]] = {"CacheControl": "max-age=31536000, immutable"}
+
+
+class R2StaticStorage(S3Boto3Storage):  # type: ignore[misc]  # django-storages ships no stubs
+    """Cloudflare R2 storage for collected static assets (CSS/JS/fonts).
+
+    Only used on a platform where nothing else can serve them. The
+    documented VPS deployment puts Caddy in front and Caddy serves
+    ``STATIC_ROOT`` straight off disk, which is faster and simpler — this
+    exists for managed platforms (Railway, Render) where there is no such
+    front door and the app process is the only thing listening.
+
+    Selected by ``SERVE_STATIC_FROM_R2`` in ``config/settings/prod.py``,
+    never by an ``if DEBUG`` branch, matching :class:`R2MediaStorage`.
+
+    ``file_overwrite`` is True here, unlike the media backend: collectstatic
+    re-uploads the same key on every deploy and must replace it. That makes
+    the URLs mutable, so the immutable cache directive the media backend
+    uses would be wrong — a year-long cache on ``app.css`` would strand
+    visitors on a stale stylesheet after a redeploy. ``max-age=3600`` with
+    ``must-revalidate`` keeps assets cached without outliving a release.
+    A hashed-filename storage would allow the long cache back; that is a
+    worthwhile follow-up, not a launch blocker.
+    """
+
+    location = "static"
+    file_overwrite = True
+    default_acl = None
+    object_parameters: ClassVar[dict[str, str]] = {"CacheControl": "max-age=3600, must-revalidate"}

@@ -1,0 +1,153 @@
+# Render Blueprint — the alternative to railway.toml/nixpacks.toml. Use one
+# platform or the other, not both; they are provided together so the choice
+# stays open, and both keep the architecture docs/deploy.md describes.
+#
+# Render is the better shape for this app in one specific way: scheduled
+# work is a first-class service type with its own schedule field, so the two
+# cron jobs are declared here in version control rather than configured by
+# hand in a dashboard. That matters because release_expired_reservations is
+# load-bearing — if it silently stops running, reserved stock is never
+# released and the store quietly stops being able to sell.
+#
+# It is worse in one specific way: the native Python runtime does not
+# guarantee pg_dump on PATH, and CLAUDE.md forbids a Dockerfile, so the
+# backup job's database half may not run. See the note on that job below.
+
+databases:
+  - name: ecommerce-db
+    databaseName: ecommerce
+    user: ecommerce_app
+    plan: basic-256mb
+    # CLAUDE.md pins PostgreSQL 18.4. Set the highest major Render offers and
+    # record the difference in specs/state.md rather than assuming parity —
+    # this project's search backend needs pg_trgm, which is available on every
+    # supported major, but the version itself is a locked decision.
+    postgresMajorVersion: "17"
+
+services:
+  - type: web
+    name: ecommerce-web
+    runtime: python
+    plan: starter
+    region: singapore # closest Render region to Pakistan; Karachi has none
+    branch: main
+    buildCommand: "./render-build.sh"
+    # Migrations run before traffic, once, not from the start command —
+    # gunicorn forks 3 workers and running migrate from startCommand would
+    # race all three against the same schema.
+    preDeployCommand: "python manage.py migrate --noinput"
+    startCommand: "gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 3 --timeout 60 --access-logfile - --error-logfile -"
+    healthCheckPath: /healthz/
+    envVars:
+      - key: DJANGO_SETTINGS_MODULE
+        value: config.settings.prod
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: DEBUG
+        value: "False"
+      - key: SERVE_STATIC_FROM_R2
+        value: "True"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ALLOWED_HOSTS
+        sync: false # set to the real hostname once Render assigns it
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ecommerce-db
+          property: connectionString
+      # R2 credentials. sync:false keeps them out of this file and out of
+      # git — set each once in the Render dashboard.
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_STORAGE_BUCKET_NAME
+        sync: false
+      - key: AWS_S3_ENDPOINT_URL
+        sync: false
+      - key: AWS_S3_REGION_NAME
+        value: auto
+
+  # Every 10 minutes, matching docs/deploy.md. This is the job that keeps
+  # stock sellable: reservations are taken at order creation with a TTL and
+  # only this releases them.
+  - type: cron
+    name: release-expired-reservations
+    runtime: python
+    plan: starter
+    region: singapore
+    branch: main
+    schedule: "*/10 * * * *"
+    buildCommand: "pip install -r requirements/prod.txt"
+    command: "python manage.py release_expired_reservations"
+    envVars:
+      - key: DJANGO_SETTINGS_MODULE
+        value: config.settings.prod
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: DEBUG
+        value: "False"
+      - key: SECRET_KEY
+        sync: false
+      - key: ALLOWED_HOSTS
+        sync: false
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ecommerce-db
+          property: connectionString
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_STORAGE_BUCKET_NAME
+        sync: false
+      - key: AWS_S3_ENDPOINT_URL
+        sync: false
+
+  # Daily at 03:00, matching docs/deploy.md.
+  #
+  # VERIFY BEFORE RELYING ON THIS: core/backup.py shells out to pg_dump.
+  # Render's native Python runtime does not document pg_dump on PATH, and a
+  # Dockerfile is not an option here (CLAUDE.md). Run this job once manually
+  # after the first deploy and confirm it produces a dump in R2. If pg_dump
+  # is absent, either point BACKUP_PG_DUMP_PATH at a binary the build step
+  # fetches, or rely on Render's own managed database backups for the
+  # database half and keep this job for the media mirror. Do not leave it
+  # scheduled and unverified — a backup nobody has restored from is not a
+  # backup, and one that never ran is worse.
+  - type: cron
+    name: nightly-backup
+    runtime: python
+    plan: starter
+    region: singapore
+    branch: main
+    schedule: "0 3 * * *"
+    buildCommand: "pip install -r requirements/prod.txt"
+    command: "python manage.py backup"
+    envVars:
+      - key: DJANGO_SETTINGS_MODULE
+        value: config.settings.prod
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: DEBUG
+        value: "False"
+      - key: SECRET_KEY
+        sync: false
+      - key: ALLOWED_HOSTS
+        sync: false
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ecommerce-db
+          property: connectionString
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_STORAGE_BUCKET_NAME
+        sync: false
+      - key: AWS_S3_ENDPOINT_URL
+        sync: false
+      - key: AWS_BACKUP_BUCKET_NAME
+        sync: false
+      - key: BACKUP_PG_DUMP_PATH
+        sync: false # set only if pg_dump is not already on PATH

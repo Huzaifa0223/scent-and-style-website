@@ -46,6 +46,36 @@ never matches. These need a human at a real browser:
 - [Polish pass] **Card hover (M1–M3)** and **reduced-motion emulation.** Hover needs a pointer the
   automation tool cannot synthesise; reduced motion needs the DevTools rendering override.
 
+## Deployment (managed platform)
+
+Incurred by adding `docs/deploy-paas.md` alongside the existing VPS runbook. Each is a
+deviation from a decision `CLAUDE.md` or `docs/deploy.md` records, kept visible rather
+than absorbed.
+
+- [PaaS config] **PostgreSQL will not be 18.4.** `CLAUDE.md`'s stack table pins it;
+  neither Railway nor Render is likely to offer that major yet (`render.yaml` requests
+  17). Record the version actually deployed in `specs/state.md`. This is a version
+  deviation, not a database substitution — the engine is unchanged and `pg_trgm` is
+  available on every supported major.
+- [PaaS config] **The least-privilege `ecommerce_app` role does not transfer.**
+  `docs/deploy.md` §3 creates a restricted role separate from the owner; managed
+  platforms hand you a single owner role. Revisit if the platform later supports
+  additional roles.
+- [PaaS config] **`pg_dump` availability on Render is unverified.** `core/backup.py`
+  shells out to it and Render's native Python runtime does not document it; a Dockerfile
+  is not an option (`CLAUDE.md` forbids Docker in production). Railway's `nixpacks.toml`
+  installs `postgresql` explicitly and has no such gap. Must be proven before the
+  nightly job is trusted.
+- [PaaS config] **Static assets are not content-hashed.** `core.storage.R2StaticStorage`
+  therefore caches for an hour with revalidation, rather than the year-long immutable
+  cache `R2MediaStorage` uses, because collectstatic overwrites the same keys on every
+  deploy. A hashed-filename storage backend would allow the long cache back.
+- [PaaS config] **The pinned Tailwind version now appears in four places** —
+  `setup_dev.sh`, `setup_dev.ps1`, `.github/workflows/ci.yml`, and `render-build.sh`
+  (plus `nixpacks.toml`'s build phase). `core/tests/test_css_build.py` catches a broken
+  build but not a version drifting between these. Worth consolidating into one file all
+  five read.
+
 ## Test isolation
 
 - [Polish pass] **`StoreSettings` tests fail on a reused test database.** Four tests in
