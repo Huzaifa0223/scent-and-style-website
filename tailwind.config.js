@@ -63,12 +63,12 @@ module.exports = {
         "ajmal-sand": { DEFAULT: "#F0E6DB", secondary: "#F3EDE7" },
         "ajmal-blush": { grad_a: "#EDE2DD", grad_b: "#F7F1EE" },
 
-        // Brand accent — warm gold, lighter and less saturated than the previous brass.
+        // Brand accent — keep the storefront on the canonical gold from docs/design.md.
         // 10% and 21% tints for card backgrounds and hover states.
         "ajmal-gold": {
-          DEFAULT: "#BC8B57",
-          10: "rgba(188, 139, 87, 0.10)",
-          21: "rgba(189, 139, 87, 0.21)",
+          DEFAULT: "#D8A448",
+          10: "rgba(216, 164, 72, 0.10)",
+          21: "rgba(216, 164, 72, 0.21)",
         },
 
         // Utility colors — semantic signaling.
@@ -87,11 +87,11 @@ module.exports = {
         "sf-fg-dim": "#777777",
         "sf-paper": "#FFF7EE",                     // cream background
         "sf-paper-fg": { DEFAULT: "#2B2826", muted: "#777777" },
-        "sf-brass": { DEFAULT: "#BC8B57", hover: "#D4A167", press: "#AC7B47" },
+        "sf-brass": { DEFAULT: "#D8A448", hover: "#C9973D", press: "#BE8C32" },
         "sf-cream": "#F0E6DB",                     // sand tone
         "sf-ink": { DEFAULT: "#2B2826", deep: "#1A1512" },
         "sf-surface": "#FFF7EE",                   // cream
-        "sf-line": { DEFAULT: "#BC8B57", strong: "#D4A167", gold: "rgba(188, 139, 87, 0.50)" },
+        "sf-line": { DEFAULT: "#D8A448", strong: "#C9973D", gold: "rgba(216, 164, 72, 0.50)" },
       },
       fontFamily: {
         sans: ["Futura", "Avenir Next", "Montserrat", "Helvetica Neue", "Arial", "sans-serif"],
