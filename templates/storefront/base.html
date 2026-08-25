@@ -86,30 +86,31 @@ control without leaking color schemes between storefront and portal.
           <path d="M8 30h12M44 30h12M35 30h-6" />
         </svg>
       </div>
-      {% firstof store_settings.contact_phone store_settings.whatsapp_number as store_contact_number %}
-      <div class="shell relative py-10 text-sf-sm text-ajmal-cream/70">
-        {% block storefront_footer %}
-          <div class="flex flex-wrap items-center justify-center gap-3 text-center">
-            <div class="w-full">
-              <span class="font-gambetta text-base font-bold italic uppercase tracking-[0.14em] text-ajmal-cream">{{ store_settings.name }}</span>
-              <p class="mx-auto mt-2 max-w-sm text-sf-sm leading-relaxed text-ajmal-cream/70">
-                {% if store_contact_number or store_settings.contact_email %}
-                  Contact:
-                  {% if store_contact_number %}
-                    <a href="tel:{{ store_contact_number }}" class="text-ajmal-gold hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ajmal-gold">{{ store_contact_number }}</a>
+      {% with store_contact_number=store_settings.contact_phone|default:store_settings.whatsapp_number %}
+        <div class="shell relative py-10 text-sf-sm text-ajmal-cream/70">
+          {% block storefront_footer %}
+            <div class="flex flex-wrap items-center justify-center gap-3 text-center">
+              <div class="w-full">
+                <span class="font-gambetta text-base font-bold italic uppercase tracking-[0.14em] text-ajmal-cream">{{ store_settings.name }}</span>
+                <p class="mx-auto mt-2 max-w-sm text-sf-sm leading-relaxed text-ajmal-cream/70">
+                  {% if store_contact_number or store_settings.contact_email %}
+                    Contact:
+                    {% if store_contact_number %}
+                      <a href="tel:{{ store_contact_number }}" class="text-ajmal-gold hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ajmal-gold">{{ store_contact_number }}</a>
+                    {% endif %}
+                    {% if store_settings.contact_email %}
+                      {% if store_contact_number %}<br />{% endif %}
+                      <a href="mailto:{{ store_settings.contact_email }}" class="text-ajmal-gold hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ajmal-gold">{{ store_settings.contact_email }}</a>
+                    {% endif %}
+                  {% else %}
+                    Luxury fragrances curated for everyday wear.
                   {% endif %}
-                  {% if store_settings.contact_email %}
-                    {% if store_contact_number %}<br />{% endif %}
-                    <a href="mailto:{{ store_settings.contact_email }}" class="text-ajmal-gold hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ajmal-gold">{{ store_settings.contact_email }}</a>
-                  {% endif %}
-                {% else %}
-                  Luxury fragrances curated for everyday wear.
-                {% endif %}
-              </p>
+                </p>
+              </div>
             </div>
-          </div>
-        {% endblock %}
-      </div>
+          {% endblock %}
+        </div>
+      {% endwith %}
     </footer>
   </div>
 {% endblock %}
