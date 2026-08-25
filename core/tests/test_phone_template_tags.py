@@ -13,3 +13,7 @@ def test_tel_target_returns_digits_only_for_local_numbers() -> None:
 
 def test_tel_target_returns_empty_string_for_blank_values() -> None:
     assert tel_target("") == ""
+
+
+def test_tel_target_returns_empty_string_for_none() -> None:
+    assert tel_target(None) == ""
