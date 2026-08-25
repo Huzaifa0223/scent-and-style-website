@@ -66,9 +66,9 @@ module.exports = {
         // Brand accent — warm gold, lighter and less saturated than the previous brass.
         // 10% and 21% tints for card backgrounds and hover states.
         "ajmal-gold": {
-          DEFAULT: "#BC8B57",
-          10: "rgba(188, 139, 87, 0.10)",
-          21: "rgba(189, 139, 87, 0.21)",
+          DEFAULT: "#D8A448",
+          10: "rgba(216, 164, 72, 0.10)",
+          21: "rgba(216, 164, 72, 0.21)",
         },
 
         // Utility colors — semantic signaling.
