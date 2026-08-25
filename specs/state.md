@@ -27,7 +27,7 @@ surfaced (and fixed, with a test) a real customer-PII leak risk into admin excep
 checkout's POST data. Per CLAUDE.md, P0 is now complete — **the next session should stop and wait
 for the human to confirm P1 priorities (Stage 14 dashboard/analytics onward) before starting**, not
 proceed automatically.
-**Last updated:** 2026-08-14
+**Last updated:** 2026-08-25
 **CI:** workflow committed (`.github/workflows/ci.yml`), never executed — no push has been made
 to any remote (the human pushes, per CLAUDE.md). Everything it runs has been run locally instead;
 see the Stage 1 log entry for that output.
@@ -44,7 +44,7 @@ Perfumes palette (warm luxury, Satoshi/Gambetta/Tajawal). This is outside P0 roa
 
 **Completed:**
 - ✅ Color tokens: Replaced all `sf-*` palette with Ajmal values (`ajmal-*`): ink #2B2826, gold
-  #BC8B57, cream #FFF7EE, sand, blush gradients, utility colors (muted, star, sale, whatsapp, ok/
+  #D8A448, cream #FFF7EE, sand, blush gradients, utility colors (muted, star, sale, whatsapp, ok/
   warn/danger)
 - ✅ Radius tokens: Updated to rounder aesthetic (`ajmal-card` 12px, `ajmal-button` 24px pill)
   from previous 2px sharp editorial style
@@ -127,6 +127,29 @@ fix that keeps checkout PII out of it, `SECURE_PROXY_SSL_HEADER`/`TRUST_X_FORWAR
 Stage 11's open question about a trusted reverse proxy), and `deploy/Caddyfile` + `docs/deploy.md`
 (completing §36's static-caching half Stage 12 deferred here). Stages 1-13 are fully built; **P0 is
 complete.** P1 (Stage 14 onward) needs the human's explicit go-ahead per CLAUDE.md before starting.
+
+---
+
+## Maintenance log
+
+### 2026-08-25 — CI quality regression fix
+
+- Investigated GitHub Actions run `32873827063` / job `97890328968`; the failure was narrowed to two
+  regressions, both outside the data model:
+  1. `core/tests/test_css_build.py` proved the storefront bundle no longer emitted the canonical
+     gold token `#D8A448`.
+  2. `tests/test_whatsapp_string_construction.py` found `templates/storefront/base.html` hardcoding
+     a `wa.me` link outside `notifications/`, violating Stage 9's boundary.
+- Fixed both on the working branch by restoring the canonical Tailwind gold aliases and replacing
+  the footer's inline WhatsApp deep link with store-configured `tel:` / `mailto:` contact links
+  (or neutral fallback copy when no contact fields are configured).
+- Verification completed:
+  - Targeted regressions green: `pytest core/tests/test_css_build.py tests/test_whatsapp_string_construction.py`
+  - Lint/type/schema checks green locally: Tailwind build, `ruff check`, `ruff format --check`,
+    `mypy`, `makemigrations --check --dry-run`, `manage.py check --deploy`
+- Full `pytest --cov` could not be re-run in this sandbox because PostgreSQL is unreachable here
+  (`localhost:5432` refused connections, no server binary available to start one). CI's failing job
+  already isolated the only broken assertions, and both now pass locally.
 
 ---
 
