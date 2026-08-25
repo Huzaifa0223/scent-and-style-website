@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load static %}
+{% load phone static %}
 
 {% comment %}
 Storefront shell. Deliberately does not share markup with portal/base.html —
@@ -96,7 +96,7 @@ control without leaking color schemes between storefront and portal.
                   {% if store_contact_number or store_settings.contact_email %}
                     Contact:
                     {% if store_contact_number %}
-                      <a href="tel:{{ store_contact_number|urlencode }}" class="text-ajmal-gold hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ajmal-gold">{{ store_contact_number }}</a>
+                      <a href="tel:{{ store_contact_number|tel_target }}" class="text-ajmal-gold hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ajmal-gold">{{ store_contact_number }}</a>
                     {% endif %}
                     {% if store_settings.contact_email %}
                       {% if store_contact_number %}<br />{% endif %}
