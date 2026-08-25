@@ -12,48 +12,41 @@ partial that would couple their designs together.
 sf-root is the scoping hook for the storefront focus ring (see the
 "Focus ring" block in static/css/input.css). It carries no visual styling
 of its own — it exists so one base rule can cover every storefront
-control without leaking dark-theme ring offsets onto the portal.
+control without leaking color schemes between storefront and portal.
 {% endcomment %}
-{% block body_class %}sf-root bg-sf-ink text-sf-fg{% endblock %}
+{% block body_class %}sf-root bg-ajmal-cream text-ajmal-ink{% endblock %}
 
 {% block body %}
   <div class="flex min-h-full flex-col">
     {% comment %}
-    bg-sf-ink (fully opaque), not a translucent bg-sf-ink/90 + backdrop-blur
-    — backdrop-filter makes its element a CSS containing block for
-    `position: fixed` descendants, which broke the cart drawer's
-    `fixed inset-y-0` sizing (it resolved against this ~68px header instead
-    of the viewport). Confirmed live before landing on this fix — see
-    cart/_widget.html's own note on the drawer for the debugging trail.
-
-    shadow-sf-lift on top of the (now real 3:1+, see tailwind.config.js)
-    border — a contrast audit found the header had no perceivable
-    separation from scrolled content, since its background is otherwise
-    byte-identical to the page background by design (this is the same
-    dark surface, not a distinct one).
-    {% endcomment %}
-    {% comment %}
-    The lift shadow is now conditional on data-scrolled (M6,
-    static/js/storefront-header.js) rather than permanent. It was added
-    because the header had no perceivable separation from content scrolled
-    beneath it — but at scroll 0 there is nothing beneath it to separate
-    from, so showing it there was decoration. The border-b is
-    unconditional and still carries the boundary if the script never runs.
+    bg-ajmal-cream (fully opaque), matching the page background for a unified
+    light aesthetic. The border-b carries the visual separation from content.
     {% endcomment %}
     <header
       data-sticky-header
-      class="rule sticky top-0 z-40 bg-sf-ink transition-shadow duration-200 ease-sf-editorial data-[scrolled]:shadow-sf-lift"
+      class="rule sticky top-0 z-40 bg-ajmal-cream transition-shadow duration-300 ease-ajmal-ease data-[scrolled]:shadow-ajmal-lift"
     >
       <div class="shell flex flex-wrap items-center gap-3 py-3 sm:gap-6">
         <a
           href="/"
-          class="font-display text-lg uppercase tracking-[0.12em] text-sf-fg hover:text-sf-brass focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass focus-visible:ring-offset-2 focus-visible:ring-offset-sf-ink"
+          class="font-gambetta text-lg font-bold italic uppercase tracking-[0.12em] text-ajmal-ink hover:text-ajmal-gold focus:outline-none focus-visible:ring-2 focus-visible:ring-ajmal-gold focus-visible:ring-offset-2 focus-visible:ring-offset-ajmal-cream"
         >{{ store_settings.name }}</a>
         <div class="order-3 w-full sm:order-none sm:w-auto sm:flex-1">
           {% block storefront_search %}{% include "search/_search_input.html" %}{% endblock %}
         </div>
-        <nav class="flex items-center gap-4 text-sf-sm">
+        <nav class="flex items-center gap-4 text-sf-sm text-ajmal-ink">
           {% block storefront_nav %}{% endblock %}
+          <a
+            href="{% url 'orders:tracking' %}"
+            class="min-h-sf-tap inline-flex items-center gap-1.5 text-ajmal-gold hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ajmal-gold focus-visible:ring-offset-2 focus-visible:ring-offset-ajmal-cream"
+          >
+            <svg aria-hidden="true" class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 12a9 9 0 1 0 3-6.7" />
+              <path d="M3 4v5h5" />
+              <path d="M12 7v5l3 2" />
+            </svg>
+            <span>Track order</span>
+          </a>
           {% include "cart/_widget.html" %}
         </nav>
       </div>
@@ -63,17 +56,47 @@ control without leaking dark-theme ring offsets onto the portal.
       {% block content %}{% endblock %}
     </main>
 
-    <footer class="rule-t">
-      <div class="shell py-10 text-sf-sm text-sf-fg-dim">
+    <footer class="footer-atmosphere rule-t relative overflow-hidden bg-ajmal-ink text-ajmal-cream">
+      <div class="footer-atmosphere__glow pointer-events-none absolute inset-0" aria-hidden="true"></div>
+      <div class="footer-atmosphere__line footer-atmosphere__line--one pointer-events-none absolute" aria-hidden="true"></div>
+      <div class="footer-atmosphere__line footer-atmosphere__line--two pointer-events-none absolute" aria-hidden="true"></div>
+      <div class="footer-atmosphere__icon footer-atmosphere__icon--spray pointer-events-none absolute" aria-hidden="true">
+        <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M28 18h9v8h-9zM30 13h5v5h-5zM25 26h15l4 8v17H20V34l5-8Z" />
+          <path d="M20 38h24M36 13h7M43 13l5-3" />
+        </svg>
+      </div>
+      <div class="footer-atmosphere__icon footer-atmosphere__icon--bottle pointer-events-none absolute" aria-hidden="true">
+        <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M27 20h10v7H27zM29 15h6v5h-6z" />
+          <rect x="22" y="27" width="20" height="25" rx="5" />
+          <path d="M25 35h14" />
+        </svg>
+      </div>
+      <div class="footer-atmosphere__icon footer-atmosphere__icon--watch pointer-events-none absolute" aria-hidden="true">
+        <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M27 8h10l2 12H25l2-12ZM27 44h10l2 12H25l2-12Z" />
+          <rect x="20" y="19" width="24" height="26" rx="7" />
+          <circle cx="32" cy="32" r="7" /><path d="M32 28v5l3 2" />
+        </svg>
+      </div>
+      <div class="footer-atmosphere__icon footer-atmosphere__icon--glasses pointer-events-none absolute" aria-hidden="true">
+        <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M8 30c5-5 12-6 21-2 2 1 4 1 6 0 9-4 16-3 21 2l-3 14c-1 4-4 6-8 6h-5c-5 0-8-4-9-9-1 5-4 9-9 9h-5c-4 0-7-2-8-6L8 30Z" />
+          <path d="M8 30h12M44 30h12M35 30h-6" />
+        </svg>
+      </div>
+      <div class="shell relative py-10 text-sf-sm text-ajmal-cream/70">
         {% block storefront_footer %}
-          <div class="flex flex-wrap items-center justify-between gap-3">
-            <span class="font-display text-base uppercase tracking-[0.14em] text-sf-fg">{{ store_settings.name }}</span>
-            <a
-              href="{% url 'orders:tracking' %}"
-              class="min-h-sf-tap inline-flex items-center text-sf-brass hover:text-sf-brass-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass focus-visible:ring-offset-2 focus-visible:ring-offset-sf-ink"
-            >
-              Track your order
-            </a>
+          <div class="flex flex-wrap items-center justify-center gap-3 text-center">
+            <div class="w-full">
+              <span class="font-gambetta text-base font-bold italic uppercase tracking-[0.14em] text-ajmal-cream">{{ store_settings.name }}</span>
+              <p class="mx-auto mt-2 max-w-sm text-sf-sm leading-relaxed text-ajmal-cream/70">
+                Ground floor, Aura Square, F-11 Markaz, Islamabad.<br />
+                WhatsApp Business / Contact:
+                <a href="https://wa.me/923341172222" class="text-ajmal-gold hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ajmal-gold">+92 334 1172222</a>
+              </p>
+            </div>
           </div>
         {% endblock %}
       </div>

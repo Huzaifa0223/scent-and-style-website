@@ -185,11 +185,11 @@
           {% if page_obj.has_other_pages %}
             <nav class="mt-12 flex items-center justify-center gap-2" aria-label="Pagination">
               {% if page_obj.has_previous %}
-                <a href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.previous_page_number }}" class="min-h-sf-tap inline-flex items-center rounded-sf border border-sf-line px-3.5 text-sf-sm text-sf-fg hover:border-sf-brass focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass">Previous</a>
+                <a href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.previous_page_number }}" class="min-h-sf-tap inline-flex items-center rounded-ajmal-card border-2 border-ajmal-gold px-3.5 text-sf-sm text-ajmal-ink hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-ajmal-gold">Previous</a>
               {% endif %}
               <span class="px-2 text-sf-sm text-sf-fg-dim">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
               {% if page_obj.has_next %}
-                <a href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.next_page_number }}" class="min-h-sf-tap inline-flex items-center rounded-sf border border-sf-line px-3.5 text-sf-sm text-sf-fg hover:border-sf-brass focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass">Next</a>
+                <a href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.next_page_number }}" class="min-h-sf-tap inline-flex items-center rounded-ajmal-card border-2 border-ajmal-gold px-3.5 text-sf-sm text-ajmal-ink hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-ajmal-gold">Next</a>
               {% endif %}
             </nav>
           {% endif %}

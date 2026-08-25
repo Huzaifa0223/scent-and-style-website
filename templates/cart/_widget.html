@@ -18,12 +18,17 @@ open/closed state survives every mutation instead of snapping shut.
     aria-label="Cart"
     aria-haspopup="true"
     :aria-expanded="cartOpen"
-    class="min-h-sf-tap flex items-center gap-1.5 rounded-sf px-2 text-sf-sm font-medium text-sf-fg hover:text-sf-brass focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass focus-visible:ring-offset-2 focus-visible:ring-offset-sf-ink"
+    class="min-h-sf-tap flex items-center gap-1.5 rounded-ajmal-card px-2 text-sf-sm font-medium text-sf-fg hover:text-ajmal-gold focus:outline-none focus-visible:ring-2 focus-visible:ring-ajmal-gold focus-visible:ring-offset-2 focus-visible:ring-offset-ajmal-cream"
   >
+    <svg aria-hidden="true" class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 4h2l2.4 11.2a2 2 0 0 0 2 1.6h7.8a2 2 0 0 0 1.9-1.4L21 8H6" />
+      <circle cx="9" cy="20" r="1" />
+      <circle cx="18" cy="20" r="1" />
+    </svg>
     <span aria-hidden="true">Cart</span>
     <span
       id="cart-badge-count"
-      class="flex h-5 min-w-5 items-center justify-center rounded-full bg-sf-brass px-1 text-xs font-semibold text-sf-fg-onbrass transition-transform duration-200"
+      class="flex h-5 min-w-5 items-center justify-center rounded-full bg-ajmal-gold px-1 text-xs font-semibold text-ajmal-ink transition-transform duration-300"
       :class="bump ? 'scale-125' : 'scale-100'"
     >{{ cart_item_count }}</span>
   </button>
@@ -50,21 +55,21 @@ open/closed state survives every mutation instead of snapping shut.
     x-transition:leave-start="opacity-100"
     x-transition:leave-end="opacity-0"
     @click="cartOpen = false"
-    class="fixed inset-0 z-50 bg-sf-ink-deep/70 backdrop-blur-[2px]"
+    class="fixed inset-0 z-50 bg-ajmal-ink/50 backdrop-blur-[2px]"
     style="display: none;"
   ></div>
 
   <div
     id="cart-drawer"
     x-show="cartOpen"
-    x-transition:enter="transition duration-420 ease-sf-editorial"
+    x-transition:enter="transition duration-420 ease-ajmal-ease"
     x-transition:enter-start="translate-x-full"
     x-transition:enter-end="translate-x-0"
-    x-transition:leave="transition duration-300 ease-sf-editorial"
+    x-transition:leave="transition duration-300 ease-ajmal-ease"
     x-transition:leave-start="translate-x-0"
     x-transition:leave-end="translate-x-full"
     @keydown.escape.window="cartOpen = false"
-    class="fixed inset-y-0 right-0 z-50 flex w-[calc(100vw-50px)] flex-col border-l border-sf-line bg-sf-ink shadow-sf-drawer sm:w-[420px]"
+    class="fixed inset-y-0 right-0 z-50 flex w-[calc(100vw-50px)] flex-col border-l-2 border-ajmal-gold bg-ajmal-cream shadow-ajmal-drawer sm:w-[420px]"
     style="display: none;"
     role="dialog"
     aria-modal="true"

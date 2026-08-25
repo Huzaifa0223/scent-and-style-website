@@ -2,6 +2,55 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  html,
+  body {
+    font-family: "Futura", "Avenir Next", "Montserrat", "Helvetica Neue", "Arial", sans-serif;
+    font-weight: 400;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: "Futura", "Avenir Next", "Montserrat", "Helvetica Neue", "Arial", sans-serif;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  p,
+  span,
+  a,
+  label,
+  input,
+  textarea,
+  select,
+  button,
+  li,
+  small,
+  strong,
+  em {
+    font-family: "Futura", "Avenir Next", "Montserrat", "Helvetica Neue", "Arial", sans-serif;
+    font-weight: 400;
+  }
+}
+
+@layer utilities {
+  .font-display,
+  .font-gambetta,
+  .font-satoshi,
+  .font-tajawal {
+    font-family: "Futura", "Avenir Next", "Montserrat", "Helvetica Neue", "Arial", sans-serif !important;
+    font-weight: 700 !important;
+    font-style: normal !important;
+    letter-spacing: -0.02em;
+  }
+}
+
 /* Self-hosted (static/fonts/) — never a Google Fonts CDN request, same
    reasoning as vendoring HTMX/Alpine/SortableJS. font-display: swap avoids
    a blocking web-font flash of invisible text; see docs/design.md. */
@@ -58,6 +107,67 @@
   font-display: swap;
 }
 
+/* Ajmal Perfumes design system fonts (Stage: design overhaul).
+   Satoshi — body copy, modern sans-serif (fontshare.com, SIL OFL).
+   Gambetta — display/headings, serif italic emphasis (fontshare.com, SIL OFL).
+   Tajawal — supporting script runs and fallback for Arabic (Google Fonts, OFL).
+   All three are self-hosted to avoid CDN requests (CLAUDE.md §36 rationale).
+*/
+@font-face {
+  font-family: "Satoshi";
+  src: url("../fonts/IBMPlexSans-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Satoshi";
+  src: url("../fonts/IBMPlexSans-SemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Gambetta";
+  src: url("../fonts/CormorantGaramond-Roman.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Gambetta";
+  src: url("../fonts/CormorantGaramond-Italic.woff2") format("woff2");
+  font-weight: 500;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Tajawal";
+  src: url("../fonts/IBMPlexSans-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Tajawal";
+  src: url("../fonts/IBMPlexSans-SemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Note on Gambetta italic: The spec uses Gambetta for "italic" display text
+   (headlines with personality). Gambetta-Regular is loaded at font-weight 500
+   font-style italic to serve this role, since the typeface's upright is used
+   for branding only. This pairing (normal weight, italic styling) gives the
+   visual weight of a semi-bold italic without committing to a dedicated italic
+   file — the browser synthesizes the angle. */
+
 /* ---------------------------------------------------------------------
    Structure primitives (storefront polish pass).
 
@@ -79,14 +189,215 @@
    @tailwind components, so the utility wins at equal specificity.
    --------------------------------------------------------------------- */
 @layer components {
+  .hero-atmosphere__glow {
+    background:
+      radial-gradient(ellipse 42% 55% at 78% 38%, rgba(188, 139, 87, 0.16), transparent 70%),
+      radial-gradient(ellipse 32% 48% at 58% 82%, rgba(255, 255, 255, 0.58), transparent 72%);
+    animation: hero-glow-drift 18s ease-in-out infinite alternate;
+  }
+  .hero-atmosphere--dark .hero-atmosphere__glow {
+    background:
+      radial-gradient(ellipse 42% 55% at 78% 38%, rgba(188, 139, 87, 0.24), transparent 70%),
+      radial-gradient(ellipse 32% 48% at 58% 82%, rgba(255, 247, 238, 0.08), transparent 72%);
+  }
+  .hero-atmosphere--dark .hero-atmosphere__grain {
+    background-image: radial-gradient(rgba(255, 247, 238, 0.14) 0.7px, transparent 0.7px);
+  }
+  .hero-atmosphere__ribbon {
+    border: 2px solid rgba(188, 139, 87, 0.38);
+    border-radius: 50%;
+    height: 100%;
+    width: 82%;
+    box-shadow: 0 0 30px rgba(188, 139, 87, 0.08);
+    opacity: 0.9;
+  }
+  .hero-atmosphere__ribbon--one {
+    right: -18%;
+    top: 8%;
+    transform: rotate(-18deg);
+    animation: hero-ribbon-one 12s ease-in-out infinite alternate;
+  }
+  .hero-atmosphere__ribbon--two {
+    right: -8%;
+    top: 24%;
+    transform: rotate(22deg);
+    animation: hero-ribbon-two 16s ease-in-out infinite alternate;
+  }
+  .hero-atmosphere__icon {
+    color: rgba(188, 139, 87, 0.68);
+    filter: drop-shadow(0 4px 12px rgba(43, 40, 38, 0.12));
+    width: clamp(4.5rem, 9vw, 8rem);
+    z-index: 1;
+    animation: hero-icon-drift 9s ease-in-out infinite alternate;
+  }
+  .hero-atmosphere__icon svg {
+    display: block;
+    height: auto;
+    width: 100%;
+  }
+  .footer-atmosphere__glow {
+    background:
+      radial-gradient(ellipse 42% 90% at 50% 100%, rgba(188, 139, 87, 0.2), transparent 72%),
+      linear-gradient(90deg, rgba(255, 247, 238, 0.04), transparent 50%, rgba(255, 247, 238, 0.04));
+    animation: footer-glow-breathe 12s ease-in-out infinite alternate;
+  }
+  .footer-atmosphere__line {
+    border: 1px solid rgba(188, 139, 87, 0.32);
+    border-radius: 50%;
+    height: 240%;
+    width: 52%;
+  }
+  .footer-atmosphere__line--one {
+    left: -12%;
+    top: -72%;
+    transform: rotate(-12deg);
+    animation: footer-line-one 18s ease-in-out infinite alternate;
+  }
+  .footer-atmosphere__line--two {
+    right: -12%;
+    top: -58%;
+    transform: rotate(12deg);
+    animation: footer-line-two 21s ease-in-out infinite alternate;
+  }
+  .footer-atmosphere__icon {
+    color: rgba(188, 139, 87, 0.38);
+    filter: drop-shadow(0 3px 9px rgba(43, 40, 38, 0.1));
+    width: clamp(2.5rem, 5vw, 4.5rem);
+    animation: footer-icon-float 8s ease-in-out infinite alternate;
+  }
+  .footer-atmosphere__icon svg {
+    display: block;
+    height: auto;
+    width: 100%;
+  }
+  .footer-atmosphere__icon--spray { left: 13%; top: 15%; }
+  .footer-atmosphere__icon--bottle { left: 28%; top: 52%; animation-delay: -2s; }
+  .footer-atmosphere__icon--watch { right: 28%; top: 14%; animation-delay: -4s; }
+  .footer-atmosphere__icon--glasses { right: 12%; top: 52%; animation-delay: -6s; }
+  .hero-brand-mark {
+    animation: hero-brand-breathe 5s ease-in-out 600ms infinite alternate;
+  }
+  .hero-atmosphere__icon--perfume {
+    right: 25%;
+    top: 12%;
+  }
+  .hero-atmosphere__icon--sunglasses {
+    right: 7%;
+    top: 48%;
+    animation-delay: -3s;
+  }
+  .hero-atmosphere__icon--watch {
+    right: 34%;
+    top: 67%;
+    animation-delay: -6s;
+  }
+  .hero-atmosphere__grain {
+    background-image: radial-gradient(rgba(43, 40, 38, 0.08) 0.7px, transparent 0.7px);
+    background-size: 9px 9px;
+    mask-image: linear-gradient(to bottom, transparent, black 28%, transparent 90%);
+    opacity: 0.16;
+  }
+  .category-atmosphere__glow {
+    background:
+      radial-gradient(ellipse 46% 70% at 8% 48%, rgba(188, 139, 87, 0.1), transparent 72%),
+      radial-gradient(ellipse 40% 60% at 92% 58%, rgba(255, 255, 255, 0.72), transparent 74%);
+    animation: category-glow-drift 16s ease-in-out infinite alternate;
+  }
+  .category-atmosphere__ring {
+    border: 2px solid rgba(188, 139, 87, 0.18);
+    border-radius: 9999px;
+    height: 82%;
+    width: 86%;
+  }
+  .category-atmosphere__ring--one {
+    left: -25%;
+    top: 24%;
+    transform: rotate(-14deg);
+    animation: category-ring-one 18s ease-in-out infinite alternate;
+  }
+  .category-atmosphere__ring--two {
+    right: -25%;
+    top: 4%;
+    transform: rotate(18deg);
+    animation: category-ring-two 21s ease-in-out infinite alternate;
+  }
+
+  @keyframes hero-glow-drift {
+    from { transform: translate3d(-2%, 1%, 0) scale(1); }
+    to { transform: translate3d(3%, -2%, 0) scale(1.08); }
+  }
+  @keyframes hero-ribbon-one {
+    from { transform: rotate(-18deg) translate3d(0, 0, 0); }
+    to { transform: rotate(-8deg) translate3d(-8%, 10%, 0); }
+  }
+  @keyframes hero-ribbon-two {
+    from { transform: rotate(22deg) translate3d(0, 0, 0); }
+    to { transform: rotate(34deg) translate3d(7%, -8%, 0); }
+  }
+  @keyframes hero-icon-drift {
+    from { transform: translate3d(0, 0, 0) rotate(-4deg); }
+    to { transform: translate3d(-18px, 14px, 0) rotate(5deg); }
+  }
+  @keyframes hero-brand-breathe {
+    from {
+      letter-spacing: 0.16em;
+      text-shadow: 0 0 0 rgba(188, 139, 87, 0);
+    }
+    to {
+      letter-spacing: 0.2em;
+      text-shadow: 0 0 16px rgba(188, 139, 87, 0.24);
+    }
+  }
+  @keyframes footer-glow-breathe {
+    from { opacity: 0.58; transform: scale(1); }
+    to { opacity: 1; transform: scale(1.08); }
+  }
+  @keyframes footer-line-one {
+    from { transform: rotate(-12deg) translate3d(0, 0, 0); }
+    to { transform: rotate(-5deg) translate3d(5%, -4%, 0); }
+  }
+  @keyframes footer-line-two {
+    from { transform: rotate(12deg) translate3d(0, 0, 0); }
+    to { transform: rotate(5deg) translate3d(-5%, -3%, 0); }
+  }
+  @keyframes footer-icon-float {
+    from { transform: translate3d(0, 0, 0) rotate(-3deg); }
+    to { transform: translate3d(0, 9px, 0) rotate(4deg); }
+  }
+  @keyframes category-glow-drift {
+    from { transform: translate3d(-2%, 0, 0) scale(1); }
+    to { transform: translate3d(2%, 2%, 0) scale(1.06); }
+  }
+  @keyframes category-ring-one {
+    from { transform: rotate(-14deg) translate3d(0, 0, 0); }
+    to { transform: rotate(-5deg) translate3d(7%, -4%, 0); }
+  }
+  @keyframes category-ring-two {
+    from { transform: rotate(18deg) translate3d(0, 0, 0); }
+    to { transform: rotate(27deg) translate3d(-6%, 5%, 0); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .hero-atmosphere__glow,
+    .hero-atmosphere__ribbon,
+    .hero-atmosphere__icon,
+    .hero-brand-mark,
+    .footer-atmosphere__glow,
+    .footer-atmosphere__line,
+    .footer-atmosphere__icon,
+    .category-atmosphere__glow,
+    .category-atmosphere__ring {
+      animation: none;
+    }
+  }
+
   .shell {
     @apply mx-auto w-full max-w-sf-shell px-gutter md:px-gutter-md lg:px-gutter-lg;
   }
   .rule {
-    @apply border-b border-sf-line;
+    @apply border-b border-ajmal-gold;
   }
   .rule-t {
-    @apply border-t border-sf-line;
+    @apply border-t border-ajmal-gold;
   }
 
   /* Product tile. The caption used to sit outside the bordered image box
@@ -100,13 +411,13 @@
      `group` is deliberately NOT applied here: it is a marker class with no
      declarations of its own and Tailwind cannot @apply it, so it stays in
      the template markup alongside .p-card. */
-  /* M1: lift + hairline shifts to gold + elevation. transition is listed
-     property-by-property rather than transition-all so the border-color
-     change cannot drag unrelated properties into a paint. */
+  /* M1: Product card hover — subtle lift + gold border + gentle shadow.
+     Ajmal uses tinted panels (gold-10) and geometric texture for depth,
+     not heavy elevation. Transition uses new ajmal-ease cubic-bezier(.4,0,.2,1). */
   .p-card {
-    @apply block overflow-hidden rounded-sf border border-sf-line bg-sf-surface
-           transition-[transform,border-color,box-shadow] duration-base ease-sf-editorial
-           hover:-translate-y-1 hover:border-sf-line-gold hover:shadow-sf-card-hover;
+    @apply block overflow-hidden rounded-ajmal-card border-2 border-ajmal-cream bg-ajmal-cream
+           transition-[transform,border-color,box-shadow] duration-300 ease-ajmal-ease
+           hover:-translate-y-0.5 hover:border-ajmal-gold hover:shadow-ajmal-card-hover;
   }
   /* aspect-[3/4] is what actually locks tile height: derivatives are
      generated with Pillow's thumbnail(), which preserves each source's own
@@ -114,27 +425,27 @@
      whatever the merchant happened to upload. object-cover on the image
      crops to this box rather than letterboxing it. */
   .p-card__media {
-    @apply relative aspect-[3/4] w-full overflow-hidden bg-sf-surface-raised;
+    @apply relative aspect-[3/4] w-full overflow-hidden bg-ajmal-cream;
   }
-  /* M2: the zoom is deliberately slower than the lift it accompanies —
-     matched durations read as one abrupt jerk rather than a settle. */
+  /* Image hover zoom — intentionally slower (400ms) than the card lift (300ms)
+     so they read as a cohesive effect, not separate actions. */
   .p-card__img {
     @apply h-full w-full object-cover
-           transition-transform duration-slow ease-sf-editorial group-hover:scale-[1.04];
+           transition-transform duration-slow ease-ajmal-ease group-hover:scale-[1.04];
   }
   .p-card__body {
-    @apply border-t border-sf-line px-3.5 py-3;
+    @apply border-t border-ajmal-gold bg-ajmal-cream px-3.5 py-3;
   }
   .p-card__eyebrow {
-    @apply text-sf-caption uppercase tracking-[0.14em] text-sf-fg-dim;
+    @apply text-sf-caption uppercase tracking-[0.14em] text-ajmal-muted;
   }
   .p-card__title {
-    @apply mt-1 line-clamp-2 font-display text-sf-d-sm leading-tight text-sf-fg;
+    @apply mt-1 line-clamp-2 text-sf-d-sm leading-tight text-ajmal-ink;
   }
-  /* M3 */
+  /* M3: Price text — gold on cream with hover transition to lighter gold. */
   .p-card__price {
-    @apply mt-1.5 text-sf-sm text-sf-cream
-           transition-colors duration-fast group-hover:text-sf-brass-hover;
+    @apply mt-1.5 text-sf-sm text-ajmal-gold
+           transition-colors duration-300 ease-ajmal-ease group-hover:text-ajmal-gold;
   }
 
   /* M4: grid entrance. CSS-only and capped at 12 children on purpose —
@@ -183,27 +494,27 @@
      vocabulary belongs to the product tile, and reusing it here would
      make every control feel like a card. */
   .btn-primary {
-    @apply inline-flex min-h-sf-ctrl items-center justify-center rounded-sf bg-sf-brass px-5
-           text-sf-caption font-semibold uppercase tracking-[0.1em] text-sf-fg-onbrass
-           transition-[background-color,transform] duration-fast ease-sf-editorial
-           hover:bg-sf-brass-hover active:bg-sf-brass-press active:scale-[0.98]
-           focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass
-           focus-visible:ring-offset-2 focus-visible:ring-offset-sf-ink
+    @apply inline-flex min-h-sf-ctrl items-center justify-center rounded-ajmal-button bg-ajmal-gold px-5
+           text-sf-caption font-semibold uppercase tracking-[0.1em] text-ajmal-ink
+           transition-[background-color,transform] duration-300 ease-ajmal-ease
+           hover:opacity-90 active:scale-[0.98]
+           focus:outline-none focus-visible:ring-2 focus-visible:ring-ajmal-gold
+           focus-visible:ring-offset-2 focus-visible:ring-offset-ajmal-cream
            disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100;
   }
   .field {
-    @apply block min-h-sf-ctrl w-full rounded-sf border border-sf-line bg-sf-surface px-3
-           text-sf-sm text-sf-fg placeholder:text-sf-fg-dim
-           transition-colors duration-fast hover:border-sf-line-strong
-           focus:outline-none focus-visible:border-sf-brass focus-visible:ring-2
-           focus-visible:ring-sf-brass;
+    @apply block min-h-sf-ctrl w-full rounded-ajmal-card border-2 border-ajmal-gold bg-ajmal-cream px-3
+           text-sf-sm text-ajmal-ink placeholder:text-ajmal-muted
+           transition-colors duration-300 ease-ajmal-ease hover:border-ajmal-gold
+           focus:outline-none focus-visible:border-ajmal-gold focus-visible:ring-2
+           focus-visible:ring-ajmal-gold;
   }
   .checkbox {
-    @apply h-5 w-5 rounded-sm border-sf-line accent-sf-brass
-           focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass;
+    @apply h-5 w-5 rounded-sm border-ajmal-gold accent-ajmal-gold
+           focus:outline-none focus-visible:ring-2 focus-visible:ring-ajmal-gold;
   }
   .eyebrow {
-    @apply text-sf-eyebrow uppercase text-sf-fg-dim;
+    @apply text-sf-eyebrow uppercase text-ajmal-muted;
   }
 }
 
@@ -231,20 +542,22 @@
 @layer base {
   .sf-root
     :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
-    @apply outline-none ring-2 ring-sf-brass ring-offset-2 ring-offset-sf-ink;
+    @apply outline-none ring-2 ring-ajmal-gold ring-offset-2 ring-offset-ajmal-cream;
   }
 }
 
-/* Storefront redesign motion (docs/design.md's "Motion" section — animation
-   spec 1, "Hero / section entrance"). static/js/storefront-reveal.js adds
-   .is-in once an element is 15% into the viewport; this is the transition
-   that makes that swap animate instead of snap. */
+/* Storefront redesign motion (Ajmal Perfumes system).
+   
+   Scroll-triggered section entrance — static/js/storefront-reveal.js adds
+   .is-in once an element is 15% into the viewport. Three speed variants
+   (slide-in-fast/mid/slow) allow staggered entrance of related elements.
+   Uses new Ajmal easing: cubic-bezier(.4, 0, .2, 1). */
 [data-reveal] {
   opacity: 0;
   transform: translateY(18px);
   transition:
-    opacity 700ms cubic-bezier(0.16, 1, 0.3, 1),
-    transform 700ms cubic-bezier(0.16, 1, 0.3, 1);
+    opacity 1400ms cubic-bezier(.4, 0, .2, 1),
+    transform 1400ms cubic-bezier(.4, 0, .2, 1);
 }
 [data-reveal].is-in {
   opacity: 1;
@@ -253,12 +566,12 @@
 @media (prefers-reduced-motion: reduce) {
   [data-reveal] {
     transform: none;
-    transition: opacity 200ms ease-out;
+    transition: opacity 300ms ease-out;
   }
 }
 
-/* Storefront redesign motion, spec 5 ("Add-to-cart feedback") — a single
-   self-dismissing keyframe so the toast needs no JS timer to hide itself. */
+/* Toast feedback animation — self-dismissing 2600ms keyframe.
+   No JS timer needed; the animation completes and opacity reaches 0. */
 @keyframes sf-toast {
   0% { opacity: 0; transform: translateY(-10px); }
   8% { opacity: 1; transform: translateY(0); }
@@ -266,25 +579,24 @@
   100% { opacity: 0; transform: translateY(-6px); }
 }
 .sf-animate-toast {
-  animation: sf-toast 2600ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: sf-toast 2600ms cubic-bezier(.4, 0, .2, 1) both;
 }
 
-/* Storefront redesign motion, "Skeleton loading" — sweep, never a pulse.
-   Mirrors the exact box of the real element (aspect ratio, line widths) so
-   nothing shifts on swap; see docs/design.md for the full rule. */
+/* Skeleton loading shimmer — sweep animation, never a pulse.
+   Mirrors the exact box of the real element so nothing shifts on swap. */
 @keyframes sf-shimmer {
   from { background-position: -140% 0; }
   to { background-position: 240% 0; }
 }
 .sf-animate-shimmer {
-  background-image: linear-gradient(100deg, #1e1917 30%, #2c2522 50%, #1e1917 70%);
+  background-image: linear-gradient(100deg, #F7F1EE 30%, #FAF9F5 50%, #F7F1EE 70%);
   background-size: 240% 100%;
   animation: sf-shimmer 1600ms linear infinite;
 }
 @media (prefers-reduced-motion: reduce) {
   .sf-animate-shimmer {
     background-image: none;
-    background-color: #2a2321;
+    background-color: #FAF9F5;
     animation: none;
   }
 }

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from django.urls import URLPattern, path
+from django.views.generic import RedirectView
 
 from . import (
     image_views,
@@ -15,6 +16,7 @@ from . import (
 app_name = "portal"
 
 urlpatterns: list[URLPattern] = [
+    path("", RedirectView.as_view(url="/admin-portal/products/"), name="portal_index"),
     path("products/", views.ProductListView.as_view(), name="product_list"),
     path("products/create/", product_views.ProductCreateView.as_view(), name="product_create"),
     path("products/<int:pk>/edit/", product_views.ProductUpdateView.as_view(), name="product_edit"),

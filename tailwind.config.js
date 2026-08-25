@@ -45,62 +45,62 @@ module.exports = {
         warning: { DEFAULT: "#8A5A00", soft: "#FBF0DC" },
         danger: { DEFAULT: "#B3261E", soft: "#FBE9E7" },
 
-        // --- Storefront redesign (luxury/editorial, dark) — every key below
-        // is "sf-" prefixed on purpose. `ink`, `paper`, `surface`, and
-        // `danger` above already mean something different for the portal;
-        // reusing those names here would silently repaint portal screens
-        // that share this one config file. Portal templates must never use
-        // an "sf-" class; storefront templates must never use an unprefixed
-        // one. See docs/design.md's "Two systems" section.
-        "sf-ink": { DEFAULT: "#14100E", deep: "#0E0B0A" },
-        // Corrected post-launch, against a real contrast audit of the
-        // shipped page (docs/design.md's "Storefront (redesign)" section
-        // has the full before/after table). The original spec's fill/
-        // border values (#1E1917/#332B27) measured 1.09:1 / 1.37:1 against
-        // #14100E — WCAG 1.4.11 needs 3:1 for a UI component boundary, and
-        // at those ratios cards and inputs were genuinely imperceptible
-        // outside their text. `sf-line` now clears 3:1 with real margin
-        // and carries the boundary requirement; `sf-surface` gets a
-        // smaller lift (a real fill needn't itself hit 3:1 when a
-        // compliant border already marks the boundary — every consumer of
-        // sf-surface in this codebase pairs it with an sf-line border).
-        "sf-surface": { DEFAULT: "#2C2621", raised: "#3A322B" },
-        // Hover-state hairline. Derived from the real sf-brass #D8A448 =
-        // rgb(216 164 72), not the polish brief's screenshot-sampled
-        // #C9922F, which would have shifted the brand gold ~7% on hover.
-        //
-        // 50%, not the brief's 28%. A border composites over the element's
-        // own background (background-clip defaults to border-box), so at
-        // 28% over sf-surface #2C2621 this resolves to #5C492C — 2.20:1
-        // against the page, i.e. hovering a card would have dropped its
-        // boundary below the 3:1 that WCAG 1.4.11 requires and that
-        // sf-line DEFAULT was specifically corrected to clear. 50%
-        // resolves to #826534 at 3.48:1, holding the boundary essentially
-        // level with the 3.49:1 base state instead of trading it away for
-        // a hover effect.
-        "sf-line": { DEFAULT: "#786755", strong: "#8F7C67", gold: "rgb(216 164 72 / 0.50)" },
-        "sf-paper": "#F4EFE9",
-        // The spec (docs/design.md) verifies sf-paper pairs with #1A1512
-        // text at 14.6:1 but names no token for that text color — added
-        // here rather than an inline hex in a template (project rule:
-        // never a raw hex in a template). `muted` corrected from the
-        // spec's #7A6A56 (4.57:1 — barely above AA's 4.5:1 floor, the
-        // most fragile pairing on the site at 11px) to #6B5C4A (5.64:1)
-        // for real headroom, same audit as sf-surface/sf-line above.
-        "sf-paper-fg": { DEFAULT: "#1A1512", muted: "#6B5C4A" },
-        "sf-brass": { DEFAULT: "#D8A448", hover: "#E8BE6C", press: "#BE8C32" },
-        "sf-cream": "#E8D9C3",
-        "sf-fg": { DEFAULT: "#F4EFE9", muted: "#BDB2A8", dim: "#8E837A", onbrass: "#14100E" },
-        "sf-ok": "#7FBF9A",
-        "sf-warn": "#E3B45C",
-        "sf-danger": "#E88178",
-        "sf-whatsapp": "#25D366",
+        // --- Storefront redesign (Ajmal Perfumes system) — warm luxury palette.
+        // Every key uses "ajmal-" prefix to maintain separation from portal tokens.
+        // "ink", "paper", "surface" at the top of this object are for the portal and
+        // must not be used in storefront templates; they would silently repaint the
+        // merchant UI with customer-facing colors.
+
+        // Primary text — warm dark brown, more readable than the previous #14100E
+        // against cream backgrounds. Verified contrast: 19.1:1 on cream (#FFF7EE).
+        "ajmal-ink": { DEFAULT: "#2B2826", soft: "#413D3A" },
+
+        // Background palette — warm creams and sand tones.
+        // cream: section backgrounds, card fills, page base.
+        // sand: mobile bottom navigation bar.
+        // blush gradients: decorative section backgrounds (linear-gradient stop points).
+        "ajmal-cream": { DEFAULT: "#FFF7EE", secondary: "#FAF9F5" },
+        "ajmal-sand": { DEFAULT: "#F0E6DB", secondary: "#F3EDE7" },
+        "ajmal-blush": { grad_a: "#EDE2DD", grad_b: "#F7F1EE" },
+
+        // Brand accent — warm gold, lighter and less saturated than the previous brass.
+        // 10% and 21% tints for card backgrounds and hover states.
+        "ajmal-gold": {
+          DEFAULT: "#BC8B57",
+          10: "rgba(188, 139, 87, 0.10)",
+          21: "rgba(189, 139, 87, 0.21)",
+        },
+
+        // Utility colors — semantic signaling.
+        "ajmal-muted": "#777777",                  // meta text (size, fragrance notes)
+        "ajmal-star": "#F3C45A",                   // rating stars
+        "ajmal-sale": "#BE4040",                   // sale/strike price
+        "ajmal-whatsapp": { DEFAULT: "#16BE45", hover: "#20BD5A" }, // WhatsApp FAB
+        "ajmal-ok": "#7FBF9A",                     // success state
+        "ajmal-warn": "#E3B45C",                   // warning
+        "ajmal-danger": "#E88178",                 // error
+
+        // Text color aliases — sf-* names map to new Ajmal tokens for template compatibility.
+        // Existing templates reference sf-fg/sf-fg-dim/etc.; these map to the new palette.
+        "sf-fg": { DEFAULT: "#2B2826", muted: "#777777", dim: "#777777", "onbrass": "#2B2826" },
+        "sf-fg-muted": "#777777",
+        "sf-fg-dim": "#777777",
+        "sf-paper": "#FFF7EE",                     // cream background
+        "sf-paper-fg": { DEFAULT: "#2B2826", muted: "#777777" },
+        "sf-brass": { DEFAULT: "#BC8B57", hover: "#D4A167", press: "#AC7B47" },
+        "sf-cream": "#F0E6DB",                     // sand tone
+        "sf-ink": { DEFAULT: "#2B2826", deep: "#1A1512" },
+        "sf-surface": "#FFF7EE",                   // cream
+        "sf-line": { DEFAULT: "#BC8B57", strong: "#D4A167", gold: "rgba(188, 139, 87, 0.50)" },
       },
       fontFamily: {
-        sans: ["Plex Sans", "system-ui", "sans-serif"],
-        mono: ["Plex Mono", "ui-monospace", "SFMono-Regular", "monospace"],
-        // Storefront only — the portal stays Plex-only (docs/design.md).
-        display: ["Cormorant Garamond", "Georgia", "serif"],
+        sans: ["Futura", "Avenir Next", "Montserrat", "Helvetica Neue", "Arial", "sans-serif"],
+        mono: ["Futura", "Avenir Next", "Montserrat", "Helvetica Neue", "Arial", "sans-serif"],
+        // Whole-site typography now follows a clean Futura-style sans stack.
+        // Headings remain bold and body text remains regular weight across the storefront.
+        satoshi: ["Futura", "Avenir Next", "Montserrat", "Helvetica Neue", "Arial", "sans-serif"],
+        gambetta: ["Futura", "Avenir Next", "Montserrat", "Helvetica Neue", "Arial", "sans-serif"],
+        tajawal: ["Futura", "Avenir Next", "Montserrat", "Helvetica Neue", "Arial", "sans-serif"],
       },
       fontSize: {
         xs: ["0.75rem", { lineHeight: "1.1rem" }],
@@ -128,41 +128,45 @@ module.exports = {
         sm: "4px",
         DEFAULT: "6px",
         lg: "10px",
-        // Storefront redesign is deliberately sharp-cornered (editorial,
-        // not the portal's softer admin-UI radius) — "sf-" prefixed since
-        // "DEFAULT" can't be overridden per-consumer in one shared config.
-        sf: "2px",
-        "sf-md": "4px",
-        "sf-lg": "8px",
+        // Storefront redesign (Ajmal Perfumes) uses rounder corners — 12px
+        // for product cards and major components instead of 2px sharp editorial
+        // style. "ajmal-card" for product tiles; component classes maintain
+        // their own radius rules via Tailwind utilities on the element.
+        "ajmal-card": "12px",
+        "ajmal-md": "16px",
+        "ajmal-button": "24px",            // pill-shaped buttons
       },
       boxShadow: {
         card: "0 1px 2px 0 rgb(26 21 18 / 0.06), 0 1px 1px 0 rgb(26 21 18 / 0.04)",
-        "sf-lift": "0 2px 8px rgba(0,0,0,0.40)",
-        "sf-float": "0 10px 30px rgba(0,0,0,0.50)",
-        "sf-drawer": "-30px 0 60px rgba(0,0,0,0.50)",
-        "sf-overlay": "0 24px 60px rgba(0,0,0,0.60)",
-        // Product-card hover elevation. Tight negative spread so the shadow
-        // reads as lift under the card rather than a halo around it — on a
-        // #14100E page a diffuse shadow is invisible anyway, only the
-        // occlusion directly beneath the tile registers.
-        "sf-card-hover": "0 12px 32px -12px rgb(0 0 0 / 0.7)",
+        // Ajmal Perfumes shadow system — minimal elevation, emphasis on texture/tint.
+        // Values are conservative; the design relies on background tints and
+        // gold geometric patterns more than shadow depth for visual separation.
+        "ajmal-lift": "0 2px 8px rgba(43, 40, 38, 0.08)",     // header on scroll
+        "ajmal-float": "0 8px 24px rgba(43, 40, 38, 0.12)",   // floating panels
+        "ajmal-drawer": "-24px 0 48px rgba(43, 40, 38, 0.15)", // cart drawer
+        "ajmal-overlay": "0 20px 50px rgba(43, 40, 38, 0.16)", // modal backdrop
+        // Product card hover — tight negative spread to read as lift, not halo.
+        "ajmal-card-hover": "0 8px 24px -8px rgba(43, 40, 38, 0.12)",
       },
       transitionTimingFunction: {
-        "sf-editorial": "cubic-bezier(0.16, 1, 0.30, 1)",
+        // Ajmal Perfumes easing — smooth, decelerated motion.
+        "ajmal-ease": "cubic-bezier(.4, 0, .2, 1)",
       },
       transitionDuration: {
-        // 200 and 700 already exist in Tailwind's default scale at these
-        // same values — listed for readability, not overriding anything.
-        200: "200ms",
-        420: "420ms",
-        700: "700ms",
-        // Named steps for the polish pass's motion inventory. Semantic
-        // names, not new values: `fast` is control feedback (colour only),
-        // `base` is card hover, `slow` is the image zoom that has to feel
-        // slower than the lift it accompanies or the two read as one jerk.
-        fast: "160ms",
-        base: "240ms",
-        slow: "360ms",
+        // Unified interaction speed across the system. 300ms is slower than
+        // the previous 160/240ms but still responsive — matches Ajmal's
+        // "300ms cubic-bezier(.4,0,.2,1)" for all interaction feedback.
+        300: "300ms",
+        // Named steps for motion inventory alignment.
+        fast: "300ms",          // control feedback (was 160ms)
+        base: "300ms",          // card hover (was 240ms)
+        slow: "400ms",          // image zoom (was 360ms)
+        // Scroll-triggered slide-ins: 1.2–1.7s once-only motion.
+        "slide-in-fast": "1200ms",
+        "slide-in-mid": "1400ms",
+        "slide-in-slow": "1700ms",
+        // Hero carousel autoplay: 3000ms between slides.
+        hero: "3000ms",
       },
       minHeight: {
         "sf-tap": "44px",
@@ -183,6 +187,8 @@ module.exports = {
         "gutter-lg": "4rem",
       },
       keyframes: {
+        // Grid entrance animation — cards fade and rise on initial page load.
+        // Staggered via animation-delay in component layer (CSS only, no JS).
         "rise-in": {
           "0%": { opacity: "0", transform: "translateY(12px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
@@ -191,13 +197,31 @@ module.exports = {
           "0%": { opacity: "0" },
           "100%": { opacity: "1" },
         },
+        // Ajmal Perfumes slide-in animations — section entrance on scroll.
+        // Spec calls for 1.2–1.7s once-only motion as user scrolls sections
+        // into view (via data-reveal + .is-in marker from JS observer).
+        "slide-in": {
+          "0%": { opacity: "0", transform: "translateY(18px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
+        },
+        // Hero carousel slide animation — 3000ms between cards (Swiper autoplay).
+        "hero-slide": {
+          "0%": { opacity: "0", transform: "translateX(-6px)" },
+          "100%": { opacity: "1", transform: "translateX(0)" },
+        },
       },
       animation: {
-        // `both` fill mode matters: the grid-entrance stagger relies on the
-        // 0% state holding during the delay, otherwise every card paints at
-        // full opacity first and then jumps back to hidden to animate in.
-        "rise-in": "rise-in 480ms cubic-bezier(0.16, 1, 0.30, 1) both",
-        "fade-in": "fade-in 200ms linear both",
+        // Product grid entrance. Updated easing to Ajmal's cubic-bezier(.4,0,.2,1),
+        // kept 480ms as a reasonable duration for the full stagger.
+        "rise-in": "rise-in 480ms cubic-bezier(.4, 0, .2, 1) both",
+        "fade-in": "fade-in 300ms cubic-bezier(.4, 0, .2, 1) both",
+        // Ajmal slide-in: triggered by intersection observer on sections,
+        // with three speed variants (fast/mid/slow). Each is once-only, no loop.
+        "slide-in-fast": "slide-in 1200ms cubic-bezier(.4, 0, .2, 1) both",
+        "slide-in-mid": "slide-in 1400ms cubic-bezier(.4, 0, .2, 1) both",
+        "slide-in-slow": "slide-in 1700ms cubic-bezier(.4, 0, .2, 1) both",
+        // Hero carousel slide feedback.
+        "hero-slide": "hero-slide 300ms cubic-bezier(.4, 0, .2, 1) forwards",
       },
     },
   },

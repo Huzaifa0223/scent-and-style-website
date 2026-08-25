@@ -32,6 +32,56 @@ proceed automatically.
 to any remote (the human pushes, per CLAUDE.md). Everything it runs has been run locally instead;
 see the Stage 1 log entry for that output.
 
+---
+
+## Design System Overhaul — Ajmal Perfumes (Aug 15, 2026)
+
+**Status:** Partial implementation, design tokens complete, templates 75% updated, assets pending
+
+**Scope:** Visual-only transformation of storefront (no model changes, no view logic changes). User
+requested rebranding from current storefront design (dark editorial, Cormorant Garamond) to Ajmal
+Perfumes palette (warm luxury, Satoshi/Gambetta/Tajawal). This is outside P0 roadmap per CLAUDE.md.
+
+**Completed:**
+- ✅ Color tokens: Replaced all `sf-*` palette with Ajmal values (`ajmal-*`): ink #2B2826, gold
+  #BC8B57, cream #FFF7EE, sand, blush gradients, utility colors (muted, star, sale, whatsapp, ok/
+  warn/danger)
+- ✅ Radius tokens: Updated to rounder aesthetic (`ajmal-card` 12px, `ajmal-button` 24px pill)
+  from previous 2px sharp editorial style
+- ✅ Motion tokens: 300ms interactions (cubic-bezier .4,0,.2,1), 1.2–1.7s scroll-triggered slide-ins,
+  3000ms hero autoplay; preserved motion guards for prefers-reduced-motion
+- ✅ Component CSS: `.p-card` (cream bg, gold border, subtle shadows), `.btn-primary` (gold pill,
+  ink text), `.field` (cream, gold accents), focus rings (gold on cream)
+- ✅ Font setup: Added @font-face declarations for Satoshi, Gambetta, Tajawal; updated tailwind
+  `fontFamily` config; actual .woff2 files not yet acquired (fonts will render as system fallbacks)
+- ✅ Template updates: `storefront/base.html` (header/footer), `home.html` (hero gradient, headings,
+  sections), `product_detail.html`, `product_list.html`, `search/_search_input.html`, `cart/_widget.html`
+- ✅ Backward compatibility: Added `sf-*` color aliases in tailwind.config.js mapping to new Ajmal
+  values; allows untouched templates to render correctly without mass refactoring
+
+**Pending:**
+- ⏳ Font acquisition: Download Satoshi, Gambetta from fontshare.com (free/OFL), Tajawal from Google
+  Fonts, place .woff2 files in `static/fonts/`
+- ⏳ Product card texture: Gold geometric line pattern background (CSS or SVG overlay)
+- ⏳ Swiper theming (if used): pagination bars (30×4px), navigation arrows (48px circular), hero
+  timing (verified not present in codebase)
+- ⏳ Mobile bottom navigation: Sand (#F0E6DB) bar, Home button overlap, FABs (WhatsApp, Contact)
+- ⏳ Testing & QA: Contrast audits, motion guard verification, template rendering checks
+
+**Implementation approach:**
+1. CSS-first: All color/radius/motion logic in `tailwind.config.js` and `static/css/input.css`
+2. Template compatibility: Used `sf-*` alias tokens to avoid breaking existing templates; only updated
+   critical visual elements (hero gradient, section backgrounds, headings to Gambetta italic)
+3. Incremental commits: Design system ready; assets/polish features staged for later
+4. No breaking changes: Portal unaffected, models/views untouched, database schema unchanged
+
+**Known issues:**
+- Fonts render as system fallbacks until .woff2 files acquired
+- Product card texture not yet applied
+- Some templates (product_detail.html lightbox controls, order tracking, checkout) still use old
+  color aliases (functional but not fully branded)
+- Swiper pagination/nav styling deferred (not found in codebase)
+
 **What's landed so far (all committed, quality gate green):**
 `accounts/` (login/logout, `PortalPermissionRequiredMixin`, seeded "Staff" Django Group),
 `portal/` product list + Category/Brand/Attribute CRUD + product create/edit with the variant
