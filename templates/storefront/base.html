@@ -93,6 +93,9 @@ control without leaking color schemes between storefront and portal.
               <div class="w-full">
                 <span class="font-gambetta text-base font-bold italic uppercase tracking-[0.14em] text-ajmal-cream">{{ store_settings.name }}</span>
                 <p class="mx-auto mt-2 max-w-sm text-sf-sm leading-relaxed text-ajmal-cream/70">
+                  {% if store_settings.address %}
+                    {{ store_settings.address|linebreaksbr }}<br />
+                  {% endif %}
                   {% if store_contact_number or store_settings.contact_email %}
                     Contact:
                     {% if store_contact_number %}

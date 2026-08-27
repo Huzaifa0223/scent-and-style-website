@@ -35,6 +35,7 @@ class StoreSettings(TimeStampedModel):
     """
 
     name = models.CharField(max_length=200, default="My Store")
+    address = models.TextField(blank=True, default="")
     contact_email = models.EmailField(blank=True, default="")
     contact_phone = models.CharField(max_length=20, blank=True, default="")
     whatsapp_number = models.CharField(max_length=20, blank=True, default="")

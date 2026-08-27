@@ -63,10 +63,12 @@ def test_the_bundle_builds_and_is_not_empty(bundle: str) -> None:
 
 @requires_tailwind
 def test_the_brand_gold_survives_into_the_bundle(bundle: str) -> None:
-    """#D8A448 is the real brand gold. The polish brief proposed #C9922F,
-    sampled from a lossy screenshot; keeping the wrong one would have
-    rebranded every button and hairline by a few percent."""
-    assert "#d8a448" in bundle.lower()
+    """#BC8B57 is the real brand gold since the cream-and-gold pass; it was
+    #D8A448 while the storefront was dark. The guard is unchanged in
+    purpose — a gold sampled from a lossy screenshot rather than taken from
+    the brand sheet would rebrand every button and hairline by a few
+    percent, and nothing else in the build would fail."""
+    assert "#bc8b57" in bundle.lower()
 
 
 @requires_tailwind

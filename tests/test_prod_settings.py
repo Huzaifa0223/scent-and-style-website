@@ -85,3 +85,33 @@ def test_prod_settings_trusts_the_proxy_headers_caddy_sets() -> None:
     assert result.returncode == 0, result.stderr.decode()
     stdout_lines = result.stdout.decode().strip().splitlines()
     assert stdout_lines == ["('HTTP_X_FORWARDED_PROTO', 'https')", "True"]
+
+
+def test_prod_settings_uses_local_filesystem_when_r2_is_unconfigured() -> None:
+    env = os.environ.copy()
+    env.pop("DEBUG", None)
+    env.update(_BASE_ENV)
+    env["DEBUG"] = "False"
+    env.pop("AWS_ACCESS_KEY_ID", None)
+    env.pop("AWS_SECRET_ACCESS_KEY", None)
+    env.pop("AWS_STORAGE_BUCKET_NAME", None)
+    env.pop("AWS_S3_ENDPOINT_URL", None)
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import django; django.setup(); from django.conf import settings; "
+            "print(settings.STORAGES['default']['BACKEND']); "
+            "print(settings.STORAGES['staticfiles']['BACKEND'])",
+        ],
+        cwd=str(PROJECT_ROOT),
+        env=env,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr.decode()
+    stdout_lines = result.stdout.decode().strip().splitlines()
+    assert stdout_lines == [
+        "django.core.files.storage.FileSystemStorage",
+        "django.contrib.staticfiles.storage.StaticFilesStorage",
+    ]

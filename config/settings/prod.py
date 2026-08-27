@@ -52,18 +52,38 @@ SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 # Resolves the open question recorded in specs/state.md's Stage 11 notes.
 TRUST_X_FORWARDED_FOR = True
 
-# Cloudflare R2 (S3-compatible) object storage — selected here, by settings
-# module, never by an `if DEBUG` branch inside storage code (CLAUDE.md).
-STORAGES["default"] = {"BACKEND": "core.storage.R2MediaStorage"}
-
-AWS_ACCESS_KEY_ID = env.str("AWS_ACCESS_KEY_ID")
-AWS_SECRET_ACCESS_KEY = env.str("AWS_SECRET_ACCESS_KEY")
-AWS_STORAGE_BUCKET_NAME = env.str("AWS_STORAGE_BUCKET_NAME")
-AWS_S3_ENDPOINT_URL = env.str("AWS_S3_ENDPOINT_URL")
-AWS_S3_REGION_NAME = env.str("AWS_S3_REGION_NAME", default="auto")
-AWS_S3_ADDRESSING_STYLE = "virtual"
-AWS_DEFAULT_ACL = None
-AWS_QUERYSTRING_AUTH = False
+# Cloudflare R2 (S3-compatible) object storage is optional in the local
+# deployment model: if the merchant is using the server's filesystem instead
+# of R2, Django should keep booting with the built-in local storage backend
+# and not fail at import time. The project still supports the managed-R2
+# path by selecting the R2 backend only when all required storage settings
+# are present.
+R2_CONFIG = {
+    "AWS_ACCESS_KEY_ID": env.str("AWS_ACCESS_KEY_ID", default=""),
+    "AWS_SECRET_ACCESS_KEY": env.str("AWS_SECRET_ACCESS_KEY", default=""),
+    "AWS_STORAGE_BUCKET_NAME": env.str("AWS_STORAGE_BUCKET_NAME", default=""),
+    "AWS_S3_ENDPOINT_URL": env.str("AWS_S3_ENDPOINT_URL", default=""),
+}
+if all(R2_CONFIG.values()):
+    STORAGES["default"] = {"BACKEND": "core.storage.R2MediaStorage"}
+    AWS_ACCESS_KEY_ID = R2_CONFIG["AWS_ACCESS_KEY_ID"]
+    AWS_SECRET_ACCESS_KEY = R2_CONFIG["AWS_SECRET_ACCESS_KEY"]
+    AWS_STORAGE_BUCKET_NAME = R2_CONFIG["AWS_STORAGE_BUCKET_NAME"]
+    AWS_S3_ENDPOINT_URL = R2_CONFIG["AWS_S3_ENDPOINT_URL"]
+    AWS_S3_REGION_NAME = env.str("AWS_S3_REGION_NAME", default="auto")
+    AWS_S3_ADDRESSING_STYLE = "virtual"
+    AWS_DEFAULT_ACL = None
+    AWS_QUERYSTRING_AUTH = False
+else:
+    STORAGES["default"] = {"BACKEND": "django.core.files.storage.FileSystemStorage"}
+    AWS_ACCESS_KEY_ID = ""
+    AWS_SECRET_ACCESS_KEY = ""
+    AWS_STORAGE_BUCKET_NAME = ""
+    AWS_S3_ENDPOINT_URL = ""
+    AWS_S3_REGION_NAME = env.str("AWS_S3_REGION_NAME", default="auto")
+    AWS_S3_ADDRESSING_STYLE = "virtual"
+    AWS_DEFAULT_ACL = None
+    AWS_QUERYSTRING_AUTH = False
 
 # core/backup.py's media mirror target. Optional: a second bucket gives
 # real off-box protection; left unset, the mirror lives under a prefix in
