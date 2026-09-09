@@ -38,6 +38,20 @@ def test_pdp_renders_the_product_name_and_price(client) -> None:  # type: ignore
 
 
 @pytest.mark.django_db
+def test_pdp_add_to_cart_uses_a_standard_post_form(client) -> None:  # type: ignore[no-untyped-def]
+    """A native form keeps cart submission reliable when HTMX cannot enhance it."""
+    product = ProductFactory(status=Product.Status.PUBLISHED)
+
+    response = client.get(f"/product/{product.slug}/")
+
+    assert response.status_code == 200
+    assert b'action="/cart/add/"' in response.content
+    assert b'method="post"' in response.content
+    assert b'name="csrfmiddlewaretoken"' in response.content
+    assert b'type="submit"' in response.content
+
+
+@pytest.mark.django_db
 def test_pdp_404s_for_an_unpublished_product(client) -> None:  # type: ignore[no-untyped-def]
     product = ProductFactory(status=Product.Status.DRAFT)
 

@@ -77,6 +77,12 @@ class StoreSettings(TimeStampedModel):
     # tracking link is simply omitted from WhatsApp messages until it's
     # configured, rather than ever sending a broken or placeholder URL.
     site_url = models.URLField(blank=True, default="")
+    # Storefront presentation toggle: whether Product.short_description
+    # renders below the product name on cards and the detail page.
+    # Merchant-controlled rather than hard-coded in the template because a
+    # merchant without short descriptions written yet would otherwise see
+    # empty gaps under every product name.
+    show_short_description = models.BooleanField(default=True)
     # roadmap's WHATSAPP_MESSAGE_MAX_CHARS — an UNVERIFIED, deliberately
     # conservative placeholder (see notifications/whatsapp/message_builder.py's
     # module docstring and specs/state.md's Stage 9 entry). §21 requires

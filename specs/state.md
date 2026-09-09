@@ -132,6 +132,28 @@ complete.** P1 (Stage 14 onward) needs the human's explicit go-ahead per CLAUDE.
 
 ## Maintenance log
 
+### 2026-09-02 — PDP cart submission compatibility fix
+
+- Replaced the product detail page's detached inputs and button-level HTMX selectors with one
+  standard POST form, retaining the existing HTMX drawer swap. The form includes Django's CSRF
+  token, so Edge can submit the selected variant and quantity through normal form semantics.
+- Added `test_pdp_add_to_cart_uses_a_standard_post_form` to preserve that browser-compatible
+  submission contract.
+- Focused validation passed: `pytest
+  storefront/tests/test_product_detail_view.py::test_pdp_add_to_cart_uses_a_standard_post_form
+  cart/tests/test_views.py` — 21 passed.
+- Full quality gate status: ruff, formatting, mypy, and `makemigrations --check --dry-run` pass;
+  full pytest remains red on five unrelated pre-existing failures: four StoreSettings cache/test
+  isolation assertions and the Tailwind gold-token assertion in `core/tests/test_css_build.py`.
+- Deployed to the production VPS at `root@169.58.228.147` on 2026-09-02. The live checkout is
+  `/root/scent-and-style-website`, where Gunicorn is directly bound to `127.0.0.1:8000` behind
+  Caddy. Backed up the original template as
+  `templates/storefront/product_detail.html.bak-20260902`, applied the exact local template
+  change, and gracefully reloaded the Gunicorn master. Live verification confirmed the product
+  page renders a POST form with `/cart/add/`, a CSRF token, `variant_id`, and submit button.
+- `manage.py check --deploy` on the VPS completed but reported four pre-existing production
+  security warnings: HSTS, SSL redirect, and secure session/CSRF cookies are not configured.
+
 ### 2026-08-25 — CI quality regression fix
 
 - Investigated GitHub Actions run `32873827063` / job `97890328968`; the failure was narrowed to two

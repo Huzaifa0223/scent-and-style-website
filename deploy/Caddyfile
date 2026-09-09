@@ -1,14 +1,11 @@
 # Caddyfile — production front door (§36, §41, roadmap Stage 13).
 #
-# REPLACE example.com BELOW WITH THE REAL DOMAIN BEFORE DEPLOYING.
-# Left as an obvious, unmistakably-fake placeholder rather than an env-
-# var indirection that would silently look "configured" — Caddy will
-# refuse to obtain a TLS certificate for "example.com" (this server
-# doesn't control it), which is a loud, immediate failure instead of a
-# server quietly listening on the wrong host with no certificate. See
-# docs/deploy.md for the full deploy checklist this file is one step of.
+# Host: mps.scentandstyle.pk — an A record for this exact name must
+# already point at 169.58.228.147 before Caddy is (re)started, or the
+# ACME HTTP-01/TLS-ALPN challenge fails and no certificate is issued.
+# See docs/deploy.md for the full deploy checklist this file is one step of.
 
-example.com {
+mps.scentandstyle.pk {
 	encode gzip zstd
 
 	# §36's static-asset half (the media half — R2 object Cache-Control —

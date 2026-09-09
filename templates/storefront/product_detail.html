@@ -36,7 +36,7 @@
       </ol>
     </nav>
 
-    <div class="mt-6 grid gap-10 lg:grid-cols-2 lg:gap-14">
+    <div class="mt-6 grid gap-10 lg:grid-cols-[minmax(0,420px)_1fr] lg:gap-14">
       {{ gallery_images|json_script:"gallery-data" }}
       <div
         id="pdp-gallery"
@@ -133,14 +133,14 @@
             x-ref="lightboxClose"
             @click="closeLightbox()"
             aria-label="Close"
-            class="absolute right-4 top-4 flex h-11 w-11 items-center justify-center rounded-full border border-sf-fg/30 text-xl text-sf-fg hover:border-sf-brass hover:text-sf-brass focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass"
+            class="absolute right-4 top-4 flex h-11 w-11 items-center justify-center rounded-full border border-white/40 text-xl text-white hover:border-sf-brass hover:text-sf-brass focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass"
           >&times;</button>
           <button
             type="button"
             x-show="images.length > 1"
             @click="prevImage()"
             aria-label="Previous image"
-            class="absolute left-4 flex h-11 w-11 items-center justify-center rounded-full border border-sf-fg/30 text-xl text-sf-fg hover:border-sf-brass hover:text-sf-brass focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass"
+            class="absolute left-4 flex h-11 w-11 items-center justify-center rounded-full border border-white/40 text-xl text-white hover:border-sf-brass hover:text-sf-brass focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass"
           >&lsaquo;</button>
           <img
             :src="images.length ? images[activeIndex].full : ''"
@@ -153,23 +153,34 @@
             x-show="images.length > 1"
             @click="nextImage()"
             aria-label="Next image"
-            class="absolute right-4 flex h-11 w-11 items-center justify-center rounded-full border border-sf-fg/30 text-xl text-sf-fg hover:border-sf-brass hover:text-sf-brass focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass"
+            class="absolute right-4 flex h-11 w-11 items-center justify-center rounded-full border border-white/40 text-xl text-white hover:border-sf-brass hover:text-sf-brass focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass"
           >&rsaquo;</button>
         </div>
       </div>
 
       {{ variants_data|json_script:"variant-data" }}
-      <div x-data="{
+      <form
+        x-data="{
         variantId: {{ default_variant.pk|default:'null' }},
         variants: JSON.parse(document.getElementById('variant-data').textContent),
         qty: 1,
         get variant() { return this.variants.find(v => v.id === this.variantId) },
         incQty() { this.qty += 1 },
         decQty() { this.qty = Math.max(1, this.qty - 1) },
-      }">
+        }"
+        action="{% url 'cart:add' %}"
+        method="post"
+        hx-post="{% url 'cart:add' %}"
+        hx-target="#cart-drawer-content"
+        hx-swap="innerHTML"
+      >
+        {% csrf_token %}
         {% if product.brand %}<p class="eyebrow text-sf-brass">{{ product.brand.name }}</p>{% endif %}
         <h1 class="mt-2 font-display text-sf-d-lg font-light leading-tight text-sf-fg">{{ product.name }}</h1>
-        <p class="mt-3 text-sf-d-sm text-sf-cream" x-text="'Rs. ' + variant.price"></p>
+        {% if store_settings.show_short_description and product.short_description %}
+          <p class="mt-2 text-sf-sm text-ajmal-muted">{{ product.short_description }}</p>
+        {% endif %}
+        <p class="mt-3 text-sf-d-sm font-semibold text-ajmal-ink" x-text="'Rs. ' + variant.price"></p>
 
         {% if variant_options|length > 1 %}
           <div class="mt-6">
@@ -209,11 +220,7 @@
 
         <input type="hidden" id="add-to-cart-variant-id" name="variant_id" :value="variantId" />
         <button
-          type="button"
-          hx-post="{% url 'cart:add' %}"
-          hx-include="#quantity, #add-to-cart-variant-id"
-          hx-target="#cart-drawer-content"
-          hx-swap="innerHTML"
+          type="submit"
           :disabled="variant.available_quantity <= 0"
           class="btn-primary mt-6 w-full px-4"
         >
@@ -227,7 +234,7 @@
             {{ product.description|linebreaks }}
           </div>
         {% endif %}
-      </div>
+      </form>
     </div>
   </div>
 {% endblock %}

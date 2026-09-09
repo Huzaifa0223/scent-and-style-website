@@ -49,6 +49,9 @@ tile must look identical in both. `group` stays inline: Tailwind cannot
       <p class="p-card__eyebrow">{{ product.brand.name }}</p>
     {% endif %}
     <p class="p-card__title">{{ product.name }}</p>
+    {% if store_settings.show_short_description and product.short_description %}
+      <p class="p-card__short-desc">{{ product.short_description }}</p>
+    {% endif %}
     <p class="p-card__price">
       {% if product.display_price is not None %}
         {{ product.display_price|money }}{% if product.has_price_range %}+{% endif %}

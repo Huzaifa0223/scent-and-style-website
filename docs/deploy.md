@@ -73,7 +73,7 @@ Copy `.env.example` to `.env` on the server and fill in every value marked requi
 DJANGO_SETTINGS_MODULE=config.settings.prod
 SECRET_KEY=<GENERATE_WITH_get_random_secret_key>
 DEBUG=False
-ALLOWED_HOSTS=example.com
+ALLOWED_HOSTS=mps.scentandstyle.pk
 
 DATABASE_URL=postgres://ecommerce_app:<ECOMMERCE_APP_DB_PASSWORD>@localhost:5432/ecommerce
 
@@ -155,7 +155,8 @@ sudo systemctl enable --now ecommerce
 
 ## 6. Caddy
 
-Edit `deploy/Caddyfile`: replace `example.com` with the real domain. Then:
+`deploy/Caddyfile` is already set to `mps.scentandstyle.pk` — confirm the A record for that
+name points at this host's IP before proceeding. Then:
 
 ```bash
 sudo cp deploy/Caddyfile /etc/caddy/Caddyfile

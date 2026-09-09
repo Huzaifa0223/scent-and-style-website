@@ -425,7 +425,7 @@
      whatever the merchant happened to upload. object-cover on the image
      crops to this box rather than letterboxing it. */
   .p-card__media {
-    @apply relative aspect-[3/4] w-full overflow-hidden bg-ajmal-cream;
+    @apply relative aspect-square w-full overflow-hidden bg-ajmal-cream;
   }
   /* Image hover zoom — intentionally slower (400ms) than the card lift (300ms)
      so they read as a cohesive effect, not separate actions. */
@@ -442,9 +442,13 @@
   .p-card__title {
     @apply mt-1 line-clamp-2 text-sf-d-sm leading-tight text-ajmal-ink;
   }
-  /* M3: Price text — gold on cream with hover transition to lighter gold. */
+  .p-card__short-desc {
+    @apply mt-0.5 line-clamp-1 text-sf-caption text-ajmal-muted;
+  }
+  /* M3: Price text — bold, dark ink for legibility against the cream card
+     (gold-on-cream measured too low-contrast to read at a glance). */
   .p-card__price {
-    @apply mt-1.5 text-sf-sm text-ajmal-gold
+    @apply mt-1.5 text-sf-sm font-semibold text-ajmal-ink
            transition-colors duration-300 ease-ajmal-ease group-hover:text-ajmal-gold;
   }
 
