@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Page not found</title>
-    <link rel="stylesheet" href="{% static 'css/app.css' %}" />
+    <link rel="stylesheet" href="{% static 'css/app.css' %}?v={{ static_asset_version }}" />
   </head>
   <body class="flex h-full flex-col items-center justify-center gap-4 bg-paper px-4 text-center font-sans">
     <p class="text-sm font-semibold uppercase tracking-wide text-text-muted">404</p>

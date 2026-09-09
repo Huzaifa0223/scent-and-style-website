@@ -21,7 +21,7 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="{% block twitter_title %}{{ store_settings.name }}{% endblock %}" />
     <meta name="twitter:description" content="{% block twitter_description %}{% endblock %}" />
-    <link rel="stylesheet" href="{% static 'css/app.css' %}" />
+    <link rel="stylesheet" href="{% static 'css/app.css' %}?v={{ static_asset_version }}" />
     {% comment %}
     [data-reveal] starts at opacity:0 and is brought in by
     static/js/storefront-reveal.js. Without this fallback, any failure to

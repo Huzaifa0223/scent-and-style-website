@@ -80,6 +80,7 @@ TEMPLATES = [
                 "store.context_processors.store_settings",
                 "cart.context_processors.cart",
                 "core.context_processors.canonical_url",
+                "core.context_processors.static_asset_version",
             ],
         },
     },

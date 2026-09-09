@@ -82,8 +82,10 @@ def test_form_widget_classes_are_reachable_from_python(bundle: str) -> None:
 
 @requires_tailwind
 def test_the_media_box_ratio_is_emitted(bundle: str) -> None:
-    """Tile height parity depends on this one declaration."""
-    assert "aspect-ratio:3/4" in bundle.replace(" ", "")
+    """Tile height parity depends on this one declaration. Square (1/1),
+    not the earlier 3/4 — shrunk deliberately so listing/home tiles read
+    smaller without touching grid column counts."""
+    assert "aspect-ratio:1/1" in bundle.replace(" ", "")
 
 
 @requires_tailwind
