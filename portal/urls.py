@@ -9,6 +9,7 @@ from . import (
     order_views,
     product_actions,
     product_views,
+    review_views,
     taxonomy_views,
     views,
 )
@@ -105,6 +106,12 @@ urlpatterns: list[URLPattern] = [
         name="inventory_adjust",
     ),
     path("orders/", order_views.OrderListView.as_view(), name="order_list"),
+    path("reviews/", review_views.ProductReviewListView.as_view(), name="review_list"),
+    path(
+        "reviews/<int:pk>/moderate/",
+        review_views.ProductReviewModerationView.as_view(),
+        name="review_moderate",
+    ),
     path("orders/<int:pk>/", order_views.OrderDetailView.as_view(), name="order_detail"),
     path(
         "orders/<int:pk>/status/",

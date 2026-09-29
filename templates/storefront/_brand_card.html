@@ -1,0 +1,21 @@
+<a
+  href="{% url 'storefront:product_list' %}?brand={{ brand.slug|urlencode }}"
+  aria-label="Shop {{ brand.name }} products"
+  class="group flex aspect-square flex-col items-center justify-center rounded-ajmal-card border border-ajmal-gold/50 bg-white p-3 text-center shadow-ajmal-lift transition duration-300 ease-ajmal-ease hover:-translate-y-1 hover:border-ajmal-gold hover:shadow-ajmal-float focus:outline-none focus-visible:ring-2 focus-visible:ring-ajmal-gold"
+>
+  <span class="relative flex min-h-0 w-full flex-1 items-center justify-center overflow-hidden rounded-md">
+    {% if brand.logo %}
+      <img src="{{ brand.logo.url }}" alt="{{ brand.name }}" width="200" height="120" loading="lazy" class="h-24 w-[90%] object-contain transition-transform duration-300 ease-ajmal-ease group-hover:scale-105 sm:h-28" />
+    {% else %}
+      <span class="font-gambetta text-sf-d-sm italic text-ajmal-ink">{{ brand.name }}</span>
+    {% endif %}
+    <span aria-hidden="true" class="absolute inset-0 flex items-center justify-center bg-ajmal-ink/85 px-2 text-ajmal-cream opacity-0 transition-opacity duration-200 ease-ajmal-ease group-hover:opacity-100 group-focus-visible:opacity-100">
+      <span class="flex max-w-full flex-col items-center gap-2">
+        <span class="h-px w-8 bg-ajmal-gold"></span>
+        <span class="font-gambetta text-sf-sm italic">{{ brand.name }}</span>
+        <span class="h-px w-8 bg-ajmal-gold"></span>
+      </span>
+    </span>
+  </span>
+  <span class="flex min-h-8 items-center text-sf-caption text-ajmal-muted">Explore {{ brand.name }}</span>
+</a>

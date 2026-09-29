@@ -13,7 +13,7 @@
 {% endblock %}
 
 {% block content %}
-  <div class="shell py-8">
+  <div x-data class="shell py-8">
     <nav aria-label="Breadcrumb" class="mb-2 text-sf-caption text-sf-fg-dim">
       <ol class="flex flex-wrap items-center gap-1.5">
         <li><a href="{% url 'storefront:home' %}" class="hover:text-sf-brass focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass">Home</a></li>
@@ -42,88 +42,10 @@
     against a measured 69px header, leaving 27px of clearance.
     {% endcomment %}
     <div class="mt-8 grid gap-y-8 lg:grid-cols-[240px_1fr] lg:gap-x-gutter-lg">
-      <aside class="lg:sticky lg:top-24 lg:self-start lg:border-r lg:border-sf-line lg:pr-10">
-        {% comment %}
-        flex-col + gap, not space-y-7. Tailwind's space-y utility emits
-        "> :not([hidden]) ~ :not([hidden])", and [hidden] there is the HTML
-        hidden *attribute*, not type="hidden" — so the sort input below
-        counted as a real first child and pushed 28px of spacing onto the
-        first fieldset, dropping the rail's first legend 28px below the
-        sort bar it is supposed to share a baseline with. A flex container
-        ignores display:none children outright, so the gap cannot be
-        thrown off by adding another hidden input here later.
-        {% endcomment %}
-        <form method="get" class="flex flex-col gap-7">
-          {% if current_sort %}<input type="hidden" name="sort" value="{{ current_sort }}" />{% endif %}
-          {% if brand_facets %}
-            <fieldset class="border-b border-sf-line pb-6">
-              <legend class="eyebrow">Brand</legend>
-              <div class="mt-3 space-y-2.5">
-                {% for facet in brand_facets %}
-                  <label class="flex min-h-sf-tap items-center justify-between gap-2 text-sf-sm text-sf-fg-muted">
-                    <span class="flex items-center gap-2.5">
-                      <input
-                        type="radio"
-                        name="brand"
-                        value="{{ facet.brand__slug }}"
-                        {% if current_brand == facet.brand__slug %}checked{% endif %}
-                        class="h-4 w-4 border-sf-line accent-sf-brass focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass"
-                      />
-                      {{ facet.brand__name }}
-                    </span>
-                    <span class="text-sf-fg-dim">({{ facet.count }})</span>
-                  </label>
-                {% endfor %}
-              </div>
-            </fieldset>
-          {% endif %}
-
-          <fieldset class="border-b border-sf-line pb-6">
-            <legend class="eyebrow">Price</legend>
-            <div class="mt-3 flex items-center gap-2">
-              <input
-                type="number" name="price_min" placeholder="Min" value="{{ current_price_min }}"
-                class="field min-h-sf-tap px-2.5"
-              />
-              <span class="text-sf-fg-dim">–</span>
-              <input
-                type="number" name="price_max" placeholder="Max" value="{{ current_price_max }}"
-                class="field min-h-sf-tap px-2.5"
-              />
-            </div>
-          </fieldset>
-
-          {% for group in attribute_facets %}
-            {% if group.values %}
-              <fieldset class="border-b border-sf-line pb-6">
-                <legend class="eyebrow">{{ group.definition.name }}</legend>
-                <div class="mt-3 space-y-2.5">
-                  {% for entry in group.values %}
-                    <label class="flex min-h-sf-tap items-center justify-between gap-2 text-sf-sm text-sf-fg-muted">
-                      <span class="flex items-center gap-2.5">
-                        <input
-                          type="checkbox"
-                          name="{{ group.definition.slug }}"
-                          value="{{ entry.value.slug }}"
-                          {% if entry.is_active %}checked{% endif %}
-                          class="h-4 w-4 rounded-sm border-sf-line accent-sf-brass focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass"
-                        />
-                        {{ entry.value.value }}
-                      </span>
-                      <span class="text-sf-fg-dim">({{ entry.count }})</span>
-                    </label>
-                  {% endfor %}
-                </div>
-              </fieldset>
-            {% endif %}
-          {% endfor %}
-
-          <button
-            type="submit"
-            class="btn-primary w-full px-4"
-          >
-            Apply filters
-          </button>
+      <aside class="hidden lg:sticky lg:top-24 lg:block lg:self-start lg:border-r lg:border-sf-line lg:pr-10">
+        <form method="get" class="flex flex-col gap-5">
+          {% include "storefront/_product_filter_fields.html" %}
+          <button type="submit" class="btn-primary w-full px-4">Apply filters</button>
         </form>
       </aside>
 
@@ -134,7 +56,21 @@
         control floating above the grid. It shares a baseline with the
         rail's first legend.
         {% endcomment %}
-        <div class="rule flex items-center justify-end pb-4">
+        <div class="rule flex items-center justify-between pb-4">
+          <button
+            type="button"
+            @click="$refs.mobileFilters.showModal()"
+            aria-haspopup="dialog"
+            class="min-h-sf-tap inline-flex items-center gap-2 text-sf-sm text-sf-fg lg:hidden"
+          >
+            <svg aria-hidden="true" viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+              <path d="M4 7h16M7 12h10m-7 5h4" />
+            </svg>
+            <span>Filters</span>
+            {% if active_filter_count %}
+              <span class="inline-flex min-w-5 items-center justify-center rounded-full bg-ajmal-gold px-1.5 py-0.5 text-xs font-semibold text-ajmal-ink">{{ active_filter_count }}</span>
+            {% endif %}
+          </button>
           <form method="get" class="flex items-center gap-2.5">
             {% for key, value in request.GET.items %}
               {% if key != "sort" %}
@@ -153,6 +89,33 @@
             </select>
           </form>
         </div>
+
+        <dialog
+          x-ref="mobileFilters"
+          @click.self="$refs.mobileFilters.close()"
+          aria-labelledby="mobile-filters-heading"
+          class="fixed inset-x-0 bottom-0 m-0 max-h-[88vh] w-full max-w-none overflow-hidden rounded-t-ajmal-card border border-ajmal-gold/40 bg-ajmal-cream p-0 text-ajmal-ink shadow-ajmal-lift backdrop:bg-ajmal-ink/55 lg:hidden"
+        >
+          <div class="flex max-h-[88vh] flex-col">
+            <div class="flex items-center justify-between border-b border-ajmal-gold/30 px-5 py-4">
+              <h2 id="mobile-filters-heading" class="font-gambetta text-sf-d-sm italic text-ajmal-ink">Filters</h2>
+              <button
+                type="button"
+                @click="$refs.mobileFilters.close()"
+                aria-label="Close filters"
+                class="flex h-11 w-11 items-center justify-center rounded-full text-xl text-ajmal-ink hover:bg-ajmal-gold/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-ajmal-gold"
+              >&times;</button>
+            </div>
+            <form method="get" class="flex min-h-0 flex-1 flex-col">
+              <div class="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+                {% include "storefront/_product_filter_fields.html" %}
+              </div>
+              <div class="border-t border-ajmal-gold/30 bg-ajmal-cream p-4">
+                <button type="submit" class="btn-primary w-full px-4">Apply filters</button>
+              </div>
+            </form>
+          </div>
+        </dialog>
 
         {% if products %}
           {% comment %}

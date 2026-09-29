@@ -15,7 +15,7 @@ from django.http import HttpRequest
 _APP_CSS_PATH = settings.BASE_DIR / "static" / "css" / "app.css"
 
 
-def static_asset_version(request: HttpRequest) -> dict[str, str]:  # noqa: ARG001
+def static_asset_version(request: HttpRequest) -> dict[str, str]:
     """A cache-busting query param for ``static/css/app.css``.
 
     ``/static/*`` is served with a one-year ``immutable`` Cache-Control

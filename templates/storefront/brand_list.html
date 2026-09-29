@@ -1,0 +1,26 @@
+{% extends "storefront/base.html" %}
+
+{% block title %}Shop by Brand — {{ store_settings.name }}{% endblock %}
+{% block meta_description %}Explore fragrances by brand at {{ store_settings.name }}.{% endblock %}
+
+{% block content %}
+  <section class="shell py-12" aria-labelledby="brand-directory-heading">
+    <p class="eyebrow text-ajmal-gold">Find your signature</p>
+    <h1 id="brand-directory-heading" class="mt-2 font-gambetta text-sf-d-lg italic font-normal text-ajmal-ink">Shop by brand</h1>
+    <p class="mt-3 max-w-xl text-sf-sm leading-relaxed text-ajmal-muted">
+      Explore fragrances from the names you know and the ones you have yet to discover.
+    </p>
+
+    {% if brands %}
+      <ul class="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        {% for brand in brands %}
+          <li>
+            {% include "storefront/_brand_card.html" %}
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="mt-8 text-sf-sm text-ajmal-muted">No brands are available yet.</p>
+    {% endif %}
+  </section>
+{% endblock %}

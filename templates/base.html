@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{% block title %}{{ store_settings.name }}{% endblock %}</title>
+    <link rel="icon" href="{% static 'favicon.ico' %}?v={{ static_asset_version }}" sizes="any" />
     <meta name="description" content="{% block meta_description %}{% endblock %}" />
     <link rel="canonical" href="{{ canonical_url }}" />
     {% comment %}

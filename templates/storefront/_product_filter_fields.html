@@ -1,0 +1,63 @@
+{% if current_sort %}<input type="hidden" name="sort" value="{{ current_sort }}" />{% endif %}
+{% if brand_facets %}
+  <fieldset class="border-b border-sf-line pb-4">
+    <legend class="eyebrow">Brand</legend>
+    <div class="mt-2 space-y-1">
+      {% for facet in brand_facets %}
+        <label class="flex min-h-sf-tap items-center justify-between gap-2 text-sf-sm text-sf-fg-muted">
+          <span class="flex items-center gap-2.5">
+            <input
+              type="radio"
+              name="brand"
+              value="{{ facet.brand__slug }}"
+              {% if current_brand == facet.brand__slug %}checked{% endif %}
+              class="h-4 w-4 border-sf-line accent-sf-brass focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass"
+            />
+            {{ facet.brand__name }}
+          </span>
+          <span class="text-sf-fg-dim">({{ facet.count }})</span>
+        </label>
+      {% endfor %}
+    </div>
+  </fieldset>
+{% endif %}
+
+<fieldset class="border-b border-sf-line pb-4">
+  <legend class="eyebrow">Price</legend>
+  <div class="mt-2 flex items-center gap-2">
+    <input
+      type="number" name="price_min" placeholder="Min" value="{{ current_price_min }}"
+      class="field min-h-sf-tap px-2.5"
+    />
+    <span class="text-sf-fg-dim">–</span>
+    <input
+      type="number" name="price_max" placeholder="Max" value="{{ current_price_max }}"
+      class="field min-h-sf-tap px-2.5"
+    />
+  </div>
+</fieldset>
+
+{% for group in attribute_facets %}
+  {% if group.values %}
+    <fieldset class="border-b border-sf-line pb-4">
+      <legend class="eyebrow">{{ group.definition.name }}</legend>
+      <div class="mt-2 space-y-1">
+        {% for entry in group.values %}
+          <label class="flex min-h-sf-tap items-center justify-between gap-2 text-sf-sm text-sf-fg-muted">
+            <span class="flex items-center gap-2.5">
+              <input
+                type="checkbox"
+                name="{{ group.definition.slug }}"
+                value="{{ entry.value.slug }}"
+                {% if entry.is_active %}checked{% endif %}
+                class="h-4 w-4 rounded-sm border-sf-line accent-sf-brass focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass"
+              />
+              {{ entry.value.value }}
+            </span>
+            <span class="text-sf-fg-dim">({{ entry.count }})</span>
+          </label>
+        {% endfor %}
+      </div>
+    </fieldset>
+  {% endif %}
+{% endfor %}

@@ -21,6 +21,8 @@ from catalog.factories import (
     VariantAttributeValueFactory,
 )
 from catalog.models import Product
+from orders.factories import OrderFactory, OrderItemFactory
+from orders.models import Order
 
 
 @pytest.mark.django_db
@@ -35,6 +37,95 @@ def test_pdp_renders_the_product_name_and_price(client) -> None:  # type: ignore
 
     assert response.status_code == 200
     assert b"Afnan 9PM Eau de Parfum" in response.content
+
+
+@pytest.mark.django_db
+def test_pdp_shows_structured_fragrance_details_and_variant_concentration(
+    client,
+) -> None:  # type: ignore[no-untyped-def]
+    concentration = AttributeDefinitionFactory(name="Concentration", is_variant_option=True)
+    eau_de_parfum = AttributeValueFactory(definition=concentration, value="Eau de Parfum")
+    product = ProductFactory(
+        top_notes="Bergamot, saffron",
+        heart_notes="Rose, jasmine",
+        base_notes="Oud, musk",
+        scent_family="Woody floral",
+        occasion="Evening wear",
+        status=Product.Status.PUBLISHED,
+    )
+    VariantAttributeValueFactory(variant=product.variants.get(), value=eau_de_parfum)
+
+    response = client.get(f"/product/{product.slug}/")
+
+    assert response.status_code == 200
+    for value in (
+        "Fragrance details",
+        "Concentration",
+        "Eau de Parfum",
+        "Woody floral",
+        "Top notes",
+        "Bergamot, saffron",
+        "Heart notes",
+        "Rose, jasmine",
+        "Base notes",
+        "Oud, musk",
+        "Evening wear",
+    ):
+        assert value.encode() in response.content
+
+
+@pytest.mark.django_db
+def test_pdp_shows_recent_best_sellers_excluding_current_and_unconfirmed_orders(
+    client,
+) -> None:  # type: ignore[no-untyped-def]
+    current = ProductFactory(status=Product.Status.PUBLISHED)
+    best_seller = ProductFactory(name="Best seller", status=Product.Status.PUBLISHED)
+    runner_up = ProductFactory(name="Runner up", status=Product.Status.PUBLISHED)
+    pending_only = ProductFactory(name="Pending only", status=Product.Status.PUBLISHED)
+
+    OrderItemFactory(
+        order=OrderFactory(status=Order.Status.CONFIRMED),
+        variant=best_seller.variants.get(),
+        quantity=7,
+    )
+    OrderItemFactory(
+        order=OrderFactory(status=Order.Status.DELIVERED),
+        variant=runner_up.variants.get(),
+        quantity=3,
+    )
+    OrderItemFactory(
+        order=OrderFactory(status=Order.Status.PENDING_CONFIRMATION),
+        variant=pending_only.variants.get(),
+        quantity=100,
+    )
+    OrderItemFactory(
+        order=OrderFactory(status=Order.Status.CONFIRMED),
+        variant=current.variants.get(),
+        quantity=20,
+    )
+
+    response = client.get(f"/product/{current.slug}/")
+
+    assert response.status_code == 200
+    trending = list(response.context["trending_products"])
+    assert [item.pk for item in trending] == [best_seller.pk, runner_up.pk]
+    assert b"Trending products" in response.content
+
+
+@pytest.mark.django_db
+def test_pdp_hides_trending_section_without_recent_confirmed_sales(client) -> None:  # type: ignore[no-untyped-def]
+    current = ProductFactory(status=Product.Status.PUBLISHED)
+    pending_product = ProductFactory(status=Product.Status.PUBLISHED)
+    OrderItemFactory(
+        order=OrderFactory(status=Order.Status.PENDING_CONFIRMATION),
+        variant=pending_product.variants.get(),
+    )
+
+    response = client.get(f"/product/{current.slug}/")
+
+    assert response.status_code == 200
+    assert response.context["trending_products"] == []
+    assert b"Trending products" not in response.content
 
 
 @pytest.mark.django_db

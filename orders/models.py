@@ -131,6 +131,31 @@ class OrderItem(TimeStampedModel):
         return f"{self.quantity} x {self.product_name} ({self.order.order_number})"
 
 
+class ProductReview(TimeStampedModel):
+    """A review tied to one delivered order line; publication is moderated."""
+
+    product = models.ForeignKey("catalog.Product", on_delete=models.CASCADE, related_name="reviews")
+    order_item = models.OneToOneField(
+        OrderItem, on_delete=models.CASCADE, related_name="product_review"
+    )
+    rating = models.PositiveSmallIntegerField()
+    title = models.CharField(max_length=100, blank=True, default="")
+    body = models.TextField(max_length=2000)
+    is_approved = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(rating__gte=1, rating__lte=5),
+                name="product_review_rating_1_to_5",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.rating}/5 review for {self.product}"
+
+
 class OrderStatusEvent(TimeStampedModel):
     """One row per status transition (§23) — both the merchant audit trail
     and the customer-facing timeline (§25, Stage 11). ``orders.services.

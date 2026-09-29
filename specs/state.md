@@ -132,6 +132,40 @@ complete.** P1 (Stage 14 onward) needs the human's explicit go-ahead per CLAUDE.
 
 ## Maintenance log
 
+### 2026-09-29 — storefront brand discovery and product recommendations
+
+- Added a home-page brand strip using published brands with at least one published product; brand
+  links reuse the existing brand filter. After the merchant confirmed the suggestion, added `/brands/`
+  for the complete published-brand directory and linked it from the home section. Added the
+  Facebook page link in the shared storefront footer and referenced a multi-resolution
+  `static/favicon.ico` generated from the page's public profile image.
+- Added a product-detail “Trending products” rail ranked by quantities in confirmed-or-later orders
+  from the previous 30 days. The current product and pending/cancelled/expired orders are excluded;
+  the rail is omitted when there are no qualifying sales. No schema or migration changes.
+- Replaced the mobile stacked filter rail with a native bottom-sheet dialog, active-filter count,
+  and shared filter partial. Expanded brand imagery into square tiles with a centered ruled hover/
+  focus overlay. Browser check at a mobile viewport confirmed the dialog opens; live hover check
+  confirmed the overlay transitions to full opacity.
+- Added optional structured product fields for top/heart/base notes, scent family, and occasion;
+  concentration is read from an existing variant attribute. Added verified-order customer reviews:
+  only delivered-order items can be reviewed, submissions are rate-limited and pending by default,
+  and portal approval is required before public display. Review order/mobile inputs are redacted
+  from Django exception reports.
+- Added three additive migrations for fragrance fields, review rate-limit scope, and ProductReview.
+  Full suite: 636 passed, 2 failed, 1 warning; total coverage 98%. The two failures are the existing
+  Tailwind gold-token assertion and WhatsApp construction policy assertion. Storefront suite: 80
+  passed before the final PII decorator, with all 7 directly affected tests passing afterward.
+- `mypy .`, changed-file Ruff lint/format, and `makemigrations --check --dry-run` passed. Full
+  `ruff check .` remains blocked by the existing unused `noqa` in `core/context_processors.py:18`.
+  VPS `manage.py check --deploy` passed with no issues.
+- Deployed to ScentAndStyle only. Backups are under
+  `/root/scentandstyle-deploy-backups/20260929-222953/` (`app-static-before.tgz` and the
+  `ecommerce-before.dump` database dump). Three migrations applied; `collectstatic` copied two
+  assets; only `scentandstyle.service` was restarted. Live home, `/brands/`, PDP, and CSS returned
+  200. `mps.scentandstyle.pk` was not accessed or changed.
+- No requirements or roadmap changes. The home page shows up to 12 brands; `/brands/` lists all
+  published brands with published products.
+
 ### 2026-09-02 — PDP cart submission compatibility fix
 
 - Replaced the product detail page's detached inputs and button-level HTMX selectors with one

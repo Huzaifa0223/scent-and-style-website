@@ -27,6 +27,7 @@ class RateLimitScope(models.TextChoices):
     LOGIN = "login", "Login"
     CHECKOUT = "checkout", "Checkout"
     SEARCH = "search", "Search"
+    REVIEW = "review", "Review"
 
 
 class RateLimitAttempt(TimeStampedModel):

@@ -32,6 +32,11 @@ SEARCH_TSVECTOR_CONFIG: Final[str] = "simple"
 SEARCH_RESULTS_LIMIT: Final[int] = 20
 SEARCH_SUGGESTIONS_LIMIT: Final[int] = 8
 
+# Storefront brand-discovery and recent-sales recommendation caps/window.
+HOME_BRANDS_LIMIT: Final[int] = 12
+TRENDING_PRODUCTS_LIMIT: Final[int] = 4
+TRENDING_WINDOW_DAYS: Final[int] = 30
+
 # core/validators.py (§41, roadmap Stage 13). Django's ImageField already
 # rejects a non-image payload via Pillow (a real content check, not an
 # extension check) — this is the one thing that check doesn't cover: a

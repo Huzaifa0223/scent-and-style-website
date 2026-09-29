@@ -65,3 +65,15 @@ class OrderTrackingForm(AriaDescribedByMixin, StorefrontStyledFieldMixin, forms.
 
     order_number = forms.CharField(max_length=20, label="Order number")
     mobile_number = forms.CharField(max_length=20, label="Mobile number")
+
+
+class ProductReviewForm(AriaDescribedByMixin, StorefrontStyledFieldMixin, forms.Form):
+    order_number = forms.CharField(max_length=20, label="Order number")
+    mobile_number = forms.CharField(max_length=20, label="Mobile number")
+    rating = forms.TypedChoiceField(
+        choices=[(value, f"{value} star{'s' if value != 1 else ''}") for value in range(1, 6)],
+        coerce=int,
+        widget=forms.RadioSelect,
+    )
+    title = forms.CharField(max_length=100, required=False)
+    body = forms.CharField(max_length=2000, widget=forms.Textarea(attrs={"rows": 4}))

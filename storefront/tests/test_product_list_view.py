@@ -92,6 +92,23 @@ def test_brand_query_param_filters_the_listing(client) -> None:  # type: ignore[
 
 
 @pytest.mark.django_db
+def test_mobile_filter_dialog_shows_active_filter_count_and_reuses_filter_fields(
+    client,
+) -> None:  # type: ignore[no-untyped-def]
+    brand = BrandFactory()
+    ProductFactory(brand=brand, status=Product.Status.PUBLISHED)
+
+    response = client.get(LIST_URL, {"brand": brand.slug})
+
+    assert response.status_code == 200
+    assert response.context["active_filter_count"] == 1
+    assert b'aria-haspopup="dialog"' in response.content
+    assert b'id="mobile-filters-heading"' in response.content
+    assert f'value="{brand.slug}"'.encode() in response.content
+    assert b"checked" in response.content
+
+
+@pytest.mark.django_db
 def test_sort_by_price_ascending(client) -> None:  # type: ignore[no-untyped-def]
     expensive = ProductFactory(
         default_variant_price=Decimal("100.00"), status=Product.Status.PUBLISHED

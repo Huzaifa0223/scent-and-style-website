@@ -4,16 +4,37 @@ mixin, unlike everything in ``portal``.
 
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import Any
 
-from django.db.models import Prefetch, QuerySet
-from django.http import Http404, HttpRequest, HttpResponse, HttpResponsePermanentRedirect
+from django.db.models import (
+    Avg,
+    Count,
+    Exists,
+    IntegerField,
+    OuterRef,
+    Prefetch,
+    QuerySet,
+    Subquery,
+    Sum,
+)
+from django.http import (
+    Http404,
+    HttpRequest,
+    HttpResponse,
+    HttpResponsePermanentRedirect,
+    HttpResponseRedirect,
+)
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
-from django.views.generic import DetailView, ListView
+from django.utils import timezone
+from django.utils.decorators import method_decorator
+from django.views.decorators.debug import sensitive_post_parameters
+from django.views.generic import DetailView, FormView, ListView
 
 from catalog.models import (
     AttributeDefinition,
+    Brand,
     Category,
     Product,
     ProductImage,
@@ -21,6 +42,18 @@ from catalog.models import (
     ProductSlugRedirect,
     ProductVariant,
 )
+from core.config import HOME_BRANDS_LIMIT, TRENDING_PRODUCTS_LIMIT, TRENDING_WINDOW_DAYS
+from core.models import RateLimitScope
+from core.ratelimit import (
+    RateLimitedError,
+    RateLimitPolicy,
+    check_rate_limit,
+    client_ip,
+    record_attempt,
+)
+from orders.forms import ProductReviewForm
+from orders.models import Order, OrderItem, ProductReview
+from orders.reviews import submit_product_review
 from store.models import StoreSettings
 from storefront import seo
 from storefront.filtering import (
@@ -41,6 +74,7 @@ _SORT_OPTIONS = {
     "featured": ("-is_featured", "-created_at"),
 }
 DEFAULT_SORT = "newest"
+PRODUCT_REVIEW_RATE_LIMIT = RateLimitPolicy(max_attempts=5, window_seconds=3600)
 
 
 def _attach_json_ld(products: list[Product], *, request: HttpRequest) -> None:
@@ -139,6 +173,12 @@ class ProductListView(ListView[Product]):
         context["current_brand"] = self.filters.brand_slug
         context["current_price_min"] = self.request.GET.get("price_min", "")
         context["current_price_max"] = self.request.GET.get("price_max", "")
+        context["active_filter_count"] = (
+            int(bool(self.filters.brand_slug))
+            + int(self.filters.price_min is not None)
+            + int(self.filters.price_max is not None)
+            + sum(len(values) for values in self.filters.attribute_groups.values())
+        )
 
         _attach_json_ld(context["products"], request=self.request)
         breadcrumb_items = [("Home", reverse("storefront:home"))]
@@ -222,6 +262,18 @@ class ProductDetailView(DetailView[Product]):
         product = self.object
         variants = list(product.variants.all())
         default_variant = product.default_variant
+        context["concentration"] = (
+            next(
+                (
+                    item.value.value
+                    for item in default_variant.variant_attribute_values.all()
+                    if item.value.definition.slug == "concentration"
+                ),
+                "",
+            )
+            if default_variant is not None
+            else ""
+        )
         images = list(product.images.all())
         primary_image = next((image for image in images if image.is_primary), None)
 
@@ -251,6 +303,54 @@ class ProductDetailView(DetailView[Product]):
             }
             for variant in variants
         ]
+        review_summary = ProductReview.objects.filter(product=product, is_approved=True).aggregate(
+            average=Avg("rating"), count=Count("id")
+        )
+        context["reviews"] = ProductReview.objects.filter(
+            product=product, is_approved=True
+        ).order_by("-created_at")[:20]
+        context["review_average"] = review_summary["average"]
+        context["review_count"] = review_summary["count"]
+        context["review_form"] = ProductReviewForm()
+
+        trending_cutoff = timezone.now() - timedelta(days=TRENDING_WINDOW_DAYS)
+        recent_sales = (
+            OrderItem.objects.filter(
+                variant__product_id=OuterRef("pk"),
+                order__created_at__gte=trending_cutoff,
+                order__status__in=(
+                    Order.Status.CONFIRMED,
+                    Order.Status.PROCESSING,
+                    Order.Status.READY_TO_DISPATCH,
+                    Order.Status.DISPATCHED,
+                    Order.Status.OUT_FOR_DELIVERY,
+                    Order.Status.DELIVERED,
+                ),
+            )
+            .values("variant__product_id")
+            .annotate(quantity_sold=Sum("quantity"))
+            .values("quantity_sold")
+        )
+        trending_products: ProductQuerySet = (
+            Product.objects.filter(status=Product.Status.PUBLISHED)
+            .exclude(pk=product.pk)
+            .filter(Exists(recent_sales))
+            .select_related("brand", "category", "subcategory")
+            .with_pricing()
+            .prefetch_related(
+                Prefetch(
+                    "images",
+                    queryset=ProductImage.objects.filter(is_primary=True),
+                    to_attr="primary_image_list",
+                ),
+                Prefetch("variants", queryset=ProductVariant.objects.with_available_quantity()),
+            )
+            .order_by(Subquery(recent_sales, output_field=IntegerField()).desc(), "-created_at")[
+                :TRENDING_PRODUCTS_LIMIT
+            ]
+        )
+        context["trending_products"] = list(trending_products)
+        _attach_json_ld(context["trending_products"], request=self.request)
 
         context["primary_image_url"] = (
             self.request.build_absolute_uri(primary_image.full_webp.url)
@@ -279,6 +379,47 @@ class ProductDetailView(DetailView[Product]):
         return context
 
 
+@method_decorator(sensitive_post_parameters("order_number", "mobile_number"), name="post")
+class ProductReviewSubmitView(FormView[ProductReviewForm]):
+    """Accept reviews only from the matching phone on a delivered order."""
+
+    form_class = ProductReviewForm
+
+    def form_valid(self, form: ProductReviewForm) -> HttpResponse:
+        ip_address = client_ip(self.request)
+        try:
+            check_rate_limit(
+                scope=RateLimitScope.REVIEW,
+                ip_address=ip_address,
+                policy=PRODUCT_REVIEW_RATE_LIMIT,
+            )
+        except RateLimitedError:
+            return HttpResponse("Too many review attempts. Please try again later.", status=429)
+
+        product = get_object_or_404(
+            Product, slug=self.kwargs["slug"], status=Product.Status.PUBLISHED
+        )
+        review = submit_product_review(
+            product=product,
+            order_number=form.cleaned_data["order_number"],
+            mobile_number=form.cleaned_data["mobile_number"],
+            rating=form.cleaned_data["rating"],
+            title=form.cleaned_data["title"],
+            body=form.cleaned_data["body"],
+        )
+        record_attempt(
+            scope=RateLimitScope.REVIEW,
+            ip_address=ip_address,
+            succeeded=review is not None,
+        )
+        return HttpResponseRedirect(f"{product.get_absolute_url()}#reviews")
+
+    def form_invalid(self, form: ProductReviewForm) -> HttpResponse:
+        return HttpResponse(
+            "Please provide a valid review and order verification details.", status=400
+        )
+
+
 HOME_SECTION_SIZE = 8
 """Featured and new-arrivals rails both cap at 8 — a 4-column desktop grid
 divides evenly with no partial final row, same reasoning as
@@ -292,6 +433,24 @@ page's total height, mostly duplicate-looking empty tiles. Capped here,
 not just visually truncated in the template: an un-rendered row costs
 nothing, a rendered-then-hidden one still costs the query, the markup,
 and the download."""
+
+
+class BrandListView(ListView[Brand]):
+    """List every published brand that has products available to browse."""
+
+    model = Brand
+    template_name = "storefront/brand_list.html"
+    context_object_name = "brands"
+
+    def get_queryset(self) -> QuerySet[Brand]:
+        return (
+            Brand.objects.filter(
+                is_published=True,
+                products__status=Product.Status.PUBLISHED,
+            )
+            .distinct()
+            .order_by("name")
+        )
 
 
 class HomeView(ListView[Product]):
@@ -334,6 +493,14 @@ class HomeView(ListView[Product]):
         )
         context["categories"] = list(all_categories[:HOME_CATEGORY_LIMIT])
         context["has_more_categories"] = all_categories.count() > HOME_CATEGORY_LIMIT
+        context["brands"] = list(
+            Brand.objects.filter(
+                is_published=True,
+                products__status=Product.Status.PUBLISHED,
+            )
+            .distinct()
+            .order_by("name")[:HOME_BRANDS_LIMIT]
+        )
         new_arrivals: ProductQuerySet = Product.objects.filter(status=Product.Status.PUBLISHED)
         context["featured_products"] = list(context["featured_products"])
         context["new_arrivals"] = list(

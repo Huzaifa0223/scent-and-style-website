@@ -61,6 +61,26 @@
     </div>
   </section>
 
+  {% if brands %}
+    <section class="shell py-12" aria-labelledby="shop-by-brand-heading">
+      <div class="flex items-baseline justify-between gap-4">
+        <div>
+          <p class="eyebrow text-ajmal-gold">Find your signature</p>
+          <h2 id="shop-by-brand-heading" class="mt-2 font-gambetta text-sf-d-md italic font-normal text-ajmal-ink">Shop by brand</h2>
+        </div>
+        <a
+          href="{% url 'storefront:brand_list' %}"
+          class="min-h-sf-tap inline-flex shrink-0 items-center text-sf-caption uppercase tracking-[0.12em] text-ajmal-gold hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ajmal-gold"
+        >View all brands</a>
+      </div>
+      <div class="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        {% for brand in brands %}
+          <div data-reveal>{% include "storefront/_brand_card.html" %}</div>
+        {% endfor %}
+      </div>
+    </section>
+  {% endif %}
+
   {% if categories %}
     <section class="category-atmosphere shell relative overflow-hidden py-16">
       <div class="category-atmosphere__glow pointer-events-none absolute inset-0" aria-hidden="true"></div>
