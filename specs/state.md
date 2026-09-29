@@ -155,9 +155,9 @@ complete.** P1 (Stage 14 onward) needs the human's explicit go-ahead per CLAUDE.
   Full suite: 636 passed, 2 failed, 1 warning; total coverage 98%. The two failures are the existing
   Tailwind gold-token assertion and WhatsApp construction policy assertion. Storefront suite: 80
   passed before the final PII decorator, with all 7 directly affected tests passing afterward.
-- `mypy .`, changed-file Ruff lint/format, and `makemigrations --check --dry-run` passed. Full
-  `ruff check .` remains blocked by the existing unused `noqa` in `core/context_processors.py:18`.
-  VPS `manage.py check --deploy` passed with no issues.
+- `mypy .`, full `ruff check .`, `ruff format --check .`, and
+  `makemigrations --check --dry-run` passed after removing the stale `noqa` in
+  `core/context_processors.py`. VPS `manage.py check --deploy` passed with no issues.
 - Deployed to ScentAndStyle only. Backups are under
   `/root/scentandstyle-deploy-backups/20260929-222953/` (`app-static-before.tgz` and the
   `ecommerce-before.dump` database dump). Three migrations applied; `collectstatic` copied two
