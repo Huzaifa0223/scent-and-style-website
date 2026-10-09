@@ -37,10 +37,25 @@
     { threshold: 0.15 }
   );
 
+  // design.md: "80ms stagger per child". The stagger is counted among an
+  // element's [data-reveal] siblings, not across the whole page — a
+  // document-wide index left the 30th card on the home page waiting 2.4s
+  // after scrolling into view, so a fast scroller saw empty sections.
+  // Capped so a long grid's last card never lags far behind its row.
+  var STAGGER_MS = 80;
+  var STAGGER_MAX_STEPS = 4;
+
   function scan(root) {
     var elements = root.querySelectorAll("[data-reveal]:not(.is-in)");
-    elements.forEach(function (el, index) {
-      el.style.transitionDelay = index * 80 + "ms";
+    elements.forEach(function (el) {
+      var parent = el.parentElement;
+      var siblings = parent
+        ? Array.prototype.filter.call(parent.children, function (child) {
+            return child.hasAttribute("data-reveal");
+          })
+        : [el];
+      var step = Math.min(siblings.indexOf(el), STAGGER_MAX_STEPS);
+      el.style.transitionDelay = step * STAGGER_MS + "ms";
       observer.observe(el);
     });
   }

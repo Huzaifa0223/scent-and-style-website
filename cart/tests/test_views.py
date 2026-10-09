@@ -302,3 +302,16 @@ def test_subtotal_and_delivery_placeholder_render(client) -> None:  # type: igno
 
     assert response.status_code == 200
     assert b"Calculated at checkout" in response.content
+
+
+@pytest.mark.django_db
+def test_the_drawer_never_shows_a_customer_the_internal_sku(client) -> None:  # type: ignore[no-untyped-def]
+    """A variant with no attribute values labels itself by SKU — an
+    internal stock code like "PRODUCT-4-DEFAULT", not customer copy."""
+    variant = _variant_with_stock(5)
+
+    response = client.post(ADD_URL, {"variant_id": variant.pk, "quantity": 1})
+
+    assert response.status_code == 200
+    assert variant.product.name.encode() in response.content
+    assert variant.sku.encode() not in response.content

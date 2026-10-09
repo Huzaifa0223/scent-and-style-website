@@ -10,7 +10,10 @@ unavailable_reason, line_total, needs_attention).
       {% if line.variant %}{{ line.variant.product.name }}{% else %}Item unavailable{% endif %}
     </p>
     {% if line.variant %}
-      <p class="mt-0.5 text-sf-caption text-sf-fg-dim">{{ line.variant.sku }}</p>
+      {% with label=line.variant.display_label %}
+        {% comment %}A variant with no attributes labels itself by SKU — an internal code, not something to show a customer.{% endcomment %}
+        {% if label != line.variant.sku %}<p class="mt-0.5 text-sf-caption text-sf-fg-dim">{{ label }}</p>{% endif %}
+      {% endwith %}
     {% endif %}
     {% if line.unavailable_reason %}
       <p class="mt-1 text-sf-caption font-medium text-sf-danger">{{ line.unavailable_reason }}</p>
@@ -43,5 +46,5 @@ unavailable_reason, line_total, needs_attention).
       class="mt-2 inline-flex h-8 items-center rounded-full border border-sf-line px-3 text-sf-caption font-medium text-sf-fg-dim hover:border-sf-danger hover:text-sf-danger focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-brass"
     >Remove</button>
   </div>
-  <p class="shrink-0 text-sf-sm text-sf-cream">{{ line.line_total|money }}</p>
+  <p class="shrink-0 text-sf-sm text-sf-fg">{{ line.line_total|money }}</p>
 </li>

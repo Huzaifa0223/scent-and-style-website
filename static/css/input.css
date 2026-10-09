@@ -560,8 +560,8 @@
   opacity: 0;
   transform: translateY(18px);
   transition:
-    opacity 1400ms cubic-bezier(.4, 0, .2, 1),
-    transform 1400ms cubic-bezier(.4, 0, .2, 1);
+    opacity 700ms cubic-bezier(.4, 0, .2, 1),
+    transform 700ms cubic-bezier(.4, 0, .2, 1);
 }
 [data-reveal].is-in {
   opacity: 1;
@@ -570,7 +570,7 @@
 @media (prefers-reduced-motion: reduce) {
   [data-reveal] {
     transform: none;
-    transition: opacity 300ms ease-out;
+    transition: opacity 200ms ease-out;
   }
 }
 

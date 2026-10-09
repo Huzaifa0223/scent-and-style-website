@@ -55,6 +55,7 @@ from core.ratelimit import (
     client_ip,
     record_attempt,
 )
+from core.templatetags.money import money
 from orders.forms import ProductReviewForm
 from orders.models import Order, OrderItem, ProductReview
 from orders.reviews import submit_product_review
@@ -334,6 +335,9 @@ class ProductDetailView(DetailView[Product]):
             {
                 "id": variant.pk,
                 "price": str(variant.price),
+                # Pre-formatted so the price the customer sees matches the
+                # cart and checkout ("Rs. 16,000.00", never "Rs. 16000.00").
+                "price_display": money(variant.price),
                 "available_quantity": variant.available_quantity,  # type: ignore[attr-defined]
             }
             for variant in variants

@@ -3,6 +3,8 @@
 
 {% block title %}Checkout — {{ store_settings.name }}{% endblock %}
 
+{% block whatsapp_fab %}{% endblock %}
+
 {% block content %}
   <div class="shell py-8">
     <h1 class="font-display text-sf-d-lg font-light text-sf-fg">Checkout</h1>
@@ -100,6 +102,9 @@
             {% endif %}
           {% endfor %}
           {% for field in form.hidden_fields %}{{ field }}{% endfor %}
+
+          {% comment %}Payment is advance-only and arranged by phone after the order — say so before the customer commits, not only on the product page.{% endcomment %}
+          {% include "storefront/_shipping_payment_info.html" %}
 
           <button
             type="submit"

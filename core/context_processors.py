@@ -16,7 +16,8 @@ _APP_CSS_PATH = settings.BASE_DIR / "static" / "css" / "app.css"
 
 
 def static_asset_version(request: HttpRequest) -> dict[str, str]:
-    """A cache-busting query param for ``static/css/app.css``.
+    """A cache-busting query param for ``static/css/app.css`` and the
+    storefront JS shipped alongside it (rebuilt on the same deploy).
 
     ``/static/*`` is served with a one-year ``immutable`` Cache-Control
     header (deploy/Caddyfile) at a fixed URL with no filename hashing

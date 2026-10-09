@@ -3,13 +3,15 @@
 
 {% block title %}Order {{ order.order_number }} — {{ store_settings.name }}{% endblock %}
 
+{% block whatsapp_fab %}{% endblock %}
+
 {% block content %}
   <div class="shell max-w-2xl py-10 text-center">
     <p class="eyebrow text-sf-ok">Order placed</p>
     <h1 class="mt-2 font-display text-sf-d-lg font-light text-sf-fg">Thank you, {{ order.customer_name }}</h1>
     <p class="mt-2 text-sf-sm text-sf-fg-muted">
       Your order number is
-      <span class="font-semibold text-sf-cream">{{ order.order_number }}</span>.
+      <span class="font-semibold text-sf-fg">{{ order.order_number }}</span>.
       Keep it handy — you'll need it to track your order.
     </p>
 
@@ -50,7 +52,7 @@
         <a
           id="whatsapp-link"
           href="{{ whatsapp_url }}"
-          class="min-h-sf-ctrl inline-flex w-full max-w-xs items-center justify-center gap-2 rounded-sf bg-sf-whatsapp px-5 text-sf-caption font-semibold uppercase tracking-[0.1em] text-sf-fg-onbrass transition-opacity duration-200 hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-whatsapp focus-visible:ring-offset-2 focus-visible:ring-offset-sf-ink"
+          class="min-h-sf-ctrl inline-flex w-full max-w-xs items-center justify-center gap-2 rounded-full bg-sf-whatsapp px-5 text-sf-caption font-semibold uppercase tracking-[0.1em] text-sf-fg-onbrass transition-opacity duration-200 hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-sf-whatsapp focus-visible:ring-offset-2 focus-visible:ring-offset-sf-ink"
         >
           Open WhatsApp to notify us
         </a>
@@ -99,10 +101,28 @@
         </div>
         <div class="flex items-center justify-between font-semibold">
           <span class="text-sf-fg">Total</span>
-          <span class="text-sf-cream">{{ order.total|money }}</span>
+          <span class="text-sf-fg">{{ order.total|money }}</span>
         </div>
       </div>
     </div>
+
+    <section class="mt-8 rounded-sf border border-sf-line bg-sf-surface p-5 text-left" aria-labelledby="next-steps-heading">
+      <h2 id="next-steps-heading" class="eyebrow">What happens next</h2>
+      <ol class="mt-3 space-y-3 text-sf-sm text-sf-fg">
+        <li class="flex gap-3">
+          <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-sf-brass text-sf-caption font-semibold text-sf-fg-onbrass" aria-hidden="true">1</span>
+          <span>We’ll contact you on <span class="font-semibold">{{ order.customer_phone }}</span> with our JazzCash, EasyPaisa, or bank account details.</span>
+        </li>
+        <li class="flex gap-3">
+          <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-sf-brass text-sf-caption font-semibold text-sf-fg-onbrass" aria-hidden="true">2</span>
+          <span>Pay in advance and send us a screenshot or receipt of your payment.</span>
+        </li>
+        <li class="flex gap-3">
+          <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-sf-brass text-sf-caption font-semibold text-sf-fg-onbrass" aria-hidden="true">3</span>
+          <span>Your order ships and arrives in 1 to 3 days. Track it any time with your order number.</span>
+        </li>
+      </ol>
+    </section>
 
     <p class="mt-6 text-sf-sm text-sf-fg-dim">
       Delivering to {{ order.delivery_address }}, {{ order.delivery_city }}

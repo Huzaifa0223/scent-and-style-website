@@ -400,3 +400,71 @@ def test_gate5_a_checkout_error_report_does_not_leak_customer_pii(
     assert "03001234567" not in body
     assert "ayesha@example.com" not in body
     assert "House 1, Street 2" not in body
+
+
+def _configure_merchant_whatsapp() -> None:
+    settings_obj = StoreSettings.load()
+    settings_obj.whatsapp_number = "923001112222"
+    settings_obj.save()
+
+
+FLOATING_WHATSAPP_MARKER = b'aria-label="Chat with us on WhatsApp"'
+
+
+@pytest.mark.django_db
+def test_checkout_explains_advance_payment_before_the_place_order_button(client) -> None:  # type: ignore[no-untyped-def]
+    """A customer must learn that payment is advance-only (JazzCash,
+    EasyPaisa, bank transfer) before committing, not only on the product
+    page they may never have read closely."""
+    variant = _variant_with_stock(5)
+    client.post("/cart/add/", {"variant_id": variant.pk, "quantity": 1})
+
+    content = client.get(CHECKOUT_URL).content.decode()
+
+    assert "Shipping and payment information" in content
+    assert "JazzCash, EasyPaisa, or bank transfer" in content
+    assert content.index("Shipping and payment information") < content.index("Place order")
+
+
+@pytest.mark.django_db
+def test_checkout_and_confirmation_drop_the_floating_whatsapp_button(client) -> None:  # type: ignore[no-untyped-def]
+    """On a phone the floating button sat on top of "Place order" and the
+    confirmation totals; confirmation already has its own WhatsApp CTA."""
+    _configure_merchant_whatsapp()
+    variant = _variant_with_stock(5)
+    assert FLOATING_WHATSAPP_MARKER in client.get("/").content
+    client.post("/cart/add/", {"variant_id": variant.pk, "quantity": 1})
+
+    checkout = client.get(CHECKOUT_URL)
+    confirmation = client.get(client.post(CHECKOUT_URL, _checkout_post_data()).url)
+
+    assert FLOATING_WHATSAPP_MARKER not in checkout.content
+    assert FLOATING_WHATSAPP_MARKER not in confirmation.content
+    assert b'id="whatsapp-link"' in confirmation.content
+
+
+@pytest.mark.django_db
+def test_confirmation_tells_the_customer_what_happens_next(client) -> None:  # type: ignore[no-untyped-def]
+    variant = _variant_with_stock(5)
+    client.post("/cart/add/", {"variant_id": variant.pk, "quantity": 1})
+    order_url = client.post(CHECKOUT_URL, _checkout_post_data()).url
+    order = Order.objects.get()
+
+    content = client.get(order_url).content.decode()
+
+    assert "What happens next" in content
+    assert order.customer_phone in content
+    assert "screenshot or receipt" in content
+    assert "1 to 3 days" in content
+
+
+@pytest.mark.django_db
+def test_confirmation_order_number_and_total_use_readable_text_color(client) -> None:  # type: ignore[no-untyped-def]
+    """sf-cream is a sand background tone (#F0E6DB) — as text on the cream
+    page it was all but invisible, which hid the order number and total."""
+    variant = _variant_with_stock(5)
+    client.post("/cart/add/", {"variant_id": variant.pk, "quantity": 1})
+
+    response = client.get(client.post(CHECKOUT_URL, _checkout_post_data()).url)
+
+    assert b"text-sf-cream" not in response.content

@@ -88,9 +88,13 @@ module.exports = {
         "sf-paper": "#FFF7EE",                     // cream background
         "sf-paper-fg": { DEFAULT: "#2B2826", muted: "#777777" },
         "sf-brass": { DEFAULT: "#D8A448", hover: "#C9973D", press: "#BE8C32" },
-        "sf-cream": "#F0E6DB",                     // sand tone
+        "sf-cream": "#F0E6DB",                     // sand tone — background only, invisible as text on cream
         "sf-ink": { DEFAULT: "#2B2826", deep: "#1A1512" },
         "sf-surface": "#FFF7EE",                   // cream
+        "sf-surface-raised": "#F0E6DB",            // sand hover/placeholder fill
+        "sf-whatsapp": "#16BE45",                  // WhatsApp CTA background
+        "sf-danger": "#BE4040",                    // error text/borders — 5:1 on cream
+        "sf-ok": "#2F7A4B",                        // success text — readable on cream
         "sf-line": { DEFAULT: "#D8A448", strong: "#C9973D", gold: "rgba(216, 164, 72, 0.50)" },
       },
       fontFamily: {

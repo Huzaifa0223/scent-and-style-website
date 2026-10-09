@@ -2774,3 +2774,36 @@ failed, and precisely what is needed to unblock. Clear the entry when resolved.
   show up to five products, preferring curated/recent sellers and then matching category/brand.
 - Added centered shipping/payment guidance below the add-to-cart controls and bottom links to Home
   and All Products. Merchant approved the checkout copy as written.
+- Pushed the feature and CI fixes to GitHub `main`; CI passed on commit `f0c1355`.
+- Deployed `f0c1355` to `scentandstyle.pk` on 2026-10-09. CSS rebuilt, Django checks/migrations
+  completed (no migrations pending), static files collected, and the production service restarted.
+  The home page, product list, and product detail page returned HTTP 200 over HTTPS; the detail
+  page's new copy and navigation were also confirmed in the live response.
+- Deployment caveats: `check --deploy` reported four HTTPS/cookie security warnings that remain
+  follow-up work. A database dump was saved on the VPS, but its optional R2 upload was skipped.
+  Existing server-side changes were preserved in a named Git stash.
+
+### 2026-10-09 — storefront UX pass (readability, checkout clarity)
+
+- Owner reported the confirmation page's order number and total were unreadable. Cause: `text-sf-cream`
+  (`#F0E6DB`, a background sand tone) used as text on the `#FFF7EE` page. Replaced with `text-sf-fg` on
+  confirmation, tracking, cart line totals, and search-suggestion prices.
+- Defined storefront tokens templates used but `tailwind.config.js` never declared, so they compiled to
+  nothing: `sf-whatsapp` (confirmation CTA had no background), `sf-danger` (checkout/cart errors and
+  "Out of stock" had no color), `sf-ok`, `sf-surface-raised`. Danger/ok use darker shades readable on cream.
+- PDP price now uses the shared `money` formatter (`Rs. 16,000.00`, was `Rs. 16000.00`) and is
+  server-rendered. "Tap to enlarge" overlay given a dark pill so it reads on dark photos.
+- Cart drawer no longer shows the internal SKU for attribute-less variants; `cart_lines` prefetches
+  variant attributes so the label stays query-flat.
+- Merchant-approved shipping/payment copy extracted to `storefront/_shipping_payment_info.html` and also
+  shown on checkout above "Place order". Confirmation gains a three-step "What happens next" built from
+  the same approved facts (needs owner sign-off on wording).
+- Floating WhatsApp button suppressed on checkout and confirmation (`whatsapp_fab` block): on phones it
+  covered "Place order" and the totals.
+- Scroll reveal brought back to `docs/design.md` motion spec: 700ms (was 1400ms), 80ms stagger counted
+  per sibling group and capped (was page-wide, delaying lower home-page cards by ~2.4s). Reveal JS is
+  now cache-busted with `static_asset_version`.
+- Not changed, recorded for the owner: gold `#D8A448` eyebrow/link text measures ~2.1:1 on cream, below
+  WCAG AA for small text. It is the canonical brand gold, so darkening it is a brand decision.
+- Gate: ruff, format, mypy, `makemigrations --check` clean; pytest 647 passed, 98% coverage; the four
+  known local-only `store/tests` StoreSettings cache failures remain (fail in isolation, untouched).

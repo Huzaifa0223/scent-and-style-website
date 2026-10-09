@@ -430,3 +430,17 @@ def test_gate4_query_count_stays_flat_as_the_products_own_variant_and_image_coun
         f"query count grew with the product's own variant/image count: {queries_small} at 1 "
         f"variant/image, {queries_large} at 10 — likely an N+1"
     )
+
+
+@pytest.mark.django_db
+def test_pdp_price_is_formatted_like_the_cart_and_checkout(client) -> None:  # type: ignore[no-untyped-def]
+    """The PDP used to print the raw decimal ("Rs. 16000.00") while the cart
+    showed "Rs. 16,000.00". Server-rendered too, so it shows without JS."""
+    product = ProductFactory(
+        default_variant_price=Decimal("16000.00"), status=Product.Status.PUBLISHED
+    )
+
+    response = client.get(f"/product/{product.slug}/")
+
+    assert response.context["variants_data"][0]["price_display"] == "Rs. 16,000.00"
+    assert b">Rs. 16,000.00</p>" in response.content

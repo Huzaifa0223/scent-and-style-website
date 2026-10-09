@@ -110,9 +110,10 @@ def _reason(variant: ProductVariant | None, purchasable_quantity: int, requested
 
 
 def cart_lines(cart: Cart) -> list[CartLine]:
-    """Every line in one pass, two queries total regardless of item count
-    (the cart's own items, then every referenced variant's availability in
-    a single ``with_available_quantity()`` query) — flat under
+    """Every line in one pass, a fixed query count regardless of item count
+    (the cart's own items, every referenced variant's availability in a
+    single ``with_available_quantity()`` query, plus the attribute prefetch
+    the drawer's ``display_label`` reads) — flat under
     ``assertNumQueries`` as the cart grows, the same discipline every other
     list-rendering view in this project already holds itself to."""
     items = list(cart.items.all())
@@ -121,6 +122,7 @@ def cart_lines(cart: Cart) -> list[CartLine]:
         variant.pk: variant
         for variant in ProductVariant.objects.with_available_quantity()
         .select_related("product")
+        .prefetch_related("variant_attribute_values__value")
         .filter(pk__in=variant_ids)
     }
 

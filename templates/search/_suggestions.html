@@ -22,7 +22,7 @@ Type-ahead suggestion dropdown (§15). Each row links to the storefront PDP
         {% endwith %}
         <span class="flex-1 text-sf-sm text-sf-fg">{{ product.name }}</span>
         {% if product.display_price is not None %}
-          <span class="text-sf-sm text-sf-cream">
+          <span class="text-sf-sm text-sf-fg">
             {{ product.display_price|money }}{% if product.has_price_range %}+{% endif %}
           </span>
         {% endif %}
