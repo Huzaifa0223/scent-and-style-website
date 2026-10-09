@@ -2807,3 +2807,9 @@ failed, and precisely what is needed to unblock. Clear the entry when resolved.
   WCAG AA for small text. It is the canonical brand gold, so darkening it is a brand decision.
 - Gate: ruff, format, mypy, `makemigrations --check` clean; pytest 647 passed, 98% coverage; the four
   known local-only `store/tests` StoreSettings cache failures remain (fail in isolation, untouched).
+- Pushed by the owner; CI run `37957860824` passed on `d4dac55`. The owner ran the deploy on the VPS
+  (auto-mode blocked Claude from deploying): backup `ecommerce_20261009_162018.dump` (R2 upload skipped),
+  fast-forward to `d4dac55`, CSS rebuilt, no planned migrations, `check` clean, 3 static files collected,
+  `scentandstyle.service` active. Live check on a 390px viewport: PDP price `Rs. 16,000.00`, versioned
+  `app.css`/reveal JS served, reveal 0.7s, `.bg-sf-whatsapp` present, checkout shows payment info with
+  no floating WhatsApp button, home still has it. No test order was placed on production.
