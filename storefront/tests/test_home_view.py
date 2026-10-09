@@ -78,7 +78,8 @@ def test_home_shows_published_brands_with_clickable_product_filters(client) -> N
     assert f"/products/?brand={brand.slug}".encode() in response.content
     assert b'href="/brands/"' in response.content
     assert b"group-hover:opacity-100" in response.content
-    assert b"Afnan</span>" in response.content
+    assert b">Afnan</span>" in response.content
+    assert b">Explore Afnan</span>" not in response.content
 
 
 @pytest.mark.django_db

@@ -26,7 +26,7 @@ from catalog.factories import (
     TagFactory,
 )
 from catalog.models import Product, ProductVariant, VariantAttributeValue
-from portal.product_forms import ProductVariantForm
+from portal.product_forms import ProductForm, ProductVariantForm
 
 
 def _login_owner(client, django_user_model):  # type: ignore[no-untyped-def]
@@ -145,6 +145,10 @@ def test_gate1_create_product_with_three_variants_across_two_attributes_and_publ
     skus = set(product.variants.values_list("sku", flat=True))
     assert skus == {"GATE1-50-RED", "GATE1-100-RED", "GATE1-50-PLAIN"}
     assert product.variants.filter(is_default=True).count() == 1
+
+
+def test_product_form_exposes_manual_trending_toggle() -> None:
+    assert "is_trending" in ProductForm().fields
 
 
 @pytest.mark.django_db

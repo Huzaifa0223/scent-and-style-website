@@ -132,6 +132,45 @@ complete.** P1 (Stage 14 onward) needs the human's explicit go-ahead per CLAUDE.
 
 ## Maintenance log
 
+### 2026-10-03 — Google Search Console verification replacement blocked
+
+- The SEO handoff identifies `https://scentandstyle.pk/googlea0804ef5f37cef71.html` as the
+  current live verification file. The requested `SEO/google0dd277f225f2406a.html` exists locally
+  with the expected verification body; another older token file also remains under `SEO/`.
+- No root-level verification file exists in the repository. The local production Caddyfile serves
+  `/static/*` directly and proxies other paths to Django; the live SEO handoff describes a separate
+  exact-path Caddy handler on the VPS.
+- Blocked before VPS changes: this task requires remote hosting access. Do not remove the current
+  live verification until SSH access to `scentandstyle.pk` is available and the replacement is
+  verified at its public URL. Do not touch `mps.scentandstyle.pk`.
+- Read-only SSH inspection was attempted with BatchMode against `root@169.58.228.147` and rejected
+  with `Permission denied (publickey,password)`. No remote files or Caddy configuration changed.
+- The owner then entered the VPS password directly in the focused terminal. The access blocker was
+  resolved, and the deployment completion is recorded in the following maintenance entry.
+
+### 2026-10-03 — replace live Google Search Console verification
+
+- Added `google0dd277f225f2406a.html` under the VPS SEO directory and changed only the
+  `scentandstyle.pk` exact-path Caddy handler. Backed up the previous Caddyfile under
+  `/root/scentandstyle-deploy-backups/20261003-google-gsc-*/Caddyfile.before`; Caddy validation and
+  reload succeeded.
+- Verified the new public URL returned HTTP 200 with the exact Google verification body, removed
+  the old `googlea0804ef5f37cef71.html` file, and verified its URL returned HTTP 404. No changes
+  were made to `mps.scentandstyle.pk`.
+- Updated `SEO/CLAUDE_SEO_HANDOFF.md` to identify the new live token.
+
+### 2026-10-02 — temporarily disable product reviews
+
+- Set `PRODUCT_REVIEWS_ENABLED = False` by default. The product-page reviews/rating section and
+  portal navigation link are hidden; public submission and both portal moderation endpoints return
+  404 while disabled. Review models, migrations, data, and implementation remain intact for a later
+  deliberate enablement by changing the setting to `True`.
+- Added a regression test covering hidden display, blocked submission, and blocked moderation when
+  disabled. `storefront/tests/test_reviews.py` — 6 passed. Strict `mypy .` and focused Ruff checks
+  passed before deploy.
+- Deployed review-off behavior to ScentAndStyle only; `scentandstyle.service` restarted. The PDP
+  renders without the reviews section; direct review GET returns 404. No schema or database changes.
+
 ### 2026-09-29 — storefront brand discovery and product recommendations
 
 - Added a home-page brand strip using published brands with at least one published product; brand
@@ -2728,3 +2767,10 @@ failed, and precisely what is needed to unblock. Clear the entry when resolved.
 ```
 - [Stage N] <blocker> — tried: <what> — need: <what exactly>
 ```
+
+## Product detail page follow-up (2026-10-09)
+
+- Replaced the customer-facing trending rail label with “You may also like”; recommendations now
+  show up to five products, preferring curated/recent sellers and then matching category/brand.
+- Added centered shipping/payment guidance below the add-to-cart controls and bottom links to Home
+  and All Products. Merchant approved the checkout copy as written.

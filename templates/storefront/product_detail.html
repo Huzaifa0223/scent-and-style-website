@@ -229,33 +229,38 @@
         </button>
         <div id="pdp-add-error" class="text-sf-sm text-sf-danger"></div>
 
-        {% if product.description %}
+        <section class="mt-6 rounded-ajmal-card border border-ajmal-gold/30 bg-white/70 p-4 text-center" aria-labelledby="shipping-payment-heading">
+          <h2 id="shipping-payment-heading" class="font-gambetta text-sf-d-sm italic text-ajmal-ink">Shipping and payment information</h2>
+          <p class="mt-2 text-sf-sm leading-relaxed text-ajmal-muted">Shipping takes 1 to 3 days. We accept advance payment only via JazzCash, EasyPaisa, or bank transfer. After you place your order, we’ll contact you on your phone number with the account details. Please send us a screenshot or receipt of your payment.</p>
+        </section>
+
+        {% if display_description %}
           <div class="mt-8 border-t border-sf-line pt-6 text-sf-sm leading-relaxed text-sf-fg-muted">
-            {{ product.description|linebreaks }}
+            {{ display_description|linebreaks }}
           </div>
         {% endif %}
 
-        {% if product.top_notes or product.heart_notes or product.base_notes or product.scent_family or product.occasion or concentration %}
+        {% if display_top_notes or display_heart_notes or display_base_notes or product.scent_family or product.occasion or concentration %}
           <section class="mt-8 border-t border-ajmal-gold/30 pt-6" aria-labelledby="fragrance-details-heading">
             <h2 id="fragrance-details-heading" class="font-gambetta text-sf-d-sm italic text-ajmal-ink">Fragrance details</h2>
             <dl class="mt-4 grid gap-4 sm:grid-cols-2">
               {% if concentration %}
-                <div><dt class="eyebrow text-ajmal-muted">Concentration</dt><dd class="mt-1 text-sf-sm text-ajmal-ink">{{ concentration }}</dd></div>
+                <div class="rounded-ajmal-card bg-white/70 p-4"><dt class="text-xs font-bold uppercase tracking-[0.1em] text-ajmal-gold">Concentration</dt><dd class="mt-2 text-base font-semibold leading-relaxed text-ajmal-ink">{{ concentration }}</dd></div>
               {% endif %}
               {% if product.scent_family %}
-                <div><dt class="eyebrow text-ajmal-muted">Scent family</dt><dd class="mt-1 text-sf-sm text-ajmal-ink">{{ product.scent_family }}</dd></div>
+                <div class="rounded-ajmal-card bg-white/70 p-4"><dt class="text-xs font-bold uppercase tracking-[0.1em] text-ajmal-gold">Scent family</dt><dd class="mt-2 text-base font-semibold leading-relaxed text-ajmal-ink">{{ product.scent_family }}</dd></div>
               {% endif %}
-              {% if product.top_notes %}
-                <div><dt class="eyebrow text-ajmal-muted">Top notes</dt><dd class="mt-1 text-sf-sm leading-relaxed text-ajmal-ink">{{ product.top_notes|linebreaksbr }}</dd></div>
+              {% if display_top_notes %}
+                <div class="rounded-ajmal-card bg-white/70 p-4"><dt class="text-xs font-bold uppercase tracking-[0.1em] text-ajmal-gold">Top notes</dt><dd class="mt-2 text-base font-semibold leading-relaxed text-ajmal-ink">{{ display_top_notes|linebreaksbr }}</dd></div>
               {% endif %}
-              {% if product.heart_notes %}
-                <div><dt class="eyebrow text-ajmal-muted">Heart notes</dt><dd class="mt-1 text-sf-sm leading-relaxed text-ajmal-ink">{{ product.heart_notes|linebreaksbr }}</dd></div>
+              {% if display_heart_notes %}
+                <div class="rounded-ajmal-card bg-white/70 p-4"><dt class="text-xs font-bold uppercase tracking-[0.1em] text-ajmal-gold">Heart notes</dt><dd class="mt-2 text-base font-semibold leading-relaxed text-ajmal-ink">{{ display_heart_notes|linebreaksbr }}</dd></div>
               {% endif %}
-              {% if product.base_notes %}
-                <div><dt class="eyebrow text-ajmal-muted">Base notes</dt><dd class="mt-1 text-sf-sm leading-relaxed text-ajmal-ink">{{ product.base_notes|linebreaksbr }}</dd></div>
+              {% if display_base_notes %}
+                <div class="rounded-ajmal-card bg-white/70 p-4"><dt class="text-xs font-bold uppercase tracking-[0.1em] text-ajmal-gold">Base notes</dt><dd class="mt-2 text-base font-semibold leading-relaxed text-ajmal-ink">{{ display_base_notes|linebreaksbr }}</dd></div>
               {% endif %}
               {% if product.occasion %}
-                <div><dt class="eyebrow text-ajmal-muted">Suitable for</dt><dd class="mt-1 text-sf-sm leading-relaxed text-ajmal-ink">{{ product.occasion|linebreaksbr }}</dd></div>
+                <div class="rounded-ajmal-card bg-white/70 p-4"><dt class="text-xs font-bold uppercase tracking-[0.1em] text-ajmal-gold">Suitable for</dt><dd class="mt-2 text-base font-semibold leading-relaxed text-ajmal-ink">{{ product.occasion|linebreaksbr }}</dd></div>
               {% endif %}
             </dl>
           </section>
@@ -263,6 +268,7 @@
       </form>
     </div>
   </div>
+  {% if product_reviews_enabled %}
   <section id="reviews" class="shell border-t border-ajmal-gold/30 py-12" aria-labelledby="reviews-heading">
     <div class="flex flex-wrap items-end justify-between gap-3">
       <div>
@@ -327,15 +333,20 @@
       </form>
     </div>
   </section>
-  {% if trending_products %}
-    <section class="shell border-t border-ajmal-gold/30 py-12" aria-labelledby="trending-products-heading">
+  {% endif %}
+  {% if related_products %}
+    <section class="shell border-t border-ajmal-gold/30 py-12" aria-labelledby="related-products-heading">
       <p class="eyebrow text-ajmal-gold">Popular with fragrance lovers</p>
-      <h2 id="trending-products-heading" class="mt-2 font-gambetta text-sf-d-md italic font-normal text-ajmal-ink">Trending products</h2>
-      <div class="mt-6 grid grid-cols-2 gap-x-4 gap-y-8 lg:grid-cols-4">
-        {% for product in trending_products %}
+      <h2 id="related-products-heading" class="mt-2 font-gambetta text-sf-d-md italic font-normal text-ajmal-ink">You may also like</h2>
+      <div class="mt-6 grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+        {% for product in related_products %}
           <div data-reveal>{% include "storefront/_product_card.html" %}</div>
         {% endfor %}
       </div>
     </section>
   {% endif %}
+  <nav class="shell flex flex-wrap justify-center gap-4 border-t border-ajmal-gold/30 py-8" aria-label="Page navigation">
+    <a href="{% url 'storefront:home' %}" class="inline-flex min-h-sf-ctrl items-center justify-center rounded-ajmal-button border border-ajmal-gold px-5 py-3 text-sf-caption font-semibold text-ajmal-ink hover:bg-ajmal-gold focus:outline-none focus-visible:ring-2 focus-visible:ring-ajmal-gold">Back to home page</a>
+    <a href="{% url 'storefront:product_list' %}" class="inline-flex min-h-sf-ctrl items-center justify-center rounded-ajmal-button border border-ajmal-gold px-5 py-3 text-sf-caption font-semibold text-ajmal-ink hover:bg-ajmal-gold focus:outline-none focus-visible:ring-2 focus-visible:ring-ajmal-gold">Back to products</a>
+  </nav>
 {% endblock %}

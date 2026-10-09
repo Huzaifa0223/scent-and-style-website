@@ -44,3 +44,7 @@ def canonical_url(request: HttpRequest) -> dict[str, str]:
     a separate page.
     """
     return {"canonical_url": request.build_absolute_uri(request.path)}
+
+
+def feature_flags(request: HttpRequest) -> dict[str, bool]:
+    return {"product_reviews_enabled": settings.PRODUCT_REVIEWS_ENABLED}

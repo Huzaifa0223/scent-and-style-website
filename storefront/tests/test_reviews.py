@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from django.test import override_settings
 from django.urls import reverse
 
 from catalog.factories import ProductFactory
@@ -12,6 +13,7 @@ from orders.models import Order, ProductReview
 
 
 @pytest.mark.django_db
+@override_settings(PRODUCT_REVIEWS_ENABLED=True)
 def test_delivered_order_customer_can_submit_pending_review(client) -> None:  # type: ignore[no-untyped-def]
     product = ProductFactory(status=Product.Status.PUBLISHED)
     order = OrderFactory(
@@ -41,6 +43,7 @@ def test_delivered_order_customer_can_submit_pending_review(client) -> None:  # 
 
 
 @pytest.mark.django_db
+@override_settings(PRODUCT_REVIEWS_ENABLED=True)
 @pytest.mark.parametrize(
     ("status", "mobile_number", "include_product"),
     [
@@ -72,6 +75,7 @@ def test_unverified_order_cannot_create_review(
 
 
 @pytest.mark.django_db
+@override_settings(PRODUCT_REVIEWS_ENABLED=True)
 def test_reviews_only_render_after_merchant_approval(client, django_user_model) -> None:  # type: ignore[no-untyped-def]
     product = ProductFactory(status=Product.Status.PUBLISHED)
     order = OrderFactory(status=Order.Status.DELIVERED)
@@ -96,3 +100,26 @@ def test_reviews_only_render_after_merchant_approval(client, django_user_model) 
     assert response.status_code == 302
     assert review.is_approved is True
     assert b"Approved review text." in product_response.content
+
+
+@pytest.mark.django_db
+def test_reviews_are_hidden_and_routes_disabled_by_default(client, django_user_model) -> None:  # type: ignore[no-untyped-def]
+    product = ProductFactory(status=Product.Status.PUBLISHED)
+
+    product_response = client.get(product.get_absolute_url())
+    submit_response = client.post(
+        reverse("storefront:product_review_submit", kwargs={"slug": product.slug}), {}
+    )
+    owner = django_user_model.objects.create_superuser(
+        username="reviews-disabled-owner", email="owner@example.com", password="secret"
+    )
+    client.force_login(owner)
+    moderation_response = client.get(reverse("portal:review_list"))
+    moderation_action_response = client.post(
+        reverse("portal:review_moderate", kwargs={"pk": 1}), {"action": "approve"}
+    )
+
+    assert b"Customer reviews" not in product_response.content
+    assert submit_response.status_code == 404
+    assert moderation_response.status_code == 404
+    assert moderation_action_response.status_code == 404

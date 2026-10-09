@@ -75,6 +75,35 @@ def test_pdp_shows_structured_fragrance_details_and_variant_concentration(
 
 
 @pytest.mark.django_db
+def test_pdp_promotes_explicit_legacy_note_lines_to_styled_fragrance_details(
+    client,
+) -> None:  # type: ignore[no-untyped-def]
+    product = ProductFactory(
+        description=(
+            "Top Notes: Bergamot, Cinnamon, Cardamom\n"
+            "Middle Notes: Elemi, Vanilla, Sugar\n"
+            "Base Notes: Musk, Almond, Tonka\n"
+            "Wear this fragrance in the evening."
+        ),
+        status=Product.Status.PUBLISHED,
+    )
+
+    response = client.get(f"/product/{product.slug}/")
+
+    assert response.status_code == 200
+    for value in (
+        "Top notes",
+        "Bergamot, Cinnamon, Cardamom",
+        "Heart notes",
+        "Elemi, Vanilla, Sugar",
+        "Base notes",
+        "Musk, Almond, Tonka",
+        "Wear this fragrance in the evening.",
+    ):
+        assert value.encode() in response.content
+
+
+@pytest.mark.django_db
 def test_pdp_shows_recent_best_sellers_excluding_current_and_unconfirmed_orders(
     client,
 ) -> None:  # type: ignore[no-untyped-def]
@@ -107,13 +136,36 @@ def test_pdp_shows_recent_best_sellers_excluding_current_and_unconfirmed_orders(
     response = client.get(f"/product/{current.slug}/")
 
     assert response.status_code == 200
-    trending = list(response.context["trending_products"])
-    assert [item.pk for item in trending] == [best_seller.pk, runner_up.pk]
-    assert b"Trending products" in response.content
+    related = list(response.context["related_products"])
+    assert [item.pk for item in related[:2]] == [best_seller.pk, runner_up.pk]
+    assert b"You may also like" in response.content
 
 
 @pytest.mark.django_db
-def test_pdp_hides_trending_section_without_recent_confirmed_sales(client) -> None:  # type: ignore[no-untyped-def]
+def test_pdp_prioritizes_merchant_curated_trending_products(client) -> None:  # type: ignore[no-untyped-def]
+    current = ProductFactory(status=Product.Status.PUBLISHED)
+    curated = ProductFactory(
+        name="Merchant pick", is_trending=True, status=Product.Status.PUBLISHED
+    )
+    automatic = ProductFactory(name="Recent seller", status=Product.Status.PUBLISHED)
+    OrderItemFactory(
+        order=OrderFactory(status=Order.Status.DELIVERED),
+        variant=automatic.variants.get(),
+        quantity=5,
+    )
+
+    response = client.get(f"/product/{current.slug}/")
+
+    assert response.status_code == 200
+    related = list(response.context["related_products"])
+    assert related[0] == curated
+    assert automatic in related
+    assert current not in related
+    assert len(related) <= 5
+
+
+@pytest.mark.django_db
+def test_pdp_recommends_other_products_without_recent_confirmed_sales(client) -> None:  # type: ignore[no-untyped-def]
     current = ProductFactory(status=Product.Status.PUBLISHED)
     pending_product = ProductFactory(status=Product.Status.PUBLISHED)
     OrderItemFactory(
@@ -124,8 +176,22 @@ def test_pdp_hides_trending_section_without_recent_confirmed_sales(client) -> No
     response = client.get(f"/product/{current.slug}/")
 
     assert response.status_code == 200
-    assert response.context["trending_products"] == []
-    assert b"Trending products" not in response.content
+    assert pending_product in response.context["related_products"]
+    assert b"You may also like" in response.content
+
+
+@pytest.mark.django_db
+def test_pdp_recommendations_are_capped_at_five_products(client) -> None:  # type: ignore[no-untyped-def]
+    current = ProductFactory(status=Product.Status.PUBLISHED)
+    other_products = [ProductFactory(status=Product.Status.PUBLISHED) for _ in range(6)]
+
+    response = client.get(f"/product/{current.slug}/")
+
+    assert response.status_code == 200
+    related = list(response.context["related_products"])
+    assert len(related) == 5
+    assert current not in related
+    assert set(related).issubset(set(other_products))
 
 
 @pytest.mark.django_db
@@ -140,6 +206,13 @@ def test_pdp_add_to_cart_uses_a_standard_post_form(client) -> None:  # type: ign
     assert b'method="post"' in response.content
     assert b'name="csrfmiddlewaretoken"' in response.content
     assert b'type="submit"' in response.content
+    assert b"Shipping and payment information" in response.content
+    assert b"Shipping takes 1 to 3 days." in response.content
+    assert b"JazzCash, EasyPaisa, or bank transfer" in response.content
+    assert b"phone number with the account details" in response.content
+    assert b"screenshot or receipt" in response.content
+    assert b'href="/" class=' in response.content
+    assert b'href="/products/" class=' in response.content
 
 
 @pytest.mark.django_db

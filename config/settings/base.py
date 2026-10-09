@@ -27,6 +27,7 @@ environ.Env.read_env(str(BASE_DIR / ".env"))
 SECRET_KEY = env.str("SECRET_KEY")
 DEBUG = env.bool("DEBUG")
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=[])
+PRODUCT_REVIEWS_ENABLED = False
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -81,6 +82,7 @@ TEMPLATES = [
                 "cart.context_processors.cart",
                 "core.context_processors.canonical_url",
                 "core.context_processors.static_asset_version",
+                "core.context_processors.feature_flags",
             ],
         },
     },

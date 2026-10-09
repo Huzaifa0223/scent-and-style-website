@@ -58,6 +58,7 @@ class ProductForm(_StyledModelForm[Product]):
             "tags",
             "status",
             "is_featured",
+            "is_trending",
             "meta_title",
             "meta_description",
         ]

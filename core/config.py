@@ -34,7 +34,7 @@ SEARCH_SUGGESTIONS_LIMIT: Final[int] = 8
 
 # Storefront brand-discovery and recent-sales recommendation caps/window.
 HOME_BRANDS_LIMIT: Final[int] = 12
-TRENDING_PRODUCTS_LIMIT: Final[int] = 4
+RELATED_PRODUCTS_LIMIT: Final[int] = 5
 TRENDING_WINDOW_DAYS: Final[int] = 30
 
 # core/validators.py (§41, roadmap Stage 13). Django's ImageField already

@@ -240,6 +240,7 @@ class Product(TimeStampedModel):
     tags = models.ManyToManyField(Tag, blank=True, related_name="products")
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
     is_featured = models.BooleanField(default=False)
+    is_trending = models.BooleanField(default=False)
     meta_title = models.CharField(max_length=70, blank=True, default="")
     meta_description = models.CharField(max_length=160, blank=True, default="")
     # Denormalised search column (§15) — populated by Stage 5's rebuild

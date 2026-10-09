@@ -4,9 +4,11 @@ mixin, unlike everything in ``portal``.
 
 from __future__ import annotations
 
+import re
 from datetime import timedelta
 from typing import Any
 
+from django.conf import settings
 from django.db.models import (
     Avg,
     Count,
@@ -14,6 +16,7 @@ from django.db.models import (
     IntegerField,
     OuterRef,
     Prefetch,
+    Q,
     QuerySet,
     Subquery,
     Sum,
@@ -22,6 +25,7 @@ from django.http import (
     Http404,
     HttpRequest,
     HttpResponse,
+    HttpResponseBase,
     HttpResponsePermanentRedirect,
     HttpResponseRedirect,
 )
@@ -42,7 +46,7 @@ from catalog.models import (
     ProductSlugRedirect,
     ProductVariant,
 )
-from core.config import HOME_BRANDS_LIMIT, TRENDING_PRODUCTS_LIMIT, TRENDING_WINDOW_DAYS
+from core.config import HOME_BRANDS_LIMIT, RELATED_PRODUCTS_LIMIT, TRENDING_WINDOW_DAYS
 from core.models import RateLimitScope
 from core.ratelimit import (
     RateLimitedError,
@@ -73,6 +77,30 @@ _SORT_OPTIONS = {
     "price_desc": ("-display_price",),
     "featured": ("-is_featured", "-created_at"),
 }
+
+_FRAGRANCE_NOTE_LINE = re.compile(
+    r"^\s*(top|head|heart|middle|base)\s+notes?\s*:\s*(.*?)\s*$", re.IGNORECASE
+)
+
+
+def _split_legacy_fragrance_notes(description: str) -> tuple[dict[str, str], str]:
+    """Promote explicitly labeled legacy fragrance-note lines for the PDP.
+
+    Catalog descriptions predate the structured note fields, so only lines
+    with a recognized label are moved; all other description text is kept.
+    """
+    notes: dict[str, str] = {}
+    remaining_lines: list[str] = []
+    labels = {"top": "top", "head": "top", "heart": "heart", "middle": "heart", "base": "base"}
+    for line in description.splitlines():
+        match = _FRAGRANCE_NOTE_LINE.match(line)
+        if match is None or not match.group(2):
+            remaining_lines.append(line)
+            continue
+        notes[labels[match.group(1).casefold()]] = match.group(2)
+    return notes, "\n".join(remaining_lines).strip()
+
+
 DEFAULT_SORT = "newest"
 PRODUCT_REVIEW_RATE_LIMIT = RateLimitPolicy(max_attempts=5, window_seconds=3600)
 
@@ -262,6 +290,13 @@ class ProductDetailView(DetailView[Product]):
         product = self.object
         variants = list(product.variants.all())
         default_variant = product.default_variant
+        legacy_notes, description_without_legacy_notes = _split_legacy_fragrance_notes(
+            product.description
+        )
+        context["display_top_notes"] = product.top_notes or legacy_notes.get("top", "")
+        context["display_heart_notes"] = product.heart_notes or legacy_notes.get("heart", "")
+        context["display_base_notes"] = product.base_notes or legacy_notes.get("base", "")
+        context["display_description"] = description_without_legacy_notes
         context["concentration"] = (
             next(
                 (
@@ -303,15 +338,16 @@ class ProductDetailView(DetailView[Product]):
             }
             for variant in variants
         ]
-        review_summary = ProductReview.objects.filter(product=product, is_approved=True).aggregate(
-            average=Avg("rating"), count=Count("id")
-        )
-        context["reviews"] = ProductReview.objects.filter(
-            product=product, is_approved=True
-        ).order_by("-created_at")[:20]
-        context["review_average"] = review_summary["average"]
-        context["review_count"] = review_summary["count"]
-        context["review_form"] = ProductReviewForm()
+        if settings.PRODUCT_REVIEWS_ENABLED:
+            review_summary = ProductReview.objects.filter(
+                product=product, is_approved=True
+            ).aggregate(average=Avg("rating"), count=Count("id"))
+            context["reviews"] = ProductReview.objects.filter(
+                product=product, is_approved=True
+            ).order_by("-created_at")[:20]
+            context["review_average"] = review_summary["average"]
+            context["review_count"] = review_summary["count"]
+            context["review_form"] = ProductReviewForm()
 
         trending_cutoff = timezone.now() - timedelta(days=TRENDING_WINDOW_DAYS)
         recent_sales = (
@@ -331,10 +367,9 @@ class ProductDetailView(DetailView[Product]):
             .annotate(quantity_sold=Sum("quantity"))
             .values("quantity_sold")
         )
-        trending_products: ProductQuerySet = (
+        recommendation_candidates: ProductQuerySet = (
             Product.objects.filter(status=Product.Status.PUBLISHED)
             .exclude(pk=product.pk)
-            .filter(Exists(recent_sales))
             .select_related("brand", "category", "subcategory")
             .with_pricing()
             .prefetch_related(
@@ -345,12 +380,46 @@ class ProductDetailView(DetailView[Product]):
                 ),
                 Prefetch("variants", queryset=ProductVariant.objects.with_available_quantity()),
             )
-            .order_by(Subquery(recent_sales, output_field=IntegerField()).desc(), "-created_at")[
-                :TRENDING_PRODUCTS_LIMIT
-            ]
         )
-        context["trending_products"] = list(trending_products)
-        _attach_json_ld(context["trending_products"], request=self.request)
+        curated_trending = recommendation_candidates.filter(is_trending=True).order_by(
+            "-updated_at", "name"
+        )[:RELATED_PRODUCTS_LIMIT]
+        curated_products = list(curated_trending)
+        remaining_slots = RELATED_PRODUCTS_LIMIT - len(curated_products)
+        automatic_trending: list[Product] = []
+        if remaining_slots:
+            automatic_trending = list(
+                recommendation_candidates.exclude(
+                    pk__in=[product.pk, *(item.pk for item in curated_products)]
+                )
+                .filter(Exists(recent_sales))
+                .order_by(
+                    Subquery(recent_sales, output_field=IntegerField()).desc(), "-created_at"
+                )[:remaining_slots]
+            )
+        related_products = [*curated_products, *automatic_trending]
+        remaining_slots = RELATED_PRODUCTS_LIMIT - len(related_products)
+        if remaining_slots:
+            related_filter = Q(category_id=product.category_id)
+            if product.brand_id is not None:
+                related_filter |= Q(brand_id=product.brand_id)
+            same_category_or_brand = list(
+                recommendation_candidates.exclude(
+                    pk__in=[product.pk, *(item.pk for item in related_products)]
+                )
+                .filter(related_filter)
+                .order_by("-created_at", "name")[:remaining_slots]
+            )
+            related_products.extend(same_category_or_brand)
+            remaining_slots = RELATED_PRODUCTS_LIMIT - len(related_products)
+        if remaining_slots:
+            related_products.extend(
+                recommendation_candidates.exclude(
+                    pk__in=[product.pk, *(item.pk for item in related_products)]
+                ).order_by("-created_at", "name")[:remaining_slots]
+            )
+        context["related_products"] = related_products
+        _attach_json_ld(context["related_products"], request=self.request)
 
         context["primary_image_url"] = (
             self.request.build_absolute_uri(primary_image.full_webp.url)
@@ -384,6 +453,11 @@ class ProductReviewSubmitView(FormView[ProductReviewForm]):
     """Accept reviews only from the matching phone on a delivered order."""
 
     form_class = ProductReviewForm
+
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
+        if not settings.PRODUCT_REVIEWS_ENABLED:
+            raise Http404
+        return super().dispatch(request, *args, **kwargs)
 
     def form_valid(self, form: ProductReviewForm) -> HttpResponse:
         ip_address = client_ip(self.request)
