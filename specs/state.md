@@ -2813,3 +2813,17 @@ failed, and precisely what is needed to unblock. Clear the entry when resolved.
   `scentandstyle.service` active. Live check on a 390px viewport: PDP price `Rs. 16,000.00`, versioned
   `app.css`/reveal JS served, reveal 0.7s, `.bg-sf-whatsapp` present, checkout shows payment info with
   no floating WhatsApp button, home still has it. No test order was placed on production.
+
+### 2026-10-09 — production settings and scheduled-job audit
+
+- The four `check --deploy` HTTPS/cookie warnings were a false alarm: `manage.py` defaults to
+  `config.settings.dev` and the VPS `.env` has no `DJANGO_SETTINGS_MODULE`, so the check ran under dev
+  settings. Gunicorn uses `config/wsgi.py` → `config.settings.prod`. Under prod settings
+  `check --deploy` reports no issues; live responses carry HSTS (1y, preload), nosniff, DENY,
+  same-origin referrer, HTTP→HTTPS 308, and `Secure` cookies.
+- Human task: root has no crontab and no store timers, so neither docs/deploy.md §7 job runs.
+  Customer availability is unaffected (it counts only unexpired reservations), but expired rows are
+  never swept and there is no nightly backup. Any server-side `manage.py` command must set
+  `DJANGO_SETTINGS_MODULE=config.settings.prod`. Claude was blocked from installing the crontab.
+- Copied backup `ecommerce_20261009_162018.dump` off the VPS to the owner's machine (outside the repo);
+  SHA-256 matched the server copy.
