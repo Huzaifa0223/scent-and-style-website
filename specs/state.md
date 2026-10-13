@@ -132,6 +132,34 @@ complete.** P1 (Stage 14 onward) needs the human's explicit go-ahead per CLAUDE.
 
 ## Maintenance log
 
+### 2026-10-13 — Noor integration (`noor/`, branch `noor-integration`, NOT deployed)
+
+- New self-contained app `noor/`: public feeds `GET /api/noor/catalog.json` and
+  `/api/noor/products.json` (no token, exact-origin CORS, `Cache-Control: public, max-age=300`) and a
+  Bearer-token tablet sync API under `/api/kiosk/sync/` (`ping/`, `catalog/`, `backup/`,
+  `backup/latest/`). Reference and the VPS deploy/rollback runbook: `docs/noor-integration.md`.
+- Only schema change: new table `noor_kioskbackup` (`noor/migrations/0001_initial.py`).
+  `makemigrations --check --dry-run` clean; no migration in any existing app.
+- Existing files touched: `config/settings/base.py` (`NOOR_ORIGIN`, `SCENT_SYNC_TOKEN`,
+  `INSTALLED_APPS`), `config/urls.py` (one `include`), `.env.example`, and templates
+  (`storefront/base.html`, `product_detail.html`, `checkout.html`, `order_confirmation.html`, new
+  `templates/noor/_ask_noor_fab.html`).
+- Decisions worth knowing: price/`inStock`/`stockQty` come from one *representative variant* (see
+  `noor/catalog.py`); `stockQty` = on-hand minus live reservations; the rate limiter reuses
+  `core.ratelimit` with scope `"kiosk_sync"` cast past `RateLimitScope` to avoid a `core` migration;
+  backups are a `TextField` (jsonb rejects `\u0000`) read from the stream because `request.body` caps
+  at 2.5 MB; private endpoints answer CORS preflight for `NOOR_ORIGIN`.
+- Verification (local Postgres, fresh test DB): `pytest --create-db` 750 passed (baseline `ab9097d`:
+  644 passed + 7 skipped; +99 noor tests), noor coverage 98%; `ruff check .`, `ruff format --check .`,
+  `mypy .` clean; `check` clean; `check --deploy` under `config.settings.prod` adds only the
+  `noor.W001` warning while the token is unset and nothing once it is set.
+- Note for future sessions: a `--reuse-db` test DB that has already run a `transaction=True` test can
+  be missing the `StoreSettings` singleton row, making four `store/tests` fail on an otherwise green
+  tree (they pass with `--create-db`). Not caused by this change; pre-existing isolation weakness.
+- Not done from this session: the live deploy. It has no access to the VPS (see 2026-10-03
+  entries); steps 1–2 and 7–10 of the safety brief are in `docs/noor-integration.md` for a session
+  or the owner with SSH.
+
 ### 2026-10-03 — Google Search Console verification replacement blocked
 
 - The SEO handoff identifies `https://scentandstyle.pk/googlea0804ef5f37cef71.html` as the
@@ -2589,6 +2617,16 @@ says, and continue. The human resolves these.
 
 ---
 
+- [Maintenance 2026-10-13] §0 C2 / CLAUDE.md "REST API: None" — the spec strikes any REST API layer
+  ("no consumer exists"). The owner explicitly requested the Noor integration, which is a real
+  consumer: four read endpoints and a small sync API, implemented as plain Django JSON views (no
+  DRF). Proposed change: amend C2 to "no REST API layer *for the storefront*; `noor/` exposes a
+  fixed, documented JSON surface for the Noor app" and add `noor` to the CLAUDE.md app list.
+- [Maintenance 2026-10-13] `core.models.RateLimitScope` — a new surface needs a new enum member,
+  which generates a `core` migration (choices are migration state). `noor` avoids that by passing
+  the scope string `"kiosk_sync"` through a cast. Proposed change: add `KIOSK_SYNC` to the enum the
+  next time `core` is migrated for another reason, then drop the cast in `noor/config.py`.
+
 ## Open questions
 
 Questions that did not block progress but need an answer eventually.
@@ -2755,6 +2793,13 @@ decisions. Not blockers unless a stage's acceptance gate depends on one.
       per §55's explicit wording — the local proof this stage produced (real commands, real
       checksums, see the Stage 13 log entry) is necessary but §55 asks for it against the thing
       that actually ships.
+- [ ] Deploy the Noor integration (2026-10-13 maintenance entry): follow "Deploying to the live
+      VPS" in docs/noor-integration.md — back up and verify the database, set a real
+      `SCENT_SYNC_TOKEN` (≥ 32 chars) in the server's `.env`, `migrate noor`, reload only
+      `scentandstyle.service`, smoke-test, and give Noor's team the token over a private channel.
+- [ ] Confirm with Noor's team whether the tablets call `/api/kiosk/sync/` from browser JS (CORS
+      preflight is answered for `NOOR_ORIGIN`) or natively, and that `stockQty` should subtract
+      live web-order reservations (`noor/catalog.py::_available`).
 ```
 
 ---
