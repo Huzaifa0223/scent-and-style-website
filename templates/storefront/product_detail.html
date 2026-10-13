@@ -1,6 +1,7 @@
 {% extends "storefront/base.html" %}
 {% load money %}
 {% load jsonld %}
+{% load noor %}
 
 {% block title %}{{ product.effective_meta_title }} — {{ store_settings.name }}{% endblock %}
 {% block meta_description %}{{ product.effective_meta_description }}{% endblock %}
@@ -228,6 +229,14 @@
           <span x-show="variant.available_quantity <= 0">Out of stock</span>
         </button>
         <div id="pdp-add-error" class="text-sf-sm text-sf-danger"></div>
+        {% comment %}Secondary action, styled like the page's other secondary buttons.{% endcomment %}
+        <a
+          href="{% noor_similar_url product.slug %}"
+          target="_blank"
+          rel="noopener"
+          data-noor-similar
+          class="mt-3 inline-flex min-h-sf-ctrl w-full items-center justify-center rounded-ajmal-button border border-ajmal-gold px-5 py-3 text-sf-caption font-semibold text-ajmal-ink hover:bg-ajmal-gold focus:outline-none focus-visible:ring-2 focus-visible:ring-ajmal-gold"
+        >Find similar with Noor<span class="sr-only"> (opens in a new tab)</span></a>
 
         <div class="mt-6">{% include "storefront/_shipping_payment_info.html" %}</div>
 

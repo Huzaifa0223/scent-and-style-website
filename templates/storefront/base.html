@@ -38,6 +38,11 @@ control without leaking color schemes between storefront and portal.
       </a>
     {% endif %}{% endblock %}
     {% comment %}
+    "Ask Noor" button — same overrides as whatsapp_fab above (checkout and
+    order confirmation hide it). See noor/_ask_noor_fab.html.
+    {% endcomment %}
+    {% block noor_fab %}{% include "noor/_ask_noor_fab.html" %}{% endblock %}
+    {% comment %}
     bg-ajmal-cream (fully opaque), matching the page background for a unified
     light aesthetic. The border-b carries the visual separation from content.
     {% endcomment %}

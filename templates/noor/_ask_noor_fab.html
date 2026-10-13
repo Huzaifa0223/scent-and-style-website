@@ -1,0 +1,22 @@
+{% load noor %}
+{% comment %}
+"Ask Noor" floating button (storefront/base.html, block noor_fab).
+
+Position: bottom-right like the WhatsApp FAB, stacked directly above it
+(5rem clears the 3.5rem button + its 1.25rem inset) so the two never
+overlap; with no WhatsApp number configured it drops to the corner instead.
+z-40 sits under the cart drawer and its backdrop (z-50), so the drawer's
+checkout button is never covered. Checkout and order confirmation override
+the block to nothing, as they do for the WhatsApp FAB. The staff login and
+the portal extend the root base.html, so they never include this partial.
+
+Opens in a new tab: the customer keeps their basket and place in the shop.
+{% endcomment %}
+<a
+  href="{% noor_ask_url %}"
+  target="_blank"
+  rel="noopener"
+  data-noor-fab
+  style="bottom: {% if store_whatsapp_url %}6rem{% else %}1.25rem{% endif %};"
+  class="btn-primary fixed right-5 z-40 shadow-ajmal-float"
+>Ask Noor<span class="sr-only"> (opens in a new tab)</span></a>
