@@ -148,7 +148,8 @@ complete.** P1 (Stage 14 onward) needs the human's explicit go-ahead per CLAUDE.
   `noor/catalog.py`); `stockQty` = on-hand minus live reservations; the rate limiter reuses
   `core.ratelimit` with scope `"kiosk_sync"` cast past `RateLimitScope` to avoid a `core` migration;
   backups are a `TextField` (jsonb rejects `\u0000`) read from the stream because `request.body` caps
-  at 2.5 MB; private endpoints answer CORS preflight for `NOOR_ORIGIN`.
+  at 2.5 MB; CORS exists only on the two public feeds — the private sync API (native Android
+  client) sends no CORS headers and answers no preflight (owner decision, 2026-10-13).
 - Verification (local Postgres, fresh test DB): `pytest --create-db` 750 passed (baseline `ab9097d`:
   644 passed + 7 skipped; +99 noor tests), noor coverage 98%; `ruff check .`, `ruff format --check .`,
   `mypy .` clean; `check` clean; `check --deploy` under `config.settings.prod` adds only the
@@ -2797,9 +2798,6 @@ decisions. Not blockers unless a stage's acceptance gate depends on one.
       VPS" in docs/noor-integration.md — back up and verify the database, set a real
       `SCENT_SYNC_TOKEN` (≥ 32 chars) in the server's `.env`, `migrate noor`, reload only
       `scentandstyle.service`, smoke-test, and give Noor's team the token over a private channel.
-- [ ] Confirm with Noor's team whether the tablets call `/api/kiosk/sync/` from browser JS (CORS
-      preflight is answered for `NOOR_ORIGIN`) or natively, and that `stockQty` should subtract
-      live web-order reservations (`noor/catalog.py::_available`).
 ```
 
 ---

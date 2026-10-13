@@ -1,16 +1,19 @@
 """Bearer-token protection for the private tablet sync API (``/api/kiosk/sync/``).
 
+The only client is the native Android tablet app, so these endpoints carry no
+CORS headers at all and ``OPTIONS`` is not special-cased: a browser page on
+another origin can neither preflight nor read a response. (CORS belongs only
+to the two public feeds — see ``http.public_feed``.)
+
 Request pipeline, in this order and for every endpoint:
 
-1. ``OPTIONS`` -> CORS preflight, answered without a token (browsers send
-   preflights without credentials) and without spending rate-limit budget.
-2. HTTPS only outside ``DEBUG``. In production ``SECURE_SSL_REDIRECT`` has
+1. HTTPS only outside ``DEBUG``. In production ``SECURE_SSL_REDIRECT`` has
    already redirected plain HTTP before a view runs; this is the backstop
    for a misconfigured front door.
-3. Rate limit (~30/min/IP) — *before* the token is checked, so guessing the
+2. Rate limit (~30/min/IP) — *before* the token is checked, so guessing the
    token is throttled just like any other traffic.
-4. Token check with ``hmac.compare_digest`` (constant time).
-5. Method check, then the view.
+3. Token check with ``hmac.compare_digest`` (constant time).
+4. Method check, then the view.
 
 Nothing here ever logs or echoes the token or the Authorization header.
 """
@@ -29,7 +32,7 @@ from django.views.decorators.csrf import csrf_exempt
 from core.ratelimit import RateLimitedError, check_rate_limit, client_ip, record_attempt
 
 from .config import SYNC_RATE_LIMIT_POLICY, SYNC_RATE_LIMIT_SCOPE, SYNC_TOKEN_MIN_LENGTH
-from .http import View, add_cors, error_response, preflight
+from .http import View, error_response
 
 logger = logging.getLogger(__name__)
 
@@ -55,14 +58,10 @@ def token_matches(request: HttpRequest) -> bool:
 
 def kiosk_endpoint(*methods: str) -> Callable[[View], View]:
     """Wrap a view in the pipeline above, allowing only ``methods``."""
-    allowed = (*methods, "OPTIONS")
 
     def decorator(view: View) -> View:
         @wraps(view)
         def wrapper(request: HttpRequest) -> HttpResponse:
-            if request.method == "OPTIONS":
-                return preflight(allowed, allow_headers="Authorization, Content-Type")
-
             if not settings.DEBUG and not request.is_secure():
                 return _finish(error_response(403, "https_required"))
 
@@ -87,7 +86,7 @@ def kiosk_endpoint(*methods: str) -> Callable[[View], View]:
 
             if request.method not in methods:
                 response = error_response(405, "method_not_allowed")
-                response["Allow"] = ", ".join(allowed)
+                response["Allow"] = ", ".join(methods)
                 return _finish(response)
 
             return _finish(view(request))
@@ -99,7 +98,6 @@ def kiosk_endpoint(*methods: str) -> Callable[[View], View]:
 
 
 def _finish(response: HttpResponse) -> HttpResponse:
-    """Private data must never sit in a shared cache; CORS lets Noor's own
-    origin read errors as well as successes."""
+    """Private data must never sit in a shared cache."""
     response["Cache-Control"] = "private, no-store"
-    return add_cors(response)
+    return response

@@ -181,6 +181,28 @@ def test_no_token_is_needed(client, url) -> None:  # type: ignore[no-untyped-def
 
 
 @pytest.mark.django_db
+@FEEDS
+def test_slug_is_exactly_the_slug_in_the_public_product_url(client, url) -> None:  # type: ignore[no-untyped-def]
+    # Noor matches products on `slug`, so it must equal the <slug> segment of
+    # /product/<slug>/ — and that URL must actually serve that product.
+    products = [published("Lattafa Khamrah"), published("Afnan 9PM Eau de Parfum")]
+    # Slugs that need care: digits, a renamed product's *current* slug.
+    renamed = published("Old Name")
+    renamed.name = "New Name"
+    renamed.slug = "brand-new-slug"
+    renamed.save()
+    products.append(renamed)
+
+    _, payload = _get(client, url)
+
+    assert {item["slug"] for item in payload["items"]} == {p.slug for p in products}
+    for item in payload["items"]:
+        path = item["url"].removeprefix("http://testserver")
+        assert path == f"/product/{item['slug']}/"
+        assert client.get(path).status_code == 200
+
+
+@pytest.mark.django_db
 def test_urls_use_the_configured_site_url_when_set(client) -> None:  # type: ignore[no-untyped-def]
     store = StoreSettings.load()
     store.site_url = "https://scentandstyle.pk/"

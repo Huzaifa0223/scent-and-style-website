@@ -171,22 +171,52 @@ def test_private_responses_are_not_cacheable(client) -> None:  # type: ignore[no
     assert response["Cache-Control"] == "private, no-store"
 
 
+def _assert_no_cors(response) -> None:  # type: ignore[no-untyped-def]
+    cors = [name for name in response.headers if name.lower().startswith("access-control-")]
+    assert cors == []
+    assert "Origin" not in response.get("Vary", "")
+
+
 @pytest.mark.django_db
 @pytest.mark.usefixtures("sync_token")
-def test_preflight_needs_no_token_and_spends_no_rate_limit(client) -> None:  # type: ignore[no-untyped-def]
-    response = client.options(
-        BACKUP_URL,
-        secure=True,
-        HTTP_ORIGIN="https://noor.scentandstyle.pk",
-        HTTP_ACCESS_CONTROL_REQUEST_METHOD="POST",
-        HTTP_ACCESS_CONTROL_REQUEST_HEADERS="authorization,content-type",
-    )
+@pytest.mark.parametrize("url", [PING_URL, KIOSK_CATALOG_URL, LATEST_URL])
+def test_private_api_sends_no_cors_headers(client, url) -> None:  # type: ignore[no-untyped-def]
+    origin = {"HTTP_ORIGIN": "https://noor.scentandstyle.pk"}
 
-    assert response.status_code == 204
-    assert response["Access-Control-Allow-Origin"] == "https://noor.scentandstyle.pk"
-    assert "Authorization" in response["Access-Control-Allow-Headers"]
-    assert "POST" in response["Access-Control-Allow-Methods"]
-    assert RateLimitAttempt.objects.count() == 0
+    _assert_no_cors(client.get(url, secure=True, **auth(), **origin))  # 200 / 404
+    _assert_no_cors(client.get(url, secure=True, **origin))  # 401
+
+
+@pytest.mark.django_db
+@pytest.mark.usefixtures("sync_token")
+def test_private_error_and_write_responses_send_no_cors_headers(client) -> None:  # type: ignore[no-untyped-def]
+    origin = {"HTTP_ORIGIN": "https://noor.scentandstyle.pk"}
+
+    _assert_no_cors(_post_backup(client, VALID_BACKUP, **origin))  # 201
+    _assert_no_cors(_post_backup(client, b"nope", **origin))  # 400
+    _assert_no_cors(_post_backup(client, backup_body(BACKUP_MAX_BYTES + 1), **origin))  # 413
+    _assert_no_cors(client.post(PING_URL, secure=True, **auth(), **origin))  # 405
+    _assert_no_cors(client.get(PING_URL, **auth(), **origin))  # 403 https_required
+
+
+@pytest.mark.django_db
+@pytest.mark.usefixtures("sync_token")
+def test_browser_preflight_is_not_answered_and_needs_the_token(client) -> None:  # type: ignore[no-untyped-def]
+    preflight = {
+        "HTTP_ORIGIN": "https://noor.scentandstyle.pk",
+        "HTTP_ACCESS_CONTROL_REQUEST_METHOD": "POST",
+        "HTTP_ACCESS_CONTROL_REQUEST_HEADERS": "authorization,content-type",
+    }
+
+    anonymous = client.options(BACKUP_URL, secure=True, **preflight)
+    authorised = client.options(BACKUP_URL, secure=True, **auth(), **preflight)
+
+    # Not a 204 "yes, you may" — a browser page cannot use this API at all.
+    assert anonymous.status_code == 401
+    assert authorised.status_code == 405
+    _assert_no_cors(anonymous)
+    _assert_no_cors(authorised)
+    assert RateLimitAttempt.objects.count() == 2  # it is rate-limited like any request
 
 
 @pytest.mark.django_db

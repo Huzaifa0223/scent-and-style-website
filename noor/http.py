@@ -46,18 +46,15 @@ def add_cors(response: HttpResponse) -> HttpResponse:
     return response
 
 
-def preflight(
-    methods: tuple[str, ...], *, allow_headers: str = "", public_cache: bool = False
-) -> HttpResponse:
+def preflight() -> HttpResponse:
+    """CORS preflight for the public feeds: same CORS and cache headers as a
+    ``GET``, plus ``Allow: GET``. The private sync API has no preflight."""
     response = HttpResponse(status=204)
     add_cors(response)
-    response["Allow"] = ", ".join(methods)
-    response["Access-Control-Allow-Methods"] = ", ".join(methods)
-    if allow_headers:
-        response["Access-Control-Allow-Headers"] = allow_headers
+    response["Allow"] = "GET"
+    response["Access-Control-Allow-Methods"] = "GET"
     response["Access-Control-Max-Age"] = str(PREFLIGHT_MAX_AGE_SECONDS)
-    if public_cache:
-        response["Cache-Control"] = f"public, max-age={PUBLIC_FEED_MAX_AGE_SECONDS}"
+    response["Cache-Control"] = f"public, max-age={PUBLIC_FEED_MAX_AGE_SECONDS}"
     return response
 
 
@@ -71,7 +68,7 @@ def public_feed(view: View) -> View:
     @wraps(view)
     def wrapper(request: HttpRequest) -> HttpResponse:
         if request.method == "OPTIONS":
-            return preflight(("GET",), public_cache=True)
+            return preflight()
         if request.method not in ("GET", "HEAD"):
             rejection = error_response(405, "method_not_allowed")
             rejection["Allow"] = "GET"

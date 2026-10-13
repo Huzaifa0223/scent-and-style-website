@@ -23,6 +23,14 @@ Public feeds send `Access-Control-Allow-Origin: https://noor.scentandstyle.pk`, 
 `Cache-Control: public, max-age=300`, and answer `OPTIONS` with the same plus `Allow: GET`.
 Stock **counts** are never public — only the `inStock` boolean.
 
+The private `/api/kiosk/sync/` endpoints send **no CORS headers** and do not answer preflights: the
+only client is the native Android tablet app, so a browser page on another origin cannot use them
+(an `OPTIONS` there is treated like any other request: 401 without the token, 405 with it).
+
+`Product.slug` is exactly the `<slug>` in `/product/<slug>/` (the URL is built with
+`reverse("storefront:product_detail", slug=product.slug)`); Noor can match on it. A product renamed
+with a slug change appears under its **current** slug; the old one 301-redirects on the site.
+
 ## Configuration
 
 | Variable | Required | Notes |
@@ -125,7 +133,5 @@ adds a table).
 
 ## Known limits
 
-- Private endpoints also answer CORS preflight for `NOOR_ORIGIN` (a browser app cannot call a
-  Bearer API otherwise). The token is still required for every real request.
 - Rate-limit rows (`core.RateLimitAttempt`, scope `kiosk_sync`) accumulate like the existing search
   scope's do; there is no purge job in this project yet.
