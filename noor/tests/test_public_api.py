@@ -12,7 +12,7 @@ from catalog.models import Product
 from noor.tests.support import CATALOG_URL, PRODUCTS_URL, published
 from store.models import StoreSettings
 
-NOOR_ORIGIN = "https://noor.scentandstyle.pk"
+NOOR_ORIGIN = "https://scentiq.scentandstyle.pk"
 ISO_Z = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
 FEEDS = pytest.mark.parametrize("url", [CATALOG_URL, PRODUCTS_URL])
 

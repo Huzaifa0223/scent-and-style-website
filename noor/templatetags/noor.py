@@ -24,7 +24,7 @@ def noor_links_enabled() -> bool:
 @register.simple_tag
 def noor_ask_url() -> str:
     """The consultant's landing screen."""
-    return f"{settings.NOOR_ORIGIN}/#/noor"
+    return f"{settings.NOOR_ORIGIN}/#/ask"
 
 
 @register.simple_tag

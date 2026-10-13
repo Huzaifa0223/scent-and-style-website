@@ -181,7 +181,7 @@ def _assert_no_cors(response) -> None:  # type: ignore[no-untyped-def]
 @pytest.mark.usefixtures("sync_token")
 @pytest.mark.parametrize("url", [PING_URL, KIOSK_CATALOG_URL, LATEST_URL])
 def test_private_api_sends_no_cors_headers(client, url) -> None:  # type: ignore[no-untyped-def]
-    origin = {"HTTP_ORIGIN": "https://noor.scentandstyle.pk"}
+    origin = {"HTTP_ORIGIN": "https://scentiq.scentandstyle.pk"}
 
     _assert_no_cors(client.get(url, secure=True, **auth(), **origin))  # 200 / 404
     _assert_no_cors(client.get(url, secure=True, **origin))  # 401
@@ -190,7 +190,7 @@ def test_private_api_sends_no_cors_headers(client, url) -> None:  # type: ignore
 @pytest.mark.django_db
 @pytest.mark.usefixtures("sync_token")
 def test_private_error_and_write_responses_send_no_cors_headers(client) -> None:  # type: ignore[no-untyped-def]
-    origin = {"HTTP_ORIGIN": "https://noor.scentandstyle.pk"}
+    origin = {"HTTP_ORIGIN": "https://scentiq.scentandstyle.pk"}
 
     _assert_no_cors(_post_backup(client, VALID_BACKUP, **origin))  # 201
     _assert_no_cors(_post_backup(client, b"nope", **origin))  # 400
@@ -203,7 +203,7 @@ def test_private_error_and_write_responses_send_no_cors_headers(client) -> None:
 @pytest.mark.usefixtures("sync_token")
 def test_browser_preflight_is_not_answered_and_needs_the_token(client) -> None:  # type: ignore[no-untyped-def]
     preflight = {
-        "HTTP_ORIGIN": "https://noor.scentandstyle.pk",
+        "HTTP_ORIGIN": "https://scentiq.scentandstyle.pk",
         "HTTP_ACCESS_CONTROL_REQUEST_METHOD": "POST",
         "HTTP_ACCESS_CONTROL_REQUEST_HEADERS": "authorization,content-type",
     }

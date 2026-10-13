@@ -26,7 +26,7 @@ NOOR_MARKERS = (
     "data-noor-similar",
     "Ask ScentIQ",
     "Find similar with ScentIQ",
-    "#/noor",
+    "#/ask",
 )
 
 
@@ -35,7 +35,7 @@ def _assert_no_noor_links(response) -> None:  # type: ignore[no-untyped-def]
     html = response.content.decode()
     for marker in NOOR_MARKERS:
         assert marker not in html
-    assert "noor.scentandstyle.pk" not in html
+    assert "scentiq.scentandstyle.pk" not in html
 
 
 def _storefront_pages(client):  # type: ignore[no-untyped-def]
@@ -73,10 +73,10 @@ def test_buttons_appear_when_on_base_page_and_product_page(client, settings) -> 
     pdp = client.get(f"/product/{product.slug}/").content.decode()
 
     assert "data-noor-fab" in home
-    assert "https://noor.scentandstyle.pk/#/noor" in home
+    assert "https://scentiq.scentandstyle.pk/#/ask" in home
     assert "data-noor-fab" in pdp
     assert "data-noor-similar" in pdp
-    assert f"https://noor.scentandstyle.pk/#/p/{product.slug}" in pdp
+    assert f"https://scentiq.scentandstyle.pk/#/p/{product.slug}" in pdp
 
 
 @pytest.mark.django_db

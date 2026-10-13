@@ -33,7 +33,7 @@ PRODUCT_REVIEWS_ENABLED = False
 # to read the public feeds cross-origin; SCENT_SYNC_TOKEN is the shared
 # secret for the tablets' /api/kiosk/sync/ API (>= 32 characters, from .env,
 # never committed). An unset token fails closed: every private request is 401.
-NOOR_ORIGIN = env.str("NOOR_ORIGIN", default="https://noor.scentandstyle.pk")
+NOOR_ORIGIN = env.str("NOOR_ORIGIN", default="https://scentiq.scentandstyle.pk")
 SCENT_SYNC_TOKEN = env.str("SCENT_SYNC_TOKEN", default="")
 # Show the "Ask ScentIQ" / "Find similar with ScentIQ" buttons on the storefront.
 # Off by default so they never point at a Noor site that is not live yet; the

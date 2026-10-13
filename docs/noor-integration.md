@@ -1,7 +1,7 @@
 # Noor integration
 
 `noor/` connects the shop to **Noor**, the store's fragrance-consultant app (in-store tablets and
-the public web app at `https://noor.scentandstyle.pk`). It reads the catalog, owns one table
+the public web app at `https://scentiq.scentandstyle.pk`). It reads the catalog, owns one table
 (`KioskBackup`) and changes no behaviour of any other app.
 
 ## Endpoints
@@ -19,7 +19,7 @@ Private endpoints: `Authorization: Bearer <SCENT_SYNC_TOKEN>`; missing/wrong →
 {"error":"unauthorised"}`; ~30 requests/min/IP → `429`; HTTPS only outside `DEBUG`; CSRF-exempt.
 Other errors: `400 invalid_json | invalid_format`, `413 payload_too_large`, `405`, `404 not_found`.
 
-Public feeds send `Access-Control-Allow-Origin: https://noor.scentandstyle.pk`, `Vary: Origin`,
+Public feeds send `Access-Control-Allow-Origin: https://scentiq.scentandstyle.pk`, `Vary: Origin`,
 `Cache-Control: public, max-age=300`, and answer `OPTIONS` with the same plus `Allow: GET`.
 Stock **counts** are never public — only the `inStock` boolean.
 
@@ -36,8 +36,8 @@ with a slug change appears under its **current** slug; the old one 301-redirects
 | Variable | Required | Notes |
 |---|---|---|
 | `SCENT_SYNC_TOKEN` | for the private API | ≥ 32 chars. Generate with `python -c "import secrets; print(secrets.token_urlsafe(40))"`. Keep out of git. Unset/short ⇒ every private request is `401` (fails closed) and `manage.py check --deploy` warns `noor.W001`. |
-| `NOOR_ORIGIN` | no | defaults to `https://noor.scentandstyle.pk` |
-| `NOOR_PUBLIC_LINKS` | no | boolean, **default `false`**. Shows the "Ask ScentIQ" floating button and the "Find similar with ScentIQ" product-page button; while off neither is rendered anywhere. **Set `NOOR_PUBLIC_LINKS=true` in `.env` and reload `scentandstyle.service` once `https://noor.scentandstyle.pk` is live.** Does not affect the API endpoints (`/api/noor/*.json`, `/api/kiosk/sync/*`), which are always on. |
+| `NOOR_ORIGIN` | no | defaults to `https://scentiq.scentandstyle.pk` |
+| `NOOR_PUBLIC_LINKS` | no | boolean, **default `false`**. Shows the "Ask ScentIQ" floating button and the "Find similar with ScentIQ" product-page button; while off neither is rendered anywhere. **Set `NOOR_PUBLIC_LINKS=true` in `.env` and reload `scentandstyle.service` once `https://scentiq.scentandstyle.pk` is live.** Does not affect the API endpoints (`/api/noor/*.json`, `/api/kiosk/sync/*`), which are always on. |
 
 Absolute URLs use `StoreSettings.site_url` when set, else the request's own scheme/host.
 

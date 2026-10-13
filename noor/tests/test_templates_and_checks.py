@@ -12,7 +12,7 @@ from noor.config import SYNC_TOKEN_MIN_LENGTH
 from noor.tests.support import published
 from store.models import DeliveryStrategy, StoreSettings
 
-ASK_URL = "https://noor.scentandstyle.pk/#/noor"
+ASK_URL = "https://scentiq.scentandstyle.pk/#/ask"
 
 
 @pytest.fixture(autouse=True)
@@ -82,7 +82,7 @@ def test_button_is_hidden_on_checkout(client) -> None:  # type: ignore[no-untype
 
     assert response.status_code == 200
     assert "data-noor-fab" not in _html(response)
-    assert "#/noor" not in _html(response)
+    assert "#/ask" not in _html(response)
 
 
 @pytest.mark.django_db
@@ -117,7 +117,7 @@ def test_button_is_absent_on_the_account_login_page(client) -> None:  # type: ig
 
     assert response.status_code == 200
     assert "data-noor-fab" not in _html(response)
-    assert "#/noor" not in _html(response)
+    assert "#/ask" not in _html(response)
 
 
 # --- product page button ----------------------------------------------------
@@ -131,7 +131,7 @@ def test_product_page_links_to_find_similar_for_its_own_slug(client) -> None:  #
     html = _html(client.get(f"/product/{product.slug}/"))
 
     assert "Find similar with ScentIQ" in html
-    assert f'href="https://noor.scentandstyle.pk/#/p/{product.slug}"' in html
+    assert f'href="https://scentiq.scentandstyle.pk/#/p/{product.slug}"' in html
     assert f"#/p/{other.slug}" not in html
 
 
@@ -156,14 +156,14 @@ def test_similar_url_quotes_the_slug() -> None:
         Context({"slug": "a b/c?d"})
     )
 
-    assert rendered == "https://noor.scentandstyle.pk/#/p/a%20b%2Fc%3Fd"
+    assert rendered == "https://scentiq.scentandstyle.pk/#/p/a%20b%2Fc%3Fd"
 
 
 def test_origin_comes_from_settings(settings) -> None:  # type: ignore[no-untyped-def]
     settings.NOOR_ORIGIN = "https://staging-noor.example"
 
     assert Template("{% load noor %}{% noor_ask_url %}").render(Context()) == (
-        "https://staging-noor.example/#/noor"
+        "https://staging-noor.example/#/ask"
     )
 
 
