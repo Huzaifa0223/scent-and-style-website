@@ -645,9 +645,19 @@ class ProductVariant(TimeStampedModel):
     # database IntegrityError rather than an application-level check, since
     # set-equality across rows isn't expressible as a column-level UNIQUE.
     attribute_signature = models.CharField(max_length=255, blank=True, default="")
+    # POS link (possync app). ``pos_sku`` is the store POS's own SKU for this
+    # variant; NULL means "not mapped". ``unique=True`` is exactly "unique when
+    # set" because Postgres treats NULLs as distinct, and the CHECK below keeps
+    # an empty string from standing in for NULL. ``pos_price`` is the last
+    # price the POS reported — informational only, never copied to ``price``.
+    pos_sku = models.CharField(max_length=128, null=True, blank=True, unique=True)
+    pos_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
 
     class Meta:
         ordering = ["position", "id"]
+        constraints = [
+            models.CheckConstraint(condition=~Q(pos_sku=""), name="variant_pos_sku_not_blank"),
+        ]
         # No Django-level uniqueness constraint on attribute_signature: see
         # the class docstring above. Enforced by a deferred constraint
         # trigger instead (catalog/migrations/0004).
