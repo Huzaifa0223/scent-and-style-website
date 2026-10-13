@@ -150,8 +150,8 @@ complete.** P1 (Stage 14 onward) needs the human's explicit go-ahead per CLAUDE.
   backups are a `TextField` (jsonb rejects `\u0000`) read from the stream because `request.body` caps
   at 2.5 MB; CORS exists only on the two public feeds — the private sync API (native Android
   client) sends no CORS headers and answers no preflight (owner decision, 2026-10-13).
-- `NOOR_PUBLIC_LINKS` (env bool, default **false**) hides both storefront buttons ("Ask Noor",
-  "Find similar with Noor") until `noor.scentandstyle.pk` is live; the API endpoints ignore it.
+- `NOOR_PUBLIC_LINKS` (env bool, default **false**) hides both storefront buttons ("Ask ScentIQ",
+  "Find similar with ScentIQ") until `noor.scentandstyle.pk` is live; the API endpoints ignore it.
 - Verification (local Postgres, fresh test DB; figures below are from before the flag was added —
   after it: 774 passed): `pytest --create-db` 750 passed (baseline `ab9097d`:
   644 passed + 7 skipped; +99 noor tests), noor coverage 98%; `ruff check .`, `ruff format --check .`,
@@ -2802,7 +2802,7 @@ decisions. Not blockers unless a stage's acceptance gate depends on one.
       `SCENT_SYNC_TOKEN` (≥ 32 chars) in the server's `.env`, `migrate noor`, reload only
       `scentandstyle.service`, smoke-test, and give Noor's team the token over a private channel.
 - [ ] Once `https://noor.scentandstyle.pk` is live: set `NOOR_PUBLIC_LINKS=true` in the server's
-      `.env` and reload `scentandstyle.service` to show the "Ask Noor" and "Find similar" buttons.
+      `.env` and reload `scentandstyle.service` to show the "Ask ScentIQ" and "Find similar" buttons.
 ```
 
 ---

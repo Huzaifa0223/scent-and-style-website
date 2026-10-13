@@ -37,7 +37,7 @@ with a slug change appears under its **current** slug; the old one 301-redirects
 |---|---|---|
 | `SCENT_SYNC_TOKEN` | for the private API | ≥ 32 chars. Generate with `python -c "import secrets; print(secrets.token_urlsafe(40))"`. Keep out of git. Unset/short ⇒ every private request is `401` (fails closed) and `manage.py check --deploy` warns `noor.W001`. |
 | `NOOR_ORIGIN` | no | defaults to `https://noor.scentandstyle.pk` |
-| `NOOR_PUBLIC_LINKS` | no | boolean, **default `false`**. Shows the "Ask Noor" floating button and the "Find similar with Noor" product-page button; while off neither is rendered anywhere. **Set `NOOR_PUBLIC_LINKS=true` in `.env` and reload `scentandstyle.service` once `https://noor.scentandstyle.pk` is live.** Does not affect the API endpoints (`/api/noor/*.json`, `/api/kiosk/sync/*`), which are always on. |
+| `NOOR_PUBLIC_LINKS` | no | boolean, **default `false`**. Shows the "Ask ScentIQ" floating button and the "Find similar with ScentIQ" product-page button; while off neither is rendered anywhere. **Set `NOOR_PUBLIC_LINKS=true` in `.env` and reload `scentandstyle.service` once `https://noor.scentandstyle.pk` is live.** Does not affect the API endpoints (`/api/noor/*.json`, `/api/kiosk/sync/*`), which are always on. |
 
 Absolute URLs use `StoreSettings.site_url` when set, else the request's own scheme/host.
 
@@ -72,10 +72,10 @@ already promised online. To send raw on-hand counts instead, change `_available(
 Both buttons render **only when `NOOR_PUBLIC_LINKS` is true** (default off — see Configuration).
 
 - `templates/noor/_ask_noor_fab.html`, included by `storefront/base.html` in the `noor_fab` block:
-  a gold "Ask Noor" pill, bottom-right, stacked above the WhatsApp button, `target="_blank"
+  a gold "Ask ScentIQ" pill, bottom-right, stacked above the WhatsApp button, `target="_blank"
   rel="noopener"`, `z-40` (under the cart drawer). `checkout.html` and `order_confirmation.html`
   override the block to nothing. Account/portal pages extend the root `base.html` and never show it.
-- `product_detail.html`: "Find similar with Noor" under Add to cart, secondary-button styling,
+- `product_detail.html`: "Find similar with ScentIQ" under Add to cart, secondary-button styling,
   links to `…/#/p/<slug>`.
 - Only utility classes already present in the built CSS are used — no Tailwind rebuild needed.
 

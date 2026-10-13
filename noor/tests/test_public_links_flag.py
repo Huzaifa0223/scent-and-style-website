@@ -24,8 +24,8 @@ from store.models import DeliveryStrategy, StoreSettings
 NOOR_MARKERS = (
     "data-noor-fab",
     "data-noor-similar",
-    "Ask Noor",
-    "Find similar with Noor",
+    "Ask ScentIQ",
+    "Find similar with ScentIQ",
     "#/noor",
 )
 
@@ -128,7 +128,7 @@ def test_checkout_and_confirmation_never_show_them_even_when_on(client, settings
         assert response.status_code == 200
         html = response.content.decode()
         assert "data-noor-fab" not in html
-        assert "Ask Noor" not in html
+        assert "Ask ScentIQ" not in html
 
 
 @pytest.mark.django_db

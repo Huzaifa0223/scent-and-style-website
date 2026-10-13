@@ -1,4 +1,4 @@
-"""'Ask Noor' on the storefront, and the deploy check for the sync token."""
+"""'Ask ScentIQ' on the storefront, and the deploy check for the sync token."""
 
 from __future__ import annotations
 
@@ -42,7 +42,7 @@ def test_home_page_has_the_floating_button(client) -> None:  # type: ignore[no-u
     assert f'href="{ASK_URL}"' in tag
     assert 'target="_blank"' in tag
     assert 'rel="noopener"' in tag
-    assert "Ask Noor" in tag
+    assert "Ask ScentIQ" in tag
 
 
 @pytest.mark.django_db
@@ -130,7 +130,7 @@ def test_product_page_links_to_find_similar_for_its_own_slug(client) -> None:  #
 
     html = _html(client.get(f"/product/{product.slug}/"))
 
-    assert "Find similar with Noor" in html
+    assert "Find similar with ScentIQ" in html
     assert f'href="https://noor.scentandstyle.pk/#/p/{product.slug}"' in html
     assert f"#/p/{other.slug}" not in html
 

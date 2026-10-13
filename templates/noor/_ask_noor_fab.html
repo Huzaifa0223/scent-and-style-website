@@ -1,6 +1,6 @@
 {% load noor %}
 {% comment %}
-"Ask Noor" floating button (storefront/base.html, block noor_fab).
+"Ask ScentIQ" floating button (storefront/base.html, block noor_fab).
 
 Renders nothing unless settings.NOOR_PUBLIC_LINKS is true (default off, so
 the button is never shown before noor.scentandstyle.pk is live). The API
@@ -24,5 +24,5 @@ Opens in a new tab: the customer keeps their basket and place in the shop.
   data-noor-fab
   style="bottom: {% if store_whatsapp_url %}6rem{% else %}1.25rem{% endif %};"
   class="btn-primary fixed right-5 z-40 shadow-ajmal-float"
->Ask Noor<span class="sr-only"> (opens in a new tab)</span></a>
+>Ask ScentIQ<span class="sr-only"> (opens in a new tab)</span></a>
 {% endif %}
