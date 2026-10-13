@@ -29,12 +29,22 @@ from possync.tests.support import (
     web_order,
 )
 
-pytestmark = [pytest.mark.django_db, pytest.mark.usefixtures("pos_token", "cutoff_long_ago")]
+pytestmark = [
+    pytest.mark.django_db,
+    pytest.mark.usefixtures("pos_token", "cutoff_long_ago", "subtracting"),
+]
 
 
 @pytest.fixture
 def pos_token(settings) -> None:  # type: ignore[no-untyped-def]
     settings.SCENT_POS_TOKEN = POS_TOKEN
+
+
+@pytest.fixture
+def subtracting(settings) -> None:  # type: ignore[no-untyped-def]
+    """This module is about the subtracting mode (the formula with web
+    orders); the default read-only mode is covered in test_modes.py."""
+    settings.POS_SYNC_SUBTRACT_WEB_ORDERS = True
 
 
 @pytest.fixture

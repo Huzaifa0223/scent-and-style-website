@@ -5,6 +5,11 @@
 {% block portal_breadcrumbs %}<a class="hover:text-ink" href="{% url 'possync:mapping' %}">POS mapping</a> / Web orders awaiting the POS{% endblock %}
 
 {% block content %}
+  {% if not subtract_web_orders %}
+    <p class="mb-3 rounded border border-border-interactive bg-paper px-3 py-2 text-sm text-ink" data-pos-mode="read-only">
+      Read-only mode — web orders are not subtracted
+    </p>
+  {% endif %}
   <h1 class="mb-1 text-xl font-semibold text-ink">Web orders awaiting the POS</h1>
   <p class="mb-4 text-sm text-text-muted">
     Confirmed web orders the POS has not recorded yet. Each one is subtracted from stock until the

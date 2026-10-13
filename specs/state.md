@@ -156,6 +156,15 @@ complete.** P1 (Stage 14 onward) needs the human's explicit go-ahead per CLAUDE.
   in the response's `skipped` array — only a malformed body is a 400; Owner-only "Mark as recorded"
   (reason required, audited, `possync.0002`) for web orders the POS will never record; stock edit
   forms warn "POS updates will overwrite this" for POS-mapped variants.
+- **Owner decision (2026-10-13): start read-only.** `POS_SYNC_SUBTRACT_WEB_ORDERS` (env, default
+  `false`): web orders are not subtracted and "oversold" is not computed, so `stock_quantity =
+  max(onHand, 0)` (reservations still subtracted). Staff ring web orders up at the till, so the POS
+  on-hand already drops. The web-orders endpoints, acknowledgement and "Mark as recorded" still work
+  but change no stock; the mode is shown at the top of Portal → POS mapping. Set `true` only if web
+  orders get recorded in the POS and acknowledged.
+- Deploy note: `scentandstyle.service` has **no `ExecReload`**, so `systemctl reload` fails. Reload
+  gunicorn gracefully with `kill -HUP $(systemctl show -p MainPID --value scentandstyle.service)`
+  (docs/pos-sync.md and docs/noor-integration.md corrected).
 - Verification: see the Stage log numbers in the commit/report; `ruff`, `mypy`, `makemigrations
   --check` clean. `pyproject.toml`: `possync` added to the existing CBV `ANN401` glob (same shape as
   `storefront`).
@@ -2834,7 +2843,8 @@ decisions. Not blockers unless a stage's acceptance gate depends on one.
       products, **review the web-order cut-off**, then point the POS at `/api/pos/sync/`. Decide how
       staff record web orders in the POS and who acknowledges them.
 - [ ] Once `https://scentiq.scentandstyle.pk` is live: set `NOOR_PUBLIC_LINKS=true` in the server's
-      `.env` and reload `scentandstyle.service` to show the "Ask ScentIQ" and "Find similar" buttons.
+      `.env` and send `scentandstyle.service` a HUP (no ExecReload; see docs/pos-sync.md) to show the
+      "Ask ScentIQ" and "Find similar" buttons.
 ```
 
 ---

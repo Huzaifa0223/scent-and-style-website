@@ -35,6 +35,7 @@ MARKED = PosMappingEvent.Action.ORDER_MARKED_RECORDED
 @pytest.fixture(autouse=True)
 def _config(settings, db) -> None:  # type: ignore[no-untyped-def]
     settings.SCENT_POS_TOKEN = POS_TOKEN
+    settings.POS_SYNC_SUBTRACT_WEB_ORDERS = True  # the stock effect only exists then
     PosSyncState.objects.update_or_create(
         pk=1, defaults={"orders_since": timezone.now() - timedelta(days=365)}
     )

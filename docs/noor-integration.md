@@ -37,7 +37,7 @@ with a slug change appears under its **current** slug; the old one 301-redirects
 |---|---|---|
 | `SCENT_SYNC_TOKEN` | for the private API | ≥ 32 chars. Generate with `python -c "import secrets; print(secrets.token_urlsafe(40))"`. Keep out of git. Unset/short ⇒ every private request is `401` (fails closed) and `manage.py check --deploy` warns `noor.W001`. |
 | `NOOR_ORIGIN` | no | defaults to `https://scentiq.scentandstyle.pk` |
-| `NOOR_PUBLIC_LINKS` | no | boolean, **default `false`**. Shows the "Ask ScentIQ" floating button and the "Find similar with ScentIQ" product-page button; while off neither is rendered anywhere. **Set `NOOR_PUBLIC_LINKS=true` in `.env` and reload `scentandstyle.service` once `https://scentiq.scentandstyle.pk` is live.** Does not affect the API endpoints (`/api/noor/*.json`, `/api/kiosk/sync/*`), which are always on. |
+| `NOOR_PUBLIC_LINKS` | no | boolean, **default `false`**. Shows the "Ask ScentIQ" floating button and the "Find similar with ScentIQ" product-page button; while off neither is rendered anywhere. **Set `NOOR_PUBLIC_LINKS=true` in `.env` and send `scentandstyle.service` a HUP (see Deploying) once `https://scentiq.scentandstyle.pk` is live.** Does not affect the API endpoints (`/api/noor/*.json`, `/api/kiosk/sync/*`), which are always on. |
 
 Absolute URLs use `StoreSettings.site_url` when set, else the request's own scheme/host.
 
@@ -110,7 +110,7 @@ python manage.py makemigrations --check --dry-run          # "No changes detecte
 # 4. Go live
 python manage.py migrate noor
 ss -tlnp | grep 8000                                       # confirm the shop's unit/master pid
-systemctl reload scentandstyle.service                     # or: kill -HUP <shop master pid>
+kill -HUP $(systemctl show -p MainPID --value scentandstyle.service)   # no ExecReload: not `systemctl reload`
 tail -n 50 /var/log/…/gunicorn error log
 
 # 5. Smoke test (expect 200 ×4, 200 ×2, 401 ×2)
@@ -128,7 +128,7 @@ cart in a browser. Then confirm with the token (do not paste it into shared logs
 ```bash
 git checkout "$PREV"
 python manage.py migrate noor zero        # drops only noor_kioskbackup
-systemctl reload scentandstyle.service
+kill -HUP $(systemctl show -p MainPID --value scentandstyle.service)
 ```
 
 Restore the database dump only if existing data was harmed (it should not be: the migration only

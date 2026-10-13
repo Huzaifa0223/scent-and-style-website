@@ -38,6 +38,11 @@ SCENT_SYNC_TOKEN = env.str("SCENT_SYNC_TOKEN", default="")
 # POS <-> website stock sync (possync/). A *different* secret from the tablets'
 # (>= 32 characters, from .env, never committed); unset fails closed: 401.
 SCENT_POS_TOKEN = env.str("SCENT_POS_TOKEN", default="")
+# Whether POS stock sync subtracts web orders that the POS has not
+# acknowledged. Default False = read-only: stock_quantity is just the POS
+# on-hand (reservations are still subtracted by the availability logic) and
+# "oversold" is not computed. Turn on only if web orders are recorded in the POS.
+POS_SYNC_SUBTRACT_WEB_ORDERS = env.bool("POS_SYNC_SUBTRACT_WEB_ORDERS", default=False)
 # Show the "Ask ScentIQ" / "Find similar with ScentIQ" buttons on the storefront.
 # Off by default so they never point at a Noor site that is not live yet; the
 # /api/noor/ and /api/kiosk/sync/ endpoints do not depend on it.

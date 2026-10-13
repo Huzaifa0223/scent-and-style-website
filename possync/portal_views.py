@@ -132,6 +132,7 @@ class PosMappingView(PortalPermissionRequiredMixin, ListView[PosProduct]):
                 "unmapped_count": max(totals["total"] - mapped_count - totals["not_online"], 0),
                 "mismatch_count": services.price_mismatches().count(),
                 "awaiting_orders_count": services.awaiting_ack_orders().count(),
+                "subtract_web_orders": services.subtract_web_orders_enabled(),
                 "recent_events": PosMappingEvent.objects.select_related("actor")[:RECENT_EVENTS],
                 "orders_since_value": timezone.localtime(state.orders_since).strftime(
                     "%Y-%m-%dT%H:%M"
@@ -296,6 +297,11 @@ class PosAwaitingOrdersView(PortalPermissionRequiredMixin, ListView[Order]):
     template_name = "portal/pos_orders.html"
     context_object_name = "orders"
     permission_required = MANAGE_PERMISSION
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        context = super().get_context_data(**kwargs)
+        context["subtract_web_orders"] = services.subtract_web_orders_enabled()
+        return context
 
     def get_queryset(self) -> QuerySet[Order]:
         latest_confirmation = (

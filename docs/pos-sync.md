@@ -4,9 +4,28 @@ The store **POS is the master of physical stock**; online orders ship from the s
 `possync` app lets the POS push stock snapshots to the website and pull the web orders it still has
 to record. **Prices are never changed automatically** — the POS price is stored for review only.
 
-Not deployed by this branch (`pos-sync`). See "Deploying" below.
+Merged to `main`, **not deployed**. See "Deploying" below.
+
+## Mode: read-only (default) or subtracting web orders
+
+`POS_SYNC_SUBTRACT_WEB_ORDERS` (env, boolean, **default `false`**) selects what a snapshot does. The
+current mode is shown at the top of **Portal → POS mapping**.
+
+| Mode | When to use | `stock_quantity` set to | "oversold" |
+|---|---|---|---|
+| **Read-only** (`false`, default) | Web orders are **not** recorded in the POS — staff ring them up at the till, so the POS on-hand already drops | `max(onHand, 0)` | never computed |
+| **Subtracting** (`true`) | Web orders are recorded in the POS and acknowledged through the API | `max(onHand − unacknowledged web-order units, 0)` | when waiting orders exceed `onHand` |
+
+In **both** modes active reservations are still subtracted by the existing availability logic
+(`available = stock_quantity − reserved`), prices are recorded but never applied, and
+`GET web-orders/`, `POST web-orders/<id>/ack/` and "Mark as recorded" keep working — in read-only
+mode they are harmless (they change no stock). The portal's *Web orders awaiting the POS* page says
+"Read-only mode — web orders are not subtracted". Switching the mode takes effect at the next
+snapshot; set it in the service's env file and send the service a HUP (see Deploying).
 
 ## The stock formula
+
+Subtracting mode (read-only is the same with the web-order term fixed at zero):
 
 ```text
 available_quantity = onHand
@@ -17,7 +36,7 @@ available_quantity = onHand
 Implemented as: on each snapshot, per mapped variant (under the variant's row lock),
 
 ```text
-stock_quantity = max(onHand − unacknowledged_units, 0)
+stock_quantity = max(onHand − unacknowledged_units, 0)        # read-only: max(onHand, 0)
 ```
 
 and the existing `with_available_quantity()` already subtracts active reservations
@@ -35,7 +54,7 @@ gave the stock back. Because the sync sets the number absolutely every time, it 
 confirming an order decrements the same figure the next snapshot would compute, and acknowledging
 one needs no recompute (the POS on-hand falls by the units that stop being subtracted).
 
-### The cut-off (read this before go-live)
+### The cut-off (subtracting mode only — read this before turning it on)
 
 Historical confirmed/delivered orders will never be acknowledged. Without a cut-off, the very first
 snapshot would subtract all of them from on-hand and zero out stock. `orders_since` defaults to the
@@ -135,7 +154,8 @@ cd /root/scent-and-style-website && git status --short          # clean
 PREV=$(git rev-parse HEAD); echo "$PREV"
 pg_dump -Fc -f /root/backups/shop-$(date +%Y%m%d-%H%M%S).dump <db>   # then pg_restore --list | head
 git fetch && git checkout pos-sync        # or main once merged
-# add SCENT_POS_TOKEN (>= 32 chars, different from SCENT_SYNC_TOKEN) to the service's env file
+# add SCENT_POS_TOKEN (>= 32 chars, different from SCENT_SYNC_TOKEN) to the service's env file;
+# leave POS_SYNC_SUBTRACT_WEB_ORDERS unset (= false, read-only) for the first go-live
 export DJANGO_SETTINGS_MODULE=config.settings.prod
 python manage.py check --deploy            # possync.W001 must NOT appear
 python manage.py makemigrations --check --dry-run
@@ -144,7 +164,9 @@ python manage.py migrate catalog && python manage.py migrate possync   # catalog
 # Tailwind: the portal pages add a few utility classes — rebuild CSS + collectstatic if the build
 # is done on the server (./tools/tailwindcss -c tailwind.config.js -i static/css/input.css \
 #   -o static/css/app.css --minify), otherwise they render unstyled (functionally fine).
-systemctl reload scentandstyle.service     # never restart; never touch 127.0.0.1:8001
+# This service has no ExecReload, so `systemctl reload` fails. Gracefully reload gunicorn's master
+# with a HUP instead (never `restart`; never touch the gunicorn on 127.0.0.1:8001):
+kill -HUP $(systemctl show -p MainPID --value scentandstyle.service)
 ```
 
 Smoke test: `/`, `/products/`, `/cart/` → 200; `/api/pos/sync/ping/` → 401 without the token and 200
@@ -160,12 +182,15 @@ export DJANGO_SETTINGS_MODULE=config.settings.prod
 python manage.py migrate possync zero                      # drops the possync tables
 python manage.py migrate catalog 0012_product_is_trending  # drops pos_sku / pos_price
 git checkout "$PREV"
-systemctl reload scentandstyle.service
+kill -HUP $(systemctl show -p MainPID --value scentandstyle.service)   # no ExecReload: not `systemctl reload`
 ```
 
 Restore the dump only if existing data was harmed (the migrations only add tables/columns).
 
 ## Known limits / things to watch
+
+- In read-only mode the cut-off, acknowledgements and *Mark as recorded* have no effect on stock;
+  they only matter if you switch to subtracting mode.
 
 - A web order the POS never records stays subtracted until acknowledged, marked recorded by hand,
   or it falls before the cut-off. If staff also correct stock by a stock-take for the same unit it

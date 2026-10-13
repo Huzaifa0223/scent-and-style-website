@@ -1,11 +1,25 @@
 """POS sync domain logic. Views stay thin; everything that decides or
 changes something lives here.
 
-THE STOCK FORMULA (one place, deliberately boring):
+THE STOCK FORMULA (one place, deliberately boring). Two modes, chosen by
+``settings.POS_SYNC_SUBTRACT_WEB_ORDERS``:
+
+  read-only (default, False) — web orders are NOT subtracted; staff ring them
+  up at the till so the POS on-hand already drops:
+
+    available_quantity = onHand
+                         - (units in active cart/pending-order reservations)
+
+  subtracting (True) — for when web orders are recorded in the POS and
+  acknowledged:
 
     available_quantity = onHand
                          - (units in web orders awaiting POS acknowledgement)
                          - (units in active cart/pending-order reservations)
+
+The rest of this docstring describes the subtracting mode; read-only is the
+same with the awaiting-acknowledgement term fixed at zero (and so no
+"oversold").
 
 ``available_quantity`` is already ``stock_quantity - active reservations``
 (``ProductVariantQuerySet.with_available_quantity``). So the sync only has to
@@ -34,6 +48,7 @@ from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any, Final
 
+from django.conf import settings
 from django.contrib.auth.models import User
 from django.db import IntegrityError, connection, transaction
 from django.db.models import Exists, F, OuterRef, QuerySet, Subquery, Sum
@@ -81,6 +96,12 @@ class MappingError(Exception):
 
 
 # --- state -------------------------------------------------------------------
+
+
+def subtract_web_orders_enabled() -> bool:
+    """``settings.POS_SYNC_SUBTRACT_WEB_ORDERS`` — see the module docstring.
+    Read at call time so it can be switched without touching code."""
+    return bool(getattr(settings, "POS_SYNC_SUBTRACT_WEB_ORDERS", False))
 
 
 def get_state() -> PosSyncState:
@@ -423,7 +444,9 @@ def _apply_variant(
         variant = ProductVariant.objects.select_for_update().get(pk=variant_id)
     except ProductVariant.DoesNotExist:
         return None
-    awaiting = units_awaiting_ack(variant_id)
+    # Read-only mode (the default): the POS on-hand is used as is. The web-order
+    # subtraction, and with it the "oversold" figure, only exist in the other mode.
+    awaiting = units_awaiting_ack(variant_id) if subtract_web_orders_enabled() else 0
     target = max(on_hand - awaiting, 0)
     short = max(awaiting - on_hand, 0)
     changed = variant.stock_quantity != target

@@ -5,6 +5,19 @@
 {% block portal_breadcrumbs %}POS mapping{% endblock %}
 
 {% block content %}
+  {# Mode first: it decides what every number below means. #}
+  {% if subtract_web_orders %}
+    <p class="mb-3 rounded border border-border-interactive bg-paper px-3 py-2 text-sm text-ink" data-pos-mode="subtract">
+      <strong>Mode: subtracting web orders.</strong>
+      Stock = POS on-hand minus web orders the POS has not acknowledged, minus active reservations.
+    </p>
+  {% else %}
+    <p class="mb-3 rounded border border-border-interactive bg-paper px-3 py-2 text-sm text-ink" data-pos-mode="read-only">
+      <strong>Mode: read-only.</strong>
+      Stock = POS on-hand, minus active reservations. Web orders are not subtracted (staff ring
+      them up at the till, so the POS count already drops).
+    </p>
+  {% endif %}
   <h1 class="mb-1 text-xl font-semibold text-ink">POS mapping</h1>
   <p class="mb-4 text-sm text-text-muted">
     The POS is the master of physical stock. Link each POS product to the website variant it is
@@ -52,6 +65,7 @@
       <p class="basis-full text-xs text-text-muted">
         Orders confirmed before this moment are treated as already reflected in the POS count and are
         never subtracted. Defaults to when POS sync was first used.
+        {% if not subtract_web_orders %}Only used when web orders are subtracted (not in read-only mode).{% endif %}
       </p>
     </form>
   </section>
