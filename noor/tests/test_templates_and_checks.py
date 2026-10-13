@@ -15,6 +15,13 @@ from store.models import DeliveryStrategy, StoreSettings
 ASK_URL = "https://noor.scentandstyle.pk/#/noor"
 
 
+@pytest.fixture(autouse=True)
+def links_on(settings) -> None:  # type: ignore[no-untyped-def]
+    """Everything in this module is about the buttons *when shown*, so the
+    flag is on throughout; test_public_links_flag.py covers off/default."""
+    settings.NOOR_PUBLIC_LINKS = True
+
+
 def _html(response) -> str:  # type: ignore[no-untyped-def]
     return response.content.decode()
 

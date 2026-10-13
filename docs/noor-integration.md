@@ -37,6 +37,7 @@ with a slug change appears under its **current** slug; the old one 301-redirects
 |---|---|---|
 | `SCENT_SYNC_TOKEN` | for the private API | ≥ 32 chars. Generate with `python -c "import secrets; print(secrets.token_urlsafe(40))"`. Keep out of git. Unset/short ⇒ every private request is `401` (fails closed) and `manage.py check --deploy` warns `noor.W001`. |
 | `NOOR_ORIGIN` | no | defaults to `https://noor.scentandstyle.pk` |
+| `NOOR_PUBLIC_LINKS` | no | boolean, **default `false`**. Shows the "Ask Noor" floating button and the "Find similar with Noor" product-page button; while off neither is rendered anywhere. **Set `NOOR_PUBLIC_LINKS=true` in `.env` and reload `scentandstyle.service` once `https://noor.scentandstyle.pk` is live.** Does not affect the API endpoints (`/api/noor/*.json`, `/api/kiosk/sync/*`), which are always on. |
 
 Absolute URLs use `StoreSettings.site_url` when set, else the request's own scheme/host.
 
@@ -67,6 +68,8 @@ already promised online. To send raw on-hand counts instead, change `_available(
 `noor/catalog.py` (one place).
 
 ## Website changes (templates only)
+
+Both buttons render **only when `NOOR_PUBLIC_LINKS` is true** (default off — see Configuration).
 
 - `templates/noor/_ask_noor_fab.html`, included by `storefront/base.html` in the `noor_fab` block:
   a gold "Ask Noor" pill, bottom-right, stacked above the WhatsApp button, `target="_blank"
