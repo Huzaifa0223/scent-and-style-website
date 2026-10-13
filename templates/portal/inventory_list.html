@@ -124,6 +124,11 @@
                   Set
                 </button>
               </form>
+              {% if variant.pos_sku %}
+                <p class="mt-1 text-xs text-warning" data-pos-stock-warning>
+                  POS updates will overwrite this
+                </p>
+              {% endif %}
             </td>
           </tr>
         {% empty %}

@@ -1,0 +1,58 @@
+{% extends "portal/base.html" %}
+
+{% block title %}POS price differences — {{ store_settings.name }} Portal{% endblock %}
+
+{% block portal_breadcrumbs %}<a class="hover:text-ink" href="{% url 'possync:mapping' %}">POS mapping</a> / Price differences{% endblock %}
+
+{% block content %}
+  <h1 class="mb-1 text-xl font-semibold text-ink">POS price differences</h1>
+  <p class="mb-4 text-sm text-text-muted">
+    Mapped variants whose last POS price differs from the website price. Prices are never changed
+    automatically — fix the ones you want on the product page.
+  </p>
+
+  <div class="overflow-x-auto rounded-lg border border-border-subtle bg-surface shadow-card">
+    <table class="min-w-full divide-y divide-border-subtle text-sm">
+      <thead class="bg-paper text-left text-xs font-semibold uppercase tracking-wide text-text-muted">
+        <tr>
+          <th class="px-4 py-3">Product</th>
+          <th class="px-4 py-3">Variant SKU</th>
+          <th class="px-4 py-3">POS SKU</th>
+          <th class="px-4 py-3">Website price</th>
+          <th class="px-4 py-3">POS price</th>
+          <th class="px-4 py-3">Fix</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-border-subtle">
+        {% for variant in variants %}
+          <tr>
+            <td class="px-4 py-3 text-ink">{{ variant.product.name }}</td>
+            <td class="px-4 py-3 font-mono text-text-muted">{{ variant.sku }}</td>
+            <td class="px-4 py-3 font-mono text-text-muted">{{ variant.pos_sku }}</td>
+            <td class="px-4 py-3 font-mono text-ink">{{ variant.price }}</td>
+            <td class="px-4 py-3 font-mono text-ink">{{ variant.pos_price }}</td>
+            <td class="px-4 py-3">
+              <a class="text-accent hover:text-accent-hover" href="{% url 'portal:product_edit' variant.product_id %}">Edit product</a>
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="6" class="px-4 py-6 text-center text-text-muted">
+              No differences — every mapped variant's price matches the POS.
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if is_paginated %}
+    <nav class="mt-4 flex items-center justify-between text-sm text-text-muted" aria-label="Pagination">
+      <span>Page {{ page_obj.number }} of {{ paginator.num_pages }}</span>
+      <div class="flex gap-2">
+        {% if page_obj.has_previous %}<a href="?page={{ page_obj.previous_page_number }}" class="inline-flex min-h-11 items-center rounded border border-border-interactive px-3 hover:bg-paper">Previous</a>{% endif %}
+        {% if page_obj.has_next %}<a href="?page={{ page_obj.next_page_number }}" class="inline-flex min-h-11 items-center rounded border border-border-interactive px-3 hover:bg-paper">Next</a>{% endif %}
+      </div>
+    </nav>
+  {% endif %}
+{% endblock %}

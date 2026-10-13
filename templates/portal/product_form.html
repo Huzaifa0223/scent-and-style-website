@@ -75,6 +75,11 @@
                   {{ field.label }}
                 </label>
                 {{ field }}
+                {% if field.name == 'stock_quantity' and variant_form.instance.pos_sku %}
+                  <p class="mt-1 text-xs text-warning" data-pos-stock-warning>
+                    POS updates will overwrite this
+                  </p>
+                {% endif %}
                 {% if field.errors %}
                   <p class="mt-1 text-xs text-danger">{{ field.errors|striptags }}</p>
                 {% endif %}

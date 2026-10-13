@@ -132,6 +132,34 @@ complete.** P1 (Stage 14 onward) needs the human's explicit go-ahead per CLAUDE.
 
 ## Maintenance log
 
+### 2026-10-13 — POS ⇄ website stock sync (`possync/`, branch `pos-sync`, NOT deployed)
+
+- New app `possync/` (reference, formula, mapping workflow, deploy + rollback runbook:
+  `docs/pos-sync.md`). Private POS API `/api/pos/sync/` (`ping/`, `stock/`, `web-orders/`,
+  `web-orders/<id>/ack/`) on a **separate** `SCENT_POS_TOKEN`, reusing noor's bearer pipeline
+  (`noor.security.bearer_endpoint`, now parameterised by token setting and rate-limit scope;
+  `kiosk_endpoint` behaves exactly as before). Portal "POS mapping" pages (Owner only, permission
+  `possync.manage_pos_mapping`): CSV upload, top-3 suggestions with scores, confirm / not sold
+  online / unmap, export, price-difference report, audit trail, sync status incl. oversold.
+- Additive schema only: `catalog.0013` (`ProductVariant.pos_sku` unique-when-set with a CHECK against
+  `""`, `pos_price`) and `possync.0001` (four new tables). No change to `orders_order`.
+- Formula: `stock_quantity = max(onHand − unacknowledged web-order units, 0)`, and the existing
+  reservation logic subtracts active reservations, so
+  `available = onHand − awaiting-ack web orders − active reservations`.
+- **Addition beyond the brief: a web-order cut-off** (`PosSyncState.orders_since`, default = first
+  use, editable in the portal). Without it every historical confirmed order — none will ever be
+  acknowledged — would be subtracted on the first snapshot.
+- Movements use `inventory.services.adjust()` (reason *Manual adjustment*, note `POS sync: …`), not a
+  new reason, to avoid an `inventory` migration. Mapping changes are audited in
+  `possync.PosMappingEvent` (there is no `audit` app yet).
+- Follow-ups from review: a bad item (empty/duplicate SKU, unusable count/price) is skipped and listed
+  in the response's `skipped` array — only a malformed body is a 400; Owner-only "Mark as recorded"
+  (reason required, audited, `possync.0002`) for web orders the POS will never record; stock edit
+  forms warn "POS updates will overwrite this" for POS-mapped variants.
+- Verification: see the Stage log numbers in the commit/report; `ruff`, `mypy`, `makemigrations
+  --check` clean. `pyproject.toml`: `possync` added to the existing CBV `ANN401` glob (same shape as
+  `storefront`).
+
 ### 2026-10-13 — Noor integration (`noor/`, branch `noor-integration`, NOT deployed)
 
 - New self-contained app `noor/`: public feeds `GET /api/noor/catalog.json` and
@@ -2801,6 +2829,10 @@ decisions. Not blockers unless a stage's acceptance gate depends on one.
       VPS" in docs/noor-integration.md — back up and verify the database, set a real
       `SCENT_SYNC_TOKEN` (≥ 32 chars) in the server's `.env`, `migrate noor`, reload only
       `scentandstyle.service`, smoke-test, and give Noor's team the token over a private channel.
+- [ ] POS sync go-live (branch `pos-sync`, `docs/pos-sync.md`): deploy with a verified backup, set a
+      real `SCENT_POS_TOKEN` (different from `SCENT_SYNC_TOKEN`), upload the POS product CSV, map
+      products, **review the web-order cut-off**, then point the POS at `/api/pos/sync/`. Decide how
+      staff record web orders in the POS and who acknowledges them.
 - [ ] Once `https://scentiq.scentandstyle.pk` is live: set `NOOR_PUBLIC_LINKS=true` in the server's
       `.env` and reload `scentandstyle.service` to show the "Ask ScentIQ" and "Find similar" buttons.
 ```
