@@ -41,6 +41,7 @@ import csv
 import io
 import logging
 import re
+from collections import Counter
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -58,9 +59,12 @@ from catalog.models import ProductVariant
 from inventory import services as inventory_services
 from orders.models import Order, OrderItem, OrderStatusEvent
 
+from . import matching
 from .config import (
+    BULK_CONFIRM_MIN_SCORE,
     MARK_RECORDED_MAX_REASON_LENGTH,
     MARK_RECORDED_MIN_REASON_LENGTH,
+    NOT_ONLINE_CATEGORY_KEYWORDS,
     SNAPSHOT_LOCK_KEY,
 )
 from .matching import VariantCandidate
@@ -320,9 +324,12 @@ def _audit(
 
 @transaction.atomic
 def confirm_mapping(
-    *, pos_product: PosProduct, variant_id: int, actor: User | None
+    *, pos_product: PosProduct, variant_id: int, actor: User | None, note: str = ""
 ) -> ProductVariant:
-    """Link ``pos_product`` to a variant. A human decision, never automatic."""
+    """Link ``pos_product`` to a variant. A human decision, never automatic.
+
+    ``note`` is appended to the audit row (the bulk review uses it so the
+    history shows which links came from a bulk confirmation)."""
     try:
         variant = ProductVariant.objects.select_for_update().get(pk=variant_id)
     except ProductVariant.DoesNotExist as exc:
@@ -339,11 +346,10 @@ def confirm_mapping(
         raise MappingError(
             f"POS SKU {pos_product.sku} is already mapped to another variant."
         ) from exc
-    note = ""
     if pos_product.not_online:
         pos_product.not_online = False
         pos_product.save(update_fields=["not_online", "updated_at"])
-        note = "Cleared 'not sold online'."
+        note = f"{note} Cleared 'not sold online'.".strip()
     _audit(
         PosMappingEvent.Action.MAPPED,
         pos_sku=pos_product.sku,
@@ -377,6 +383,120 @@ def set_not_online(*, pos_product: PosProduct, value: bool, actor: User | None) 
         pos_sku=pos_product.sku,
         actor=actor,
     )
+
+
+@dataclass(frozen=True)
+class BulkProposal:
+    """One POS product with the single website variant it very probably is."""
+
+    pos_product: PosProduct
+    display_name: str  # POS name with a repeated brand stripped
+    suggestion: matching.Suggestion
+
+
+@dataclass(frozen=True)
+class BulkProposals:
+    proposals: list[BulkProposal]
+    ambiguous: int  # rows left out: tie, or the same variant proposed twice
+
+
+def bulk_match_proposals(min_score: float = BULK_CONFIRM_MIN_SCORE) -> BulkProposals:
+    """Unmapped, sold-online POS products whose best suggestion scores at
+    least ``min_score`` — the list behind "Review and confirm all matches".
+
+    Deliberately conservative, because the owner ticks rows from a long
+    list: a POS row is left out when its best two candidates both reach the
+    threshold (the tie would be broken arbitrarily), when its size or
+    gift-set status disagrees with the candidate, or when another POS row
+    proposes the same variant (at most one can be right). Everything left
+    out stays on the normal page for a one-by-one decision.
+    """
+    candidates = unmapped_candidates()
+    pos_products = list(
+        PosProduct.objects.filter(not_online=False)
+        .exclude(sku__in=ProductVariant.objects.filter(pos_sku__isnull=False).values("pos_sku"))
+        .order_by("brand", "name", "sku")
+    )
+    ambiguous = 0
+    picked: list[BulkProposal] = []
+    for pos_product in pos_products:
+        ranked = matching.suggest(
+            pos_brand=pos_product.brand,
+            pos_name=pos_product.name,
+            pos_sku=pos_product.sku,
+            candidates=candidates,
+            limit=2,
+            min_score=min_score,
+        )
+        if not ranked:
+            continue
+        if len(ranked) > 1 or ranked[0].size_mismatch:
+            ambiguous += 1
+            continue
+        picked.append(
+            BulkProposal(
+                pos_product=pos_product,
+                display_name=matching.strip_leading_brand(pos_product.brand, pos_product.name),
+                suggestion=ranked[0],
+            )
+        )
+    by_variant = Counter(p.suggestion.candidate.variant_id for p in picked)
+    kept = [p for p in picked if by_variant[p.suggestion.candidate.variant_id] == 1]
+    return BulkProposals(proposals=kept, ambiguous=ambiguous + len(picked) - len(kept))
+
+
+@dataclass
+class BulkResult:
+    done: int = 0
+    errors: list[str] = field(default_factory=list)
+
+
+def confirm_mappings(*, pairs: list[tuple[int, int]], actor: User | None) -> BulkResult:
+    """Map each ``(pos_product_id, variant_id)`` the owner ticked.
+
+    Each pair is its own transaction (``confirm_mapping``), so one stale row
+    — a variant mapped meanwhile — is reported and skipped without undoing
+    the rest."""
+    result = BulkResult()
+    products = PosProduct.objects.in_bulk([pos_id for pos_id, _ in pairs])
+    for pos_id, variant_id in pairs:
+        pos_product = products.get(pos_id)
+        if pos_product is None:
+            result.errors.append(f"POS product #{pos_id} no longer exists.")
+            continue
+        try:
+            confirm_mapping(
+                pos_product=pos_product,
+                variant_id=variant_id,
+                actor=actor,
+                note="Bulk confirmation.",
+            )
+        except MappingError as exc:
+            result.errors.append(f"{pos_product.sku}: {exc}")
+        else:
+            result.done += 1
+    return result
+
+
+def set_not_online_many(*, pos_ids: list[int], actor: User | None) -> BulkResult:
+    """Mark every ticked POS product "not sold online"; a product that is
+    already mapped is reported and skipped (``set_not_online`` refuses it)."""
+    result = BulkResult()
+    for pos_product in PosProduct.objects.filter(pk__in=pos_ids).order_by("sku"):
+        try:
+            set_not_online(pos_product=pos_product, value=True, actor=actor)
+        except MappingError as exc:
+            result.errors.append(f"{pos_product.sku}: {exc}")
+        else:
+            result.done += 1
+    return result
+
+
+def looks_not_sold_online(category: str) -> bool:
+    """Whether a POS category reads like a watch, sunglasses or accessory —
+    things this store sells at the till but not on the website."""
+    lowered = category.casefold()
+    return any(keyword in lowered for keyword in NOT_ONLINE_CATEGORY_KEYWORDS)
 
 
 def price_mismatches() -> QuerySet[ProductVariant]:

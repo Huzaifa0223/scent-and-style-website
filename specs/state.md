@@ -2917,3 +2917,27 @@ failed, and precisely what is needed to unblock. Clear the entry when resolved.
   `DJANGO_SETTINGS_MODULE=config.settings.prod`. Claude was blocked from installing the crontab.
 - Copied backup `ecommerce_20261009_162018.dump` off the VPS to the owner's machine (outside the repo);
   SHA-256 matched the server copy.
+
+### 2026-10-14 — POS mapping page: better suggestions and bulk actions (local only)
+
+- **Matching** (`possync/matching.py`): gift sets only match gift sets (hard gate, both directions);
+  spacing and spelling are ignored in names ("Nightout" = "Night Out", "9pm" = "9 PM", "Al Majeed" =
+  "Al Majed"); a brand repeated at the start of the POS name is stripped (display and scoring); both
+  sizes travel on each `Suggestion` and the row shows a red "Size differs: POS says 100ml, website
+  says 50ml" warning. Scores are unchanged apart from these rules.
+- **Bulk review** (`/admin-portal/pos/bulk-review/`): GET previews every unmapped POS row whose best
+  match scores ≥ 0.90 (`BULK_CONFIRM_MIN_SCORE`) with both prices; POST maps only the ticked pairs.
+  Rows with a tie at the threshold, a size mismatch, or a variant proposed by two POS rows are left
+  out and counted, so they stay a one-by-one decision. Boxes start unticked; "Tick all" is a GET link.
+- **Bulk "not sold online"**: row checkboxes (attached with `form=`, no nested forms), one submit.
+  Categories containing watch / sunglass / eyewear / accessor are hinted, and "Tick the N suggested"
+  is a link — never applied automatically. Keywords live in `possync/config.py`.
+- Performance: tokenisation and similarity ratios memoised, exact words matched before fuzzy, and a
+  brand-based upper bound skips hopeless candidates. 400 POS rows × 400 variants: 66 s → 1.9 s.
+- No migration, no settings change, nothing deployed or pushed.
+- Gate: ruff, format, mypy (possync), `makemigrations --check`, `manage.py check` clean; pytest 1002
+  passed, 97% coverage; the same four local-only `store/tests` StoreSettings failures (fail in
+  isolation, untouched).
+- Not done / for the owner: `box` is not in the not-online keyword list (gift boxes may be sold
+  online); Tailwind CSS was not rebuilt, so run the CSS build before deploying if the new
+  checkbox/warning classes are not already in `app.css`.

@@ -1,0 +1,72 @@
+{% extends "portal/base.html" %}
+
+{% block title %}Review matches — {{ store_settings.name }} Portal{% endblock %}
+
+{% block portal_breadcrumbs %}<a class="text-accent hover:text-accent-hover" href="{% url 'possync:mapping' %}">POS mapping</a> / Review matches{% endblock %}
+
+{% block content %}
+  <h1 class="mb-1 text-xl font-semibold text-ink">Review and confirm {{ min_score|floatformat:2 }} matches</h1>
+  <p class="mb-4 text-sm text-text-muted">
+    Each row below is a POS product whose best website match scores {{ min_score|floatformat:2 }} or more,
+    with the same size and the same kind (bottle or gift set). Nothing is linked until you tick a row and
+    press <em>Confirm ticked</em>. Prices are shown side by side but never changed.
+  </p>
+  {% if left_out %}
+    <p class="mb-4 rounded border border-border-interactive bg-paper px-3 py-2 text-sm text-ink" data-left-out>
+      {{ left_out }} row(s) were left out because the match was not clear-cut (two equally good
+      candidates, or the same website variant proposed twice). They stay on the
+      <a class="text-accent hover:text-accent-hover" href="{% url 'possync:mapping' %}">mapping page</a> for a one-by-one decision.
+    </p>
+  {% endif %}
+
+  {% if proposals %}
+    <form method="post" action="{% url 'possync:bulk_review' %}">
+      {% csrf_token %}
+      <div class="mb-3 flex flex-wrap items-center gap-3 text-sm">
+        <button type="submit" class="inline-flex min-h-11 items-center rounded bg-accent px-4 font-medium text-text-inverse hover:bg-accent-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2">Confirm ticked</button>
+        <a href="?tick=all" class="text-accent hover:text-accent-hover">Tick all {{ proposals|length }}</a>
+        <a href="?" class="text-text-muted hover:text-ink">Untick all</a>
+      </div>
+
+      <div class="overflow-x-auto rounded-lg border border-border-subtle bg-surface shadow-card">
+        <table class="min-w-full divide-y divide-border-subtle text-sm">
+          <thead class="bg-paper text-left text-xs font-semibold uppercase tracking-wide text-text-muted">
+            <tr>
+              <th class="w-10 px-4 py-3"><span class="sr-only">Select</span></th>
+              <th class="px-4 py-3">POS product</th>
+              <th class="px-4 py-3">POS price</th>
+              <th class="px-4 py-3">Website variant</th>
+              <th class="px-4 py-3">Website price</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-border-subtle">
+            {% for proposal in proposals %}
+              <tr class="align-top" data-proposal>
+                <td class="px-4 py-3">
+                  <input type="checkbox" name="pair" value="{{ proposal.pos_product.pk }}:{{ proposal.suggestion.candidate.variant_id }}"
+                         {% if tick_all %}checked{% endif %}
+                         aria-label="Map {{ proposal.pos_product.sku }}" class="h-5 w-5 rounded border-border-interactive" />
+                </td>
+                <td class="px-4 py-3">
+                  <div class="text-ink">{{ proposal.pos_product.brand }} {{ proposal.display_name }}</div>
+                  <div class="font-mono text-xs text-text-muted">{{ proposal.pos_product.sku }}</div>
+                </td>
+                <td class="px-4 py-3 font-mono text-ink">{% if proposal.pos_product.price is not None %}Rs. {{ proposal.pos_product.price }}{% else %}—{% endif %}</td>
+                <td class="px-4 py-3">
+                  <span class="text-ink">{{ proposal.suggestion.candidate.brand }} {{ proposal.suggestion.candidate.product_name }}</span>
+                  <span class="text-text-muted"> · {{ proposal.suggestion.candidate.label }}</span>
+                  <span class="block font-mono text-xs text-text-muted">{{ proposal.suggestion.candidate.sku }} · match {{ proposal.suggestion.score|floatformat:2 }}</span>
+                </td>
+                <td class="px-4 py-3 font-mono text-ink">Rs. {{ proposal.suggestion.candidate.price }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </form>
+  {% else %}
+    <p class="rounded-lg border border-border-subtle bg-surface p-4 text-sm text-text-muted">
+      No unmapped POS product has a clear-cut match at {{ min_score|floatformat:2 }} or above.
+    </p>
+  {% endif %}
+{% endblock %}

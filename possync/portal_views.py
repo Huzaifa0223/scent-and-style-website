@@ -17,7 +17,7 @@ from django.contrib import messages
 from django.contrib.auth.models import User
 from django.db.models import Count, Exists, OuterRef, Q, QuerySet, Subquery
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.generic import ListView, View
@@ -27,7 +27,13 @@ from catalog.models import ProductVariant
 from orders.models import Order, OrderStatusEvent
 
 from . import matching, services
-from .config import CSV_MAX_BYTES, MAPPING_PAGE_SIZE, PRICE_MISMATCH_PAGE_SIZE
+from .config import (
+    BULK_CONFIRM_MIN_SCORE,
+    BULK_MAX_ROWS,
+    CSV_MAX_BYTES,
+    MAPPING_PAGE_SIZE,
+    PRICE_MISMATCH_PAGE_SIZE,
+)
 from .models import PosMappingEvent, PosProduct
 from .services import MappingError
 
@@ -90,6 +96,9 @@ class PosMappingView(PortalPermissionRequiredMixin, ListView[PosProduct]):
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         context = super().get_context_data(**kwargs)
         rows = list(context["page_obj"].object_list) if context.get("page_obj") else []
+        # "Tick the suggested rows" is a plain link (?tick=suggested) so the
+        # bulk form works without JavaScript and survives a page reload.
+        tick = self.request.GET.get("tick", "")
 
         # Attach the mapped variant / suggestions to each row object so the
         # template stays a plain loop (no per-row queries, no logic in HTML).
@@ -106,6 +115,13 @@ class PosMappingView(PortalPermissionRequiredMixin, ListView[PosProduct]):
         )
         for row in rows:
             row.mapped_variant = mapped_by_sku.get(row.sku)
+            row.display_name = matching.strip_leading_brand(row.brand, row.name)
+            row.looks_not_online = (
+                not row.is_mapped
+                and not row.not_online
+                and services.looks_not_sold_online(row.category)
+            )
+            row.ticked = tick == "all" or (tick == "suggested" and row.looks_not_online)
             row.suggestions = (
                 matching.suggest(
                     pos_brand=row.brand, pos_name=row.name, pos_sku=row.sku, candidates=candidates
@@ -114,6 +130,11 @@ class PosMappingView(PortalPermissionRequiredMixin, ListView[PosProduct]):
                 else []
             )
 
+        # Where bulk actions return to: this page, minus the one-shot ?tick=
+        # so the rows that remain are not ticked again.
+        keep = self.request.GET.copy()
+        keep.pop("tick", None)
+        next_url = self.request.path + (f"?{keep.urlencode()}" if keep else "")
         state = services.get_state()
         totals = PosProduct.objects.aggregate(
             total=Count("pk"), not_online=Count("pk", filter=Q(not_online=True))
@@ -122,6 +143,10 @@ class PosMappingView(PortalPermissionRequiredMixin, ListView[PosProduct]):
         context.update(
             {
                 "rows": rows,
+                "tick": tick,
+                "next_url": next_url,
+                "suggested_not_online_count": sum(1 for row in rows if row.looks_not_online),
+                "bulk_min_score": BULK_CONFIRM_MIN_SCORE,
                 "status": self._status(),
                 "current_q": self.request.GET.get("q", ""),
                 "state": state,
@@ -189,6 +214,75 @@ class PosConfirmMappingView(PortalPermissionRequiredMixin, View):
             messages.error(request, str(exc))
         else:
             messages.success(request, f"{pos_product.sku} mapped to {variant.sku}.")
+        return _back(request)
+
+
+def _id_list(values: list[str]) -> list[int]:
+    """Digits-only form values as ints, de-duplicated, capped at
+    ``BULK_MAX_ROWS`` — anything else is ignored rather than trusted."""
+    seen: dict[int, None] = {}
+    for value in values:
+        if value.isdigit():
+            seen.setdefault(int(value), None)
+    return list(seen)[:BULK_MAX_ROWS]
+
+
+def _report(request: HttpRequest, result: services.BulkResult, done_text: str) -> None:
+    if result.done:
+        messages.success(request, f"{result.done} {done_text}")
+    for error in result.errors[:10]:
+        messages.warning(request, error)
+    if len(result.errors) > 10:
+        messages.warning(request, f"…and {len(result.errors) - 10} more.")
+
+
+class PosBulkReviewView(PortalPermissionRequiredMixin, View):
+    """Preview every very-likely match, and map only the rows the owner ticks.
+
+    GET changes nothing. POST maps exactly the ``pair`` values ticked
+    (``<pos id>:<variant id>``) — an untouched form maps nothing."""
+
+    permission_required = MANAGE_PERMISSION
+
+    def get(self, request: HttpRequest) -> HttpResponse:
+        found = services.bulk_match_proposals()
+        return render(
+            request,
+            "portal/pos_bulk_review.html",
+            {
+                "proposals": found.proposals,
+                "left_out": found.ambiguous,
+                "min_score": BULK_CONFIRM_MIN_SCORE,
+                "tick_all": request.GET.get("tick") == "all",
+            },
+        )
+
+    def post(self, request: HttpRequest) -> HttpResponseRedirect:
+        pairs: list[tuple[int, int]] = []
+        for raw in request.POST.getlist("pair")[:BULK_MAX_ROWS]:
+            pos_id, _, variant_id = raw.partition(":")
+            if pos_id.isdigit() and variant_id.isdigit():
+                pairs.append((int(pos_id), int(variant_id)))
+        if not pairs:
+            messages.warning(request, "Nothing was ticked, so nothing was mapped.")
+            return redirect("possync:bulk_review")
+        result = services.confirm_mappings(pairs=pairs, actor=_actor(request))
+        _report(request, result, "POS product(s) mapped.")
+        return redirect("possync:mapping")
+
+
+class PosBulkNotOnlineView(PortalPermissionRequiredMixin, View):
+    """Mark every ticked POS product as not sold online in one go."""
+
+    permission_required = MANAGE_PERMISSION
+
+    def post(self, request: HttpRequest) -> HttpResponseRedirect:
+        pos_ids = _id_list(request.POST.getlist("pos_ids"))
+        if not pos_ids:
+            messages.warning(request, "Tick at least one product first.")
+            return _back(request)
+        result = services.set_not_online_many(pos_ids=pos_ids, actor=_actor(request))
+        _report(request, result, "POS product(s) marked not sold online.")
         return _back(request)
 
 

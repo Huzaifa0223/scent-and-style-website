@@ -98,11 +98,33 @@
     <button type="submit" class="inline-flex min-h-11 items-center rounded border border-border-interactive px-4 text-sm font-medium text-ink hover:bg-paper focus:outline-none focus-visible:ring-2 focus-visible:ring-accent">Filter</button>
   </form>
 
+  {# --- bulk actions ----------------------------------------------------- #}
+  {% if status == "unmapped" %}
+    <div class="mb-4 flex flex-wrap items-center gap-3 text-sm" data-bulk-toolbar>
+      <a href="{% url 'possync:bulk_review' %}" class="inline-flex min-h-11 items-center rounded bg-accent px-4 font-medium text-text-inverse hover:bg-accent-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2">Review and confirm all {{ bulk_min_score|floatformat:2 }} matches</a>
+      {% if rows %}
+        <button type="submit" form="bulk-not-online" class="inline-flex min-h-11 items-center rounded border border-border-interactive px-4 font-medium text-ink hover:bg-paper focus:outline-none focus-visible:ring-2 focus-visible:ring-accent">Mark ticked as not sold online</button>
+        {% if suggested_not_online_count %}
+          <a href="?status={{ status }}&q={{ current_q|urlencode }}&page={{ page_obj.number|default:1 }}&tick=suggested" class="text-accent hover:text-accent-hover">Tick the {{ suggested_not_online_count }} suggested row(s)</a>
+        {% endif %}
+        <a href="?status={{ status }}&q={{ current_q|urlencode }}&page={{ page_obj.number|default:1 }}&tick=all" class="text-accent hover:text-accent-hover">Tick all on this page</a>
+        <a href="?status={{ status }}&q={{ current_q|urlencode }}&page={{ page_obj.number|default:1 }}" class="text-text-muted hover:text-ink">Untick all</a>
+      {% endif %}
+    </div>
+    {# The checkboxes in the table point here with form="…": a form cannot wrap
+       the table, whose rows already contain their own forms. #}
+    <form id="bulk-not-online" method="post" action="{% url 'possync:bulk_not_online' %}">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ next_url }}" />
+    </form>
+  {% endif %}
+
   {# --- products --------------------------------------------------------- #}
   <div class="overflow-x-auto rounded-lg border border-border-subtle bg-surface shadow-card">
     <table class="min-w-full divide-y divide-border-subtle text-sm">
       <thead class="bg-paper text-left text-xs font-semibold uppercase tracking-wide text-text-muted">
         <tr>
+          <th class="w-10 px-4 py-3"><span class="sr-only">Select</span></th>
           <th class="px-4 py-3">POS product</th>
           <th class="px-4 py-3">POS price</th>
           <th class="px-4 py-3">Website variant</th>
@@ -113,8 +135,18 @@
         {% for row in rows %}
           <tr class="align-top">
             <td class="px-4 py-3">
-              <div class="text-ink">{{ row.brand }} {{ row.name }}</div>
-              <div class="font-mono text-xs text-text-muted">{{ row.sku }}{% if not row.active %} · inactive in POS{% endif %}</div>
+              {% if not row.mapped_variant and not row.not_online %}
+                <input type="checkbox" name="pos_ids" value="{{ row.pk }}" form="bulk-not-online"
+                       {% if row.ticked %}checked{% endif %}
+                       aria-label="Select {{ row.sku }}" class="h-5 w-5 rounded border-border-interactive" />
+              {% endif %}
+            </td>
+            <td class="px-4 py-3">
+              <div class="text-ink">{{ row.brand }} {{ row.display_name }}</div>
+              <div class="font-mono text-xs text-text-muted">{{ row.sku }}{% if row.category %} · {{ row.category }}{% endif %}{% if not row.active %} · inactive in POS{% endif %}</div>
+              {% if row.looks_not_online %}
+                <div class="mt-1 text-xs text-warning" data-not-online-hint>Looks like a watch, sunglasses or accessory — probably not sold online.</div>
+              {% endif %}
             </td>
             <td class="px-4 py-3 font-mono text-ink">{% if row.price is not None %}{{ row.price }}{% else %}—{% endif %}</td>
             <td class="px-4 py-3">
@@ -138,6 +170,9 @@
                           <span class="text-ink">{{ suggestion.candidate.brand }} {{ suggestion.candidate.product_name }}</span>
                           <span class="text-text-muted"> · {{ suggestion.candidate.label }}</span>
                           <span class="block font-mono text-xs text-text-muted">{{ suggestion.candidate.sku }} · Rs. {{ suggestion.candidate.price }} · match {{ suggestion.score|floatformat:2 }}</span>
+                          {% if suggestion.size_warning %}
+                            <span class="mt-1 block rounded border border-danger bg-danger-soft px-2 py-1 text-xs font-semibold text-danger" role="alert" data-size-warning>{{ suggestion.size_warning }}</span>
+                          {% endif %}
                         </span>
                       </form>
                     </li>
@@ -173,7 +208,7 @@
           </tr>
         {% empty %}
           <tr>
-            <td colspan="4" class="px-4 py-6 text-center text-text-muted">
+            <td colspan="5" class="px-4 py-6 text-center text-text-muted">
               {% if total_products %}No POS products match these filters.{% else %}No POS products yet — upload the POS product CSV above.{% endif %}
             </td>
           </tr>

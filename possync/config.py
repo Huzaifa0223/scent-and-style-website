@@ -33,6 +33,21 @@ CSV_MAX_BYTES: Final[int] = 2 * 1024 * 1024
 SUGGESTION_COUNT: Final[int] = 3
 SUGGESTION_MIN_SCORE: Final[float] = 0.30
 
+# "Review and confirm all matches": only suggestions scoring at least this are
+# offered, and never ones with a size or gift-set mismatch or a tie.
+BULK_CONFIRM_MIN_SCORE: Final[float] = 0.90
+# Most rows one bulk action will touch (the whole POS catalogue is ~400).
+BULK_MAX_ROWS: Final[int] = 1000
+
+# A POS category containing one of these (case-insensitive) is *suggested* as
+# "not sold online". Only a hint: the owner ticks and confirms.
+NOT_ONLINE_CATEGORY_KEYWORDS: Final[tuple[str, ...]] = (
+    "watch",
+    "sunglass",
+    "eyewear",
+    "accessor",
+)
+
 MAPPING_PAGE_SIZE: Final[int] = 50
 PRICE_MISMATCH_PAGE_SIZE: Final[int] = 50
 
