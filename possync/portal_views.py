@@ -15,7 +15,7 @@ from typing import Any, cast
 
 from django.contrib import messages
 from django.contrib.auth.models import User
-from django.db.models import Count, Exists, OuterRef, Q, QuerySet
+from django.db.models import Count, Exists, OuterRef, Q, QuerySet, Subquery
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 from django.utils import timezone
@@ -24,6 +24,7 @@ from django.views.generic import ListView, View
 
 from accounts.mixins import PortalPermissionRequiredMixin
 from catalog.models import ProductVariant
+from orders.models import Order, OrderStatusEvent
 
 from . import matching, services
 from .config import CSV_MAX_BYTES, MAPPING_PAGE_SIZE, PRICE_MISMATCH_PAGE_SIZE
@@ -130,6 +131,7 @@ class PosMappingView(PortalPermissionRequiredMixin, ListView[PosProduct]):
                 "mapped_count": mapped_count,
                 "unmapped_count": max(totals["total"] - mapped_count - totals["not_online"], 0),
                 "mismatch_count": services.price_mismatches().count(),
+                "awaiting_orders_count": services.awaiting_ack_orders().count(),
                 "recent_events": PosMappingEvent.objects.select_related("actor")[:RECENT_EVENTS],
                 "orders_since_value": timezone.localtime(state.orders_since).strftime(
                     "%Y-%m-%dT%H:%M"
@@ -284,3 +286,49 @@ class PosPriceMismatchView(PortalPermissionRequiredMixin, ListView[ProductVarian
 
     def get_queryset(self) -> QuerySet[ProductVariant]:
         return services.price_mismatches()
+
+
+class PosAwaitingOrdersView(PortalPermissionRequiredMixin, ListView[Order]):
+    """Web orders the POS has not recorded yet, each with a "mark recorded"
+    form. No customer details are shown — only what is needed to decide."""
+
+    model = Order
+    template_name = "portal/pos_orders.html"
+    context_object_name = "orders"
+    permission_required = MANAGE_PERMISSION
+
+    def get_queryset(self) -> QuerySet[Order]:
+        latest_confirmation = (
+            OrderStatusEvent.objects.filter(order=OuterRef("pk"), to_status=Order.Status.CONFIRMED)
+            .order_by("-created_at")
+            .values("created_at")[:1]
+        )
+        return (
+            services.awaiting_ack_orders()
+            .annotate(confirmed_at=Subquery(latest_confirmation))
+            .prefetch_related("items")
+            .order_by("confirmed_at", "pk")
+        )
+
+
+class PosMarkRecordedView(PortalPermissionRequiredMixin, View):
+    """Owner-only: take one web order out of the awaiting-ack count, with a
+    mandatory reason, audited. See ``services.mark_recorded``."""
+
+    permission_required = MANAGE_PERMISSION
+
+    def post(self, request: HttpRequest, pk: int) -> HttpResponseRedirect:
+        order = get_object_or_404(Order, pk=pk)
+        try:
+            services.mark_recorded(
+                order=order, reason=request.POST.get("reason", ""), actor=_actor(request)
+            )
+        except MappingError as exc:
+            messages.error(request, str(exc))
+        else:
+            messages.success(
+                request,
+                f"Order {order.order_number} marked as recorded. Its units stop being "
+                "subtracted at the next POS stock snapshot.",
+            )
+        return redirect("possync:orders")

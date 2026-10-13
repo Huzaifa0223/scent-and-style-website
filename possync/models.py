@@ -56,6 +56,7 @@ class PosMappingEvent(TimeStampedModel):
         MARKED_ONLINE = "marked_online", "Marked sold online"
         CSV_IMPORT = "csv_import", "POS product CSV imported"
         ORDERS_CUTOFF = "orders_cutoff", "Web-order cutoff changed"
+        ORDER_MARKED_RECORDED = "order_marked_recorded", "Web order marked as recorded"
 
     action = models.CharField(max_length=24, choices=Action.choices)
     pos_sku = models.CharField(max_length=128, blank=True, default="")
@@ -101,16 +102,38 @@ class PosSyncState(models.Model):
 
 
 class PosOrderAck(models.Model):
-    """ "This web order has been recorded in the POS as sale ``pos_sale_number``."
+    """ "This web order has been recorded in the POS" — and therefore no longer
+    counts against stock.
+
+    Normally the POS sends the sale number it recorded (``source=pos``). When
+    the POS will never record an order (a stock-take already reflected it, a
+    sale rung up under another name…) the Owner can mark it recorded by hand
+    (``source=manual``) with a reason, which is audited. A manual mark is
+    provisional: if the POS later acknowledges the same order with a real
+    sale number, that number replaces it.
 
     A separate table (not a column on ``orders.Order``) so the integration
     adds a table instead of altering one of the shop's busiest. One row per
     order (OneToOne) makes acknowledgement idempotent by construction.
     """
 
+    class Source(models.TextChoices):
+        POS = "pos", "Acknowledged by the POS"
+        MANUAL = "manual", "Marked recorded by hand"
+
     order = models.OneToOneField("orders.Order", on_delete=models.CASCADE, related_name="pos_ack")
-    pos_sale_number = models.CharField(max_length=64)
+    # Empty for a manual mark until (unless) the POS acknowledges it.
+    pos_sale_number = models.CharField(max_length=64, blank=True, default="")
+    source = models.CharField(max_length=10, choices=Source.choices, default=Source.POS)
+    reason = models.CharField(max_length=500, blank=True, default="")
+    marked_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
     acked_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self) -> str:
-        return f"order {self.order_id} -> {self.pos_sale_number}"
+        return f"order {self.order_id} -> {self.pos_sale_number or self.source}"

@@ -19,6 +19,7 @@
       <div><dt class="text-text-muted">Last stock snapshot</dt><dd class="text-ink">{% if state.last_snapshot_at %}{{ state.last_snapshot_at|date:"d M Y H:i" }}{% else %}Never received{% endif %}</dd></div>
       <div><dt class="text-text-muted">Last applied</dt><dd class="text-ink">{% if last_result %}{{ last_result.applied|default:0 }} changed, {{ last_result.unchanged|default:0 }} unchanged{% else %}—{% endif %}</dd></div>
       <div><dt class="text-text-muted">Mapped / unmapped / not online</dt><dd class="text-ink">{{ mapped_count }} / {{ unmapped_count }} / {{ not_online_count }}</dd></div>
+      <div><dt class="text-text-muted">Web orders awaiting the POS</dt><dd class="text-ink"><a class="text-accent hover:text-accent-hover" href="{% url 'possync:orders' %}">{{ awaiting_orders_count }} order(s)</a></dd></div>
       <div><dt class="text-text-muted">Price differences</dt><dd class="text-ink"><a class="text-accent hover:text-accent-hover" href="{% url 'possync:price_mismatches' %}">{{ mismatch_count }} to review</a></dd></div>
     </dl>
 

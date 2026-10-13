@@ -90,46 +90,75 @@ def _parse_snapshot_at(value: object) -> datetime:
     return moment
 
 
-def _parse_item(raw: object, index: int) -> SnapshotItem:
+def _parse_item(raw: object) -> SnapshotItem:
+    """One item, or ``PayloadError`` whose ``code`` becomes its skip reason."""
     if not isinstance(raw, dict):
-        raise PayloadError("invalid_item", index)
+        raise PayloadError("invalid_item")
     sku = raw.get("sku")
-    if not isinstance(sku, str) or not sku.strip() or len(sku.strip()) > services.SKU_MAX_LENGTH:
-        raise PayloadError("invalid_sku", index)
+    if not isinstance(sku, str) or not sku.strip():
+        raise PayloadError("empty_sku")
+    if len(sku.strip()) > services.SKU_MAX_LENGTH:
+        raise PayloadError("sku_too_long")
     on_hand = raw.get("onHand")
     if isinstance(on_hand, float) and on_hand.is_integer():
         on_hand = int(on_hand)
     # bool is an int subclass — `true` is not a stock count.
     if isinstance(on_hand, bool) or not isinstance(on_hand, int):
-        raise PayloadError("invalid_on_hand", index)
+        raise PayloadError("invalid_on_hand")
     price: Decimal | None = None
     raw_price = raw.get("priceRs")
     if raw_price is not None:
         if isinstance(raw_price, bool) or not isinstance(raw_price, int | float | str):
-            raise PayloadError("invalid_price", index)
+            raise PayloadError("invalid_price")
         try:
             price = Decimal(str(raw_price))
         except InvalidOperation as exc:
-            raise PayloadError("invalid_price", index) from exc
+            raise PayloadError("invalid_price") from exc
         if not price.is_finite() or price < 0:
-            raise PayloadError("invalid_price", index)
+            raise PayloadError("invalid_price")
         price = price.quantize(Decimal("0.01"))
     return SnapshotItem(sku=sku.strip(), on_hand=on_hand, price=price)
 
 
-def _parse_snapshot(payload: dict[str, Any]) -> tuple[datetime, list[SnapshotItem]]:
+def _parse_snapshot(
+    payload: dict[str, Any],
+) -> tuple[datetime, list[SnapshotItem], list[dict[str, Any]]]:
+    """Split a body into applicable items and ``skipped`` ones.
+
+    Only a *malformed body* (bad ``snapshotAt``, ``items`` not a list) raises
+    ``PayloadError`` and so becomes a 400. A single bad item — empty or
+    over-long SKU, a duplicate SKU, an unusable count or price — is skipped
+    and reported with its position and reason, and every other item is
+    applied: one broken row in a thousand-row export must not block the
+    other 999. For a duplicate SKU the first occurrence is the one applied.
+    """
     snapshot_at = _parse_snapshot_at(payload.get("snapshotAt"))
     raw_items = payload.get("items")
     if not isinstance(raw_items, list):
         raise PayloadError("invalid_items")
-    items = [_parse_item(raw, index) for index, raw in enumerate(raw_items)]
+
+    items: list[SnapshotItem] = []
+    skipped: list[dict[str, Any]] = []
     seen: set[str] = set()
-    for index, item in enumerate(items):
+    for index, raw in enumerate(raw_items):
+        try:
+            item = _parse_item(raw)
+        except PayloadError as exc:
+            sku = raw.get("sku") if isinstance(raw, dict) else None
+            skipped.append(
+                {
+                    "index": index,
+                    "sku": sku.strip() if isinstance(sku, str) and sku.strip() else None,
+                    "reason": exc.code,
+                }
+            )
+            continue
         if item.sku in seen:
-            # Two counts for one SKU: refusing is the only non-guessing answer.
-            raise PayloadError("duplicate_sku", index)
+            skipped.append({"index": index, "sku": item.sku, "reason": "duplicate_sku"})
+            continue
         seen.add(item.sku)
-    return snapshot_at, items
+        items.append(item)
+    return snapshot_at, items, skipped
 
 
 @pos_endpoint("GET")
@@ -141,20 +170,21 @@ def ping(request: HttpRequest) -> HttpResponse:
 def stock(request: HttpRequest) -> HttpResponse:
     """POST /api/pos/sync/stock/ — apply a stock snapshot.
 
-    The whole request is validated before anything is applied, so a bad
-    item never leaves a half-applied snapshot.
+    A malformed body is a 400 and nothing is applied. A bad *item* is
+    skipped and listed in ``skipped``; the rest of the snapshot is applied.
     """
     try:
-        snapshot_at, items = _parse_snapshot(_read_json_object(request))
+        snapshot_at, items, skipped = _parse_snapshot(_read_json_object(request))
     except PayloadError as exc:
         return exc.response()
 
-    result = services.apply_snapshot(snapshot_at=snapshot_at, items=items)
+    result = services.apply_snapshot(snapshot_at=snapshot_at, items=items, skipped=skipped)
     body: dict[str, Any] = {
         "applied": result.applied,
         "unchanged": result.unchanged,
         "unmapped": result.unmapped,
         "oversold": result.oversold,
+        "skipped": result.skipped,
     }
     if result.stale:
         # A late retry of an older snapshot: acknowledged (so the POS stops

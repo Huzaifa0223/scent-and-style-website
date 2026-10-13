@@ -74,7 +74,9 @@ def test_with_nothing_pending_stock_equals_on_hand(client) -> None:  # type: ign
     response = post_json(client, STOCK_URL, snapshot([item("POS-1", 7)]))
 
     assert response.status_code == 200
-    assert response.json() == {"applied": 1, "unchanged": 0, "unmapped": [], "oversold": []}
+    assert response.json() == {
+        "applied": 1, "unchanged": 0, "unmapped": [], "oversold": [], "skipped": [],
+    }  # fmt: skip
     assert (stock(variant), available(variant)) == (7, 7)
 
 
@@ -210,7 +212,9 @@ def test_a_movement_is_written_only_when_the_number_changes(client) -> None:  # 
     second = post_json(client, STOCK_URL, snapshot([item("POS-1", 9)], at=minutes_ago(5)))
 
     assert first.json()["applied"] == 1
-    assert second.json() == {"applied": 0, "unchanged": 1, "unmapped": [], "oversold": []}
+    assert second.json() == {
+        "applied": 0, "unchanged": 1, "unmapped": [], "oversold": [], "skipped": [],
+    }  # fmt: skip
     movements = InventoryAdjustment.objects.filter(variant=variant)
     assert movements.count() == 1
     movement = movements.get()
@@ -265,7 +269,8 @@ def test_an_older_snapshot_cannot_roll_stock_back(client) -> None:  # type: igno
 
     assert late_retry.status_code == 200
     assert late_retry.json() == {
-        "applied": 0, "unchanged": 0, "unmapped": [], "oversold": [], "stale": True,
+        "applied": 0, "unchanged": 0, "unmapped": [], "oversold": [], "skipped": [],
+        "stale": True,
     }  # fmt: skip
     assert stock(variant) == 5
     assert PosSyncState.objects.get(pk=1).last_snapshot_at == last
@@ -338,38 +343,126 @@ def test_malformed_requests_are_400(client, payload, error) -> None:  # type: ig
 
 
 @pytest.mark.parametrize(
-    ("bad_item", "error"),
+    ("bad_item", "reason", "reported_sku"),
     [
-        ("just a string", "invalid_item"),
-        ({"onHand": 1}, "invalid_sku"),
-        ({"sku": "  ", "onHand": 1}, "invalid_sku"),
-        ({"sku": "A"}, "invalid_on_hand"),
-        ({"sku": "A", "onHand": "7"}, "invalid_on_hand"),
-        ({"sku": "A", "onHand": 1.5}, "invalid_on_hand"),
-        ({"sku": "A", "onHand": True}, "invalid_on_hand"),
-        ({"sku": "A", "onHand": 1, "priceRs": -1}, "invalid_price"),
-        ({"sku": "A", "onHand": 1, "priceRs": "abc"}, "invalid_price"),
-        ({"sku": "A", "onHand": 1, "priceRs": True}, "invalid_price"),
+        ("just a string", "invalid_item", None),
+        ({"onHand": 1}, "empty_sku", None),
+        ({"sku": "", "onHand": 1}, "empty_sku", None),
+        ({"sku": "   ", "onHand": 1}, "empty_sku", None),
+        ({"sku": None, "onHand": 1}, "empty_sku", None),
+        ({"sku": 12345, "onHand": 1}, "empty_sku", None),
+        ({"sku": "S" * 129, "onHand": 1}, "sku_too_long", "S" * 129),
+        ({"sku": "A"}, "invalid_on_hand", "A"),
+        ({"sku": "A", "onHand": "7"}, "invalid_on_hand", "A"),
+        ({"sku": "A", "onHand": 1.5}, "invalid_on_hand", "A"),
+        ({"sku": "A", "onHand": True}, "invalid_on_hand", "A"),
+        ({"sku": "A", "onHand": 1, "priceRs": -1}, "invalid_price", "A"),
+        ({"sku": "A", "onHand": 1, "priceRs": "abc"}, "invalid_price", "A"),
+        ({"sku": "A", "onHand": 1, "priceRs": True}, "invalid_price", "A"),
     ],
 )
-def test_one_bad_item_rejects_the_whole_snapshot_and_names_it(client, bad_item, error) -> None:  # type: ignore[no-untyped-def]
-    variant = mapped_variant("POS-1", stock=1)
-    body = snapshot([item("POS-1", 50), bad_item])
+def test_a_bad_item_is_skipped_and_reported_and_the_rest_is_applied(  # type: ignore[no-untyped-def]
+    client, bad_item, reason, reported_sku
+) -> None:
+    before = mapped_variant("POS-1", stock=1)
+    after = mapped_variant("POS-2", stock=1)
 
-    response = post_json(client, STOCK_URL, body)
+    response = post_json(
+        client, STOCK_URL, snapshot([item("POS-1", 50), bad_item, item("POS-2", 60)])
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["skipped"] == [{"index": 1, "sku": reported_sku, "reason": reason}]
+    assert body["applied"] == 2
+    assert (stock(before), stock(after)) == (50, 60)  # the rest went through
+
+
+def test_an_empty_sku_does_not_reject_the_snapshot(client) -> None:  # type: ignore[no-untyped-def]
+    variant = mapped_variant("POS-1", stock=0)
+
+    response = post_json(client, STOCK_URL, snapshot([item("", 3), item("POS-1", 4)]))
+
+    assert response.status_code == 200
+    assert response.json()["skipped"] == [{"index": 0, "sku": None, "reason": "empty_sku"}]
+    assert stock(variant) == 4
+    assert PosProduct.objects.filter(sku="").count() == 0  # never remembered
+
+
+def test_a_duplicate_sku_is_skipped_and_the_first_is_applied(client) -> None:  # type: ignore[no-untyped-def]
+    variant = mapped_variant("POS-1", stock=1)
+    other = mapped_variant("POS-2", stock=1)
+
+    response = post_json(
+        client, STOCK_URL, snapshot([item("POS-1", 5), item("POS-2", 7), item("POS-1", 9)])
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["skipped"] == [{"index": 2, "sku": "POS-1", "reason": "duplicate_sku"}]
+    assert body["applied"] == 2
+    assert (stock(variant), stock(other)) == (5, 7)
+
+
+def test_every_skip_is_listed_with_its_own_index_and_reason(client) -> None:  # type: ignore[no-untyped-def]
+    mapped_variant("POS-1", stock=0)
+
+    response = post_json(
+        client,
+        STOCK_URL,
+        snapshot(
+            [
+                item("POS-1", 5),
+                item("", 1),
+                item("POS-1", 6),
+                {"sku": "BAD", "onHand": "x"},
+                item("NEW-1", 2),
+            ]
+        ),
+    )
+
+    body = response.json()
+    assert body["skipped"] == [
+        {"index": 1, "sku": None, "reason": "empty_sku"},
+        {"index": 2, "sku": "POS-1", "reason": "duplicate_sku"},
+        {"index": 3, "sku": "BAD", "reason": "invalid_on_hand"},
+    ]
+    assert body["unmapped"] == ["NEW-1"]
+    assert PosProduct.objects.filter(sku="BAD").count() == 0
+
+
+def test_skipped_items_are_remembered_with_the_last_sync(client) -> None:  # type: ignore[no-untyped-def]
+    post_json(client, STOCK_URL, snapshot([item("", 1)]))
+
+    state = PosSyncState.objects.get(pk=1)
+
+    assert state.last_result["skipped"] == [{"index": 0, "sku": None, "reason": "empty_sku"}]
+
+
+def test_a_stale_snapshot_still_reports_its_skipped_items(client) -> None:  # type: ignore[no-untyped-def]
+    post_json(client, STOCK_URL, snapshot([], at=minutes_ago(1)))
+
+    late = post_json(client, STOCK_URL, snapshot([item("", 1)], at=minutes_ago(30)))
+
+    assert late.json()["stale"] is True
+    assert late.json()["skipped"] == [{"index": 0, "sku": None, "reason": "empty_sku"}]
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"snapshotAt": "2026-01-01T00:00:00Z", "items": "nope"},
+        {"snapshotAt": "not a time", "items": []},
+        {"items": []},
+    ],
+)
+def test_only_a_malformed_body_is_a_400_and_applies_nothing(client, payload) -> None:  # type: ignore[no-untyped-def]
+    variant = mapped_variant("POS-1", stock=1)
+
+    response = post_json(client, STOCK_URL, payload)
 
     assert response.status_code == 400
-    assert response.json() == {"error": error, "index": 1}
-    assert stock(variant) == 1  # nothing half-applied
-
-
-def test_two_counts_for_one_sku_are_refused(client) -> None:  # type: ignore[no-untyped-def]
-    variant = mapped_variant("POS-1", stock=1)
-
-    response = post_json(client, STOCK_URL, snapshot([item("POS-1", 5), item("POS-1", 9)]))
-
-    assert response.status_code == 400
-    assert response.json() == {"error": "duplicate_sku", "index": 1}
+    assert "skipped" not in response.json()
     assert stock(variant) == 1
 
 
@@ -397,4 +490,6 @@ def test_an_empty_snapshot_is_valid(client) -> None:  # type: ignore[no-untyped-
     response = post_json(client, STOCK_URL, snapshot([]))
 
     assert response.status_code == 200
-    assert response.json() == {"applied": 0, "unchanged": 0, "unmapped": [], "oversold": []}
+    assert response.json() == {
+        "applied": 0, "unchanged": 0, "unmapped": [], "oversold": [], "skipped": [],
+    }  # fmt: skip

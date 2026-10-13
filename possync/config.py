@@ -40,3 +40,7 @@ PRICE_MISMATCH_PAGE_SIZE: Final[int] = 50
 # fixed; it only needs to differ from any other advisory lock in this database
 # (none exist in this project).
 SNAPSHOT_LOCK_KEY: Final[int] = 7_012_042
+
+# "Mark recorded" by hand: the reason is mandatory so the audit trail says why.
+MARK_RECORDED_MIN_REASON_LENGTH: Final[int] = 5
+MARK_RECORDED_MAX_REASON_LENGTH: Final[int] = 400

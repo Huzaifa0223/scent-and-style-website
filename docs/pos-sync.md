@@ -57,7 +57,7 @@ them counted until acknowledged.
 - Unmapped SKUs are upserted into `PosProduct` (`last_seen_at`, price) and listed in the response —
   never matched by guesswork. SKUs marked "not sold online" are not listed as unmapped.
 - Hand edits to `stock_quantity` (Inventory page, product form) on a **mapped** variant are
-  overwritten by the next snapshot — the POS is the master.
+  overwritten by the next snapshot — the POS is the master (the forms warn about it).
 
 ## API
 
@@ -70,14 +70,18 @@ headers**, `Cache-Control: private, no-store`. Unset/short token ⇒ every reque
 | Request | Response |
 |---|---|
 | `GET ping/` | `200 {"ok": true}` |
-| `POST stock/` `{"snapshotAt": "<ISO>", "items": [{"sku": "…", "onHand": 7, "priceRs": 12500}]}` | `200 {"applied": n, "unchanged": n, "unmapped": ["sku"], "oversold": [{"sku": "…", "short": n}]}` (+ `"stale": true` when ignored) |
+| `POST stock/` `{"snapshotAt": "<ISO>", "items": [{"sku": "…", "onHand": 7, "priceRs": 12500}]}` | `200 {"applied": n, "unchanged": n, "unmapped": ["sku"], "oversold": [{"sku": "…", "short": n}], "skipped": [{"index": n, "sku": "…"\|null, "reason": "…"}]}` (+ `"stale": true` when ignored) |
 | `GET web-orders/` | `200 {"orders": [{"id", "number", "paidAt", "lines": [{"posSku","variantSku","name","qty","unitPriceRs"}], "unmappedLines": [...]}]}` — **no names, phones or addresses**. `paidAt` is when the order was confirmed (there is no online payment). Oldest first. |
 | `POST web-orders/<id>/ack/` `{"posSaleNumber": "S-2026-00123"}` | `200 {"ok": true, "orderId", "posSaleNumber", "alreadyAcked"}`; same number again `200`; different number `409 already_acked_differently`; unknown id `404`; order not in a status the POS should record `409 order_not_awaiting_ack` |
 
-`POST stock/` validates the whole request before applying anything: `400` with `invalid_json`,
-`invalid_snapshot_at`, `snapshot_in_future`, `invalid_items`, or per item (`index` = position)
-`invalid_item`, `invalid_sku`, `invalid_on_hand`, `invalid_price`, `duplicate_sku`. Body cap 5 MiB
-(`413 payload_too_large`). `onHand` must be an integer (`7` or `7.0`); `priceRs` optional, ≥ 0.
+**Bad items are skipped, not fatal.** An item with an empty/missing SKU (`empty_sku`), an over-long
+SKU (`sku_too_long`), a repeated SKU (`duplicate_sku` — the first occurrence is applied, later ones
+skipped), an unusable count (`invalid_on_hand`), an unusable price (`invalid_price`) or that is not
+an object (`invalid_item`) is left out, listed in `skipped` with its `index`, and every other item is
+applied. Only a **malformed body** is a `400` and applies nothing: `invalid_json`,
+`invalid_snapshot_at`, `snapshot_in_future`, `invalid_items`. Body cap 5 MiB (`413
+payload_too_large`). `onHand` must be an integer (`7` or `7.0`); `priceRs` optional, ≥ 0. The last
+sync's `skipped` list is kept and shown in the portal.
 
 `oversold` appears when units in unacknowledged web orders exceed `onHand`; it is also shown in the
 portal and stored with the last sync result.
@@ -96,8 +100,17 @@ Requires the `possync.manage_pos_mapping` permission, which Staff do not have (4
 3. Filter unmapped / mapped / not online; search; **Export mapping (CSV)**.
 4. **Price differences** lists mapped variants whose POS price ≠ website price, for a human to fix
    on the product page. Nothing writes `price`.
-5. Every change (map, unmap, not-online, CSV import, cut-off change) is audited with who/when
-   (*Recent changes*). A variant maps to at most one POS SKU and vice-versa (DB unique constraint).
+5. Every change (map, unmap, not-online, CSV import, cut-off change, mark-recorded) is audited with
+   who/when (*Recent changes*). A variant maps to at most one POS SKU and vice-versa (DB unique
+   constraint).
+6. **Web orders awaiting the POS** (`/admin-portal/pos/orders/`, Owner only) lists the orders still
+   being subtracted. For one the POS will **never** record (e.g. a stock-take already reflects it),
+   **Mark as recorded** takes it out of the awaiting-ack count. A reason (5–400 characters) is
+   mandatory and is audited with your name. The order disappears from `GET web-orders/` at once; its
+   units stop being subtracted at the **next stock snapshot**. A manual mark is provisional: if the
+   POS later acknowledges the same order, its real sale number replaces the mark (history kept).
+7. The Inventory page and the product edit form show **"POS updates will overwrite this"** beside the
+   stock field of any POS-mapped variant (and saving one from Inventory says so too).
 
 ## Data model (all additive)
 
@@ -107,7 +120,9 @@ Requires the `possync.manage_pos_mapping` permission, which Staff do not have (4
 | `possync.PosProduct` | every POS product incl. not-online ones |
 | `possync.PosMappingEvent` | append-only audit trail |
 | `possync.PosSyncState` | singleton: cut-off, last snapshot time, last result |
-| `possync.PosOrderAck` | one row per acknowledged order (a separate table; `orders_order` is untouched) |
+| `possync.PosOrderAck` | one row per acknowledged order — by the POS (`source=pos`) or by hand (`source=manual`, with `reason` and `marked_by`); a separate table, `orders_order` is untouched |
+
+Migrations: `catalog.0013`, `possync.0001`, `possync.0002`.
 
 ## Deploying (runbook — not run from this repo's session)
 
@@ -125,7 +140,7 @@ export DJANGO_SETTINGS_MODULE=config.settings.prod
 python manage.py check --deploy            # possync.W001 must NOT appear
 python manage.py makemigrations --check --dry-run
 python manage.py showmigrations catalog possync     # catalog 0013 and possync 0001 unapplied
-python manage.py migrate catalog && python manage.py migrate possync
+python manage.py migrate catalog && python manage.py migrate possync   # catalog 0013, possync 0001+0002
 # Tailwind: the portal pages add a few utility classes — rebuild CSS + collectstatic if the build
 # is done on the server (./tools/tailwindcss -c tailwind.config.js -i static/css/input.css \
 #   -o static/css/app.css --minify), otherwise they render unstyled (functionally fine).
@@ -152,9 +167,9 @@ Restore the dump only if existing data was harmed (the migrations only add table
 
 ## Known limits / things to watch
 
-- A web order the POS never records stays subtracted until acknowledged (or until it falls before
-  the cut-off). If staff also correct stock by a stock-take for the same unit, it would be counted
-  twice; raising the cut-off is the escape hatch.
+- A web order the POS never records stays subtracted until acknowledged, marked recorded by hand,
+  or it falls before the cut-off. If staff also correct stock by a stock-take for the same unit it
+  would otherwise be counted twice — that is what *Mark as recorded* is for.
 - The mapping page computes suggestions in Python over every unmapped variant, per page of 50 POS
   products. Fine for a catalog of hundreds/low thousands.
 - `RateLimitAttempt` rows (scope `pos_sync`) accumulate one per request, like the other scopes.

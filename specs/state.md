@@ -152,6 +152,10 @@ complete.** P1 (Stage 14 onward) needs the human's explicit go-ahead per CLAUDE.
 - Movements use `inventory.services.adjust()` (reason *Manual adjustment*, note `POS sync: …`), not a
   new reason, to avoid an `inventory` migration. Mapping changes are audited in
   `possync.PosMappingEvent` (there is no `audit` app yet).
+- Follow-ups from review: a bad item (empty/duplicate SKU, unusable count/price) is skipped and listed
+  in the response's `skipped` array — only a malformed body is a 400; Owner-only "Mark as recorded"
+  (reason required, audited, `possync.0002`) for web orders the POS will never record; stock edit
+  forms warn "POS updates will overwrite this" for POS-mapped variants.
 - Verification: see the Stage log numbers in the commit/report; `ruff`, `mypy`, `makemigrations
   --check` clean. `pyproject.toml`: `possync` added to the existing CBV `ANN401` glob (same shape as
   `storefront`).

@@ -43,7 +43,11 @@ from catalog.models import ProductVariant
 from inventory import services as inventory_services
 from orders.models import Order, OrderItem, OrderStatusEvent
 
-from .config import SNAPSHOT_LOCK_KEY
+from .config import (
+    MARK_RECORDED_MAX_REASON_LENGTH,
+    MARK_RECORDED_MIN_REASON_LENGTH,
+    SNAPSHOT_LOCK_KEY,
+)
 from .matching import VariantCandidate
 from .models import PosMappingEvent, PosOrderAck, PosProduct, PosSyncState
 
@@ -381,6 +385,7 @@ class SnapshotResult:
     unchanged: int
     unmapped: list[str]
     oversold: list[dict[str, Any]]
+    skipped: list[dict[str, Any]] = field(default_factory=list)
     stale: bool = False
 
 
@@ -434,15 +439,28 @@ def _apply_variant(
     return changed, short
 
 
-def apply_snapshot(*, snapshot_at: datetime, items: list[SnapshotItem]) -> SnapshotResult:
-    """Apply a POS stock snapshot. See the module docstring for the formula."""
+def apply_snapshot(
+    *,
+    snapshot_at: datetime,
+    items: list[SnapshotItem],
+    skipped: list[dict[str, Any]] | None = None,
+) -> SnapshotResult:
+    """Apply a POS stock snapshot. See the module docstring for the formula.
+
+    ``skipped`` are items the API layer refused to apply (empty/duplicate SKU,
+    unusable count…); they are only carried through into the result and the
+    remembered last sync so the portal and the POS can see them.
+    """
+    skipped = skipped or []
     with _snapshot_lock():
         state = get_state()
         if state.last_snapshot_at is not None and snapshot_at < state.last_snapshot_at:
             logger.info(
                 "Ignored stale POS snapshot %s (< %s).", snapshot_at, state.last_snapshot_at
             )
-            return SnapshotResult(applied=0, unchanged=0, unmapped=[], oversold=[], stale=True)
+            return SnapshotResult(
+                applied=0, unchanged=0, unmapped=[], oversold=[], skipped=skipped, stale=True
+            )
 
         now = timezone.now()
         skus = [item.sku for item in items]
@@ -477,7 +495,11 @@ def apply_snapshot(*, snapshot_at: datetime, items: list[SnapshotItem]) -> Snaps
         _remember_pos_products(items, known=known, now=now)
 
         result = SnapshotResult(
-            applied=applied, unchanged=unchanged, unmapped=unmapped, oversold=oversold
+            applied=applied,
+            unchanged=unchanged,
+            unmapped=unmapped,
+            oversold=oversold,
+            skipped=skipped,
         )
         state.last_snapshot_at = snapshot_at
         state.last_applied_at = now
@@ -486,6 +508,7 @@ def apply_snapshot(*, snapshot_at: datetime, items: list[SnapshotItem]) -> Snaps
             "unchanged": unchanged,
             "unmapped": unmapped,
             "oversold": oversold,
+            "skipped": skipped,
         }
         state.save(update_fields=["last_snapshot_at", "last_applied_at", "last_result"])
         return result
@@ -574,14 +597,60 @@ class OrderNotAwaitingAckError(Exception):
 
 @transaction.atomic
 def acknowledge(*, order: Order, pos_sale_number: str) -> tuple[PosOrderAck, bool]:
-    """Idempotent acknowledgement. Returns ``(ack, already_acked)``; raises
-    ``AckConflictError`` if a *different* sale number was recorded before."""
+    """Idempotent acknowledgement by the POS. Returns ``(ack, already_acked)``;
+    raises ``AckConflictError`` if a *different* sale number was recorded by
+    the POS before. A manual mark is provisional and is upgraded to the POS's
+    real sale number."""
     locked = Order.objects.select_for_update().get(pk=order.pk)
     existing = PosOrderAck.objects.filter(order=locked).first()
     if existing is not None:
+        if existing.source == PosOrderAck.Source.MANUAL:
+            existing.pos_sale_number = pos_sale_number
+            existing.source = PosOrderAck.Source.POS
+            existing.save(update_fields=["pos_sale_number", "source"])
+            return existing, False
         if existing.pos_sale_number != pos_sale_number:
             raise AckConflictError(existing.pos_sale_number)
         return existing, True
     if locked.status not in AWAITING_ACK_STATUSES:
         raise OrderNotAwaitingAckError(locked.status)
     return PosOrderAck.objects.create(order=locked, pos_sale_number=pos_sale_number), False
+
+
+@transaction.atomic
+def mark_recorded(*, order: Order, reason: str, actor: User | None) -> PosOrderAck:
+    """Owner action: take one web order out of the awaiting-ack count without
+    a POS acknowledgement. Needs a reason and is audited.
+
+    Its units stop being subtracted at the **next** POS snapshot (the sync
+    sets stock absolutely from the POS count, which it does not store
+    between snapshots), so use it for orders the POS on-hand already
+    reflects or will never record.
+    """
+    reason = reason.strip()
+    if len(reason) < MARK_RECORDED_MIN_REASON_LENGTH:
+        raise MappingError(
+            f"Give a reason of at least {MARK_RECORDED_MIN_REASON_LENGTH} characters."
+        )
+    if len(reason) > MARK_RECORDED_MAX_REASON_LENGTH:
+        raise MappingError(f"Keep the reason under {MARK_RECORDED_MAX_REASON_LENGTH} characters.")
+
+    locked = Order.objects.select_for_update().get(pk=order.pk)
+    if PosOrderAck.objects.filter(order=locked).exists():
+        raise MappingError(f"Order {locked.order_number} is already recorded.")
+    if locked.status not in AWAITING_ACK_STATUSES:
+        raise MappingError(f"Order {locked.order_number} is not waiting for the POS.")
+
+    ack = PosOrderAck.objects.create(
+        order=locked,
+        pos_sale_number="",
+        source=PosOrderAck.Source.MANUAL,
+        reason=reason,
+        marked_by=actor,
+    )
+    PosMappingEvent.objects.create(
+        action=PosMappingEvent.Action.ORDER_MARKED_RECORDED,
+        actor=actor,
+        note=f"{locked.order_number}: {reason}"[:500],
+    )
+    return ack

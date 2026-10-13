@@ -120,4 +120,7 @@ class InventoryAdjustView(PortalPermissionRequiredMixin, View):
             return redirect("portal:inventory_list")
 
         messages.success(request, f"{variant.sku} stock set to {variant.stock_quantity}.")
+        if variant.pos_sku:
+            # The POS is the master of mapped variants' stock (possync).
+            messages.warning(request, "POS updates will overwrite this.")
         return redirect("portal:inventory_list")
