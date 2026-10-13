@@ -1,0 +1,203 @@
+{% extends "portal/base.html" %}
+
+{% block title %}POS mapping — {{ store_settings.name }} Portal{% endblock %}
+
+{% block portal_breadcrumbs %}POS mapping{% endblock %}
+
+{% block content %}
+  <h1 class="mb-1 text-xl font-semibold text-ink">POS mapping</h1>
+  <p class="mb-4 text-sm text-text-muted">
+    The POS is the master of physical stock. Link each POS product to the website variant it is
+    the same bottle as. Suggestions are only hints — nothing is linked until you confirm it, and
+    prices are never changed automatically.
+  </p>
+
+  {# --- sync status ------------------------------------------------------ #}
+  <section class="mb-6 rounded-lg border border-border-subtle bg-surface p-4 shadow-card" aria-labelledby="pos-sync-status">
+    <h2 id="pos-sync-status" class="text-sm font-semibold uppercase tracking-wide text-text-muted">Sync status</h2>
+    <dl class="mt-3 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+      <div><dt class="text-text-muted">Last stock snapshot</dt><dd class="text-ink">{% if state.last_snapshot_at %}{{ state.last_snapshot_at|date:"d M Y H:i" }}{% else %}Never received{% endif %}</dd></div>
+      <div><dt class="text-text-muted">Last applied</dt><dd class="text-ink">{% if last_result %}{{ last_result.applied|default:0 }} changed, {{ last_result.unchanged|default:0 }} unchanged{% else %}—{% endif %}</dd></div>
+      <div><dt class="text-text-muted">Mapped / unmapped / not online</dt><dd class="text-ink">{{ mapped_count }} / {{ unmapped_count }} / {{ not_online_count }}</dd></div>
+      <div><dt class="text-text-muted">Price differences</dt><dd class="text-ink"><a class="text-accent hover:text-accent-hover" href="{% url 'possync:price_mismatches' %}">{{ mismatch_count }} to review</a></dd></div>
+    </dl>
+
+    {% if last_result.oversold %}
+      <div class="mt-4 rounded border border-danger bg-danger-soft p-3 text-sm text-danger" role="alert">
+        <p class="font-semibold">Oversold — paid web orders exceed what the POS has on hand</p>
+        <ul class="mt-1 list-disc pl-5">
+          {% for item in last_result.oversold %}
+            <li><span class="font-mono">{{ item.sku }}</span>: short by {{ item.short }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    {% if last_result.unmapped %}
+      <p class="mt-4 text-sm text-text-muted">
+        {{ last_result.unmapped|length }} POS SKU(s) in the last snapshot are not mapped
+        (see the <em>Unmapped</em> list below).
+      </p>
+    {% endif %}
+
+    <form method="post" action="{% url 'possync:orders_since' %}" class="mt-4 flex flex-wrap items-end gap-3 text-sm">
+      {% csrf_token %}
+      <div>
+        <label for="orders-since" class="block text-text-muted">Count web orders confirmed since</label>
+        <input id="orders-since" type="datetime-local" name="orders_since" value="{{ orders_since_value }}"
+               class="mt-1 min-h-11 rounded border border-border-interactive bg-surface px-3 text-sm text-ink focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent" />
+      </div>
+      <button type="submit" class="inline-flex min-h-11 items-center rounded border border-border-interactive px-4 font-medium text-ink hover:bg-paper focus:outline-none focus-visible:ring-2 focus-visible:ring-accent">Update cutoff</button>
+      <p class="basis-full text-xs text-text-muted">
+        Orders confirmed before this moment are treated as already reflected in the POS count and are
+        never subtracted. Defaults to when POS sync was first used.
+      </p>
+    </form>
+  </section>
+
+  {# --- upload / export -------------------------------------------------- #}
+  <div class="mb-6 flex flex-wrap items-end gap-4">
+    <form method="post" action="{% url 'possync:upload' %}" enctype="multipart/form-data" class="flex flex-wrap items-end gap-3 text-sm">
+      {% csrf_token %}
+      <div>
+        <label for="csv-file" class="block text-text-muted">POS product CSV <span class="font-mono text-xs">(sku,brand,name,category,price_rs,active)</span></label>
+        <input id="csv-file" type="file" name="csv_file" accept=".csv,text/csv" required
+               class="mt-1 block min-h-11 text-sm text-ink" />
+      </div>
+      <button type="submit" class="inline-flex min-h-11 items-center rounded bg-accent px-4 font-medium text-text-inverse hover:bg-accent-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2">Upload</button>
+    </form>
+    <a href="{% url 'possync:export' %}" class="inline-flex min-h-11 items-center rounded border border-border-interactive px-4 text-sm font-medium text-ink hover:bg-paper focus:outline-none focus-visible:ring-2 focus-visible:ring-accent">Export mapping (CSV)</a>
+  </div>
+
+  {# --- filters ---------------------------------------------------------- #}
+  <form method="get" class="mb-4 flex flex-wrap gap-3">
+    <select name="status" aria-label="Show"
+            class="min-h-11 rounded border border-border-interactive bg-surface px-3 text-sm text-ink focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent">
+      <option value="unmapped" {% if status == "unmapped" %}selected{% endif %}>Unmapped</option>
+      <option value="mapped" {% if status == "mapped" %}selected{% endif %}>Mapped</option>
+      <option value="not_online" {% if status == "not_online" %}selected{% endif %}>Not sold online</option>
+      <option value="all" {% if status == "all" %}selected{% endif %}>All</option>
+    </select>
+    <input type="text" name="q" value="{{ current_q }}" placeholder="Search SKU, name or brand"
+           class="min-h-11 rounded border border-border-interactive bg-surface px-3 text-sm text-ink focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent" />
+    <button type="submit" class="inline-flex min-h-11 items-center rounded border border-border-interactive px-4 text-sm font-medium text-ink hover:bg-paper focus:outline-none focus-visible:ring-2 focus-visible:ring-accent">Filter</button>
+  </form>
+
+  {# --- products --------------------------------------------------------- #}
+  <div class="overflow-x-auto rounded-lg border border-border-subtle bg-surface shadow-card">
+    <table class="min-w-full divide-y divide-border-subtle text-sm">
+      <thead class="bg-paper text-left text-xs font-semibold uppercase tracking-wide text-text-muted">
+        <tr>
+          <th class="px-4 py-3">POS product</th>
+          <th class="px-4 py-3">POS price</th>
+          <th class="px-4 py-3">Website variant</th>
+          <th class="px-4 py-3">Action</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-border-subtle">
+        {% for row in rows %}
+          <tr class="align-top">
+            <td class="px-4 py-3">
+              <div class="text-ink">{{ row.brand }} {{ row.name }}</div>
+              <div class="font-mono text-xs text-text-muted">{{ row.sku }}{% if not row.active %} · inactive in POS{% endif %}</div>
+            </td>
+            <td class="px-4 py-3 font-mono text-ink">{% if row.price is not None %}{{ row.price }}{% else %}—{% endif %}</td>
+            <td class="px-4 py-3">
+              {% if row.mapped_variant %}
+                <a class="text-accent hover:text-accent-hover" href="{% url 'portal:product_edit' row.mapped_variant.product_id %}">{{ row.mapped_variant.product.name }}</a>
+                <div class="font-mono text-xs text-text-muted">{{ row.mapped_variant.sku }}</div>
+              {% elif row.not_online %}
+                {% include "portal/_badge.html" with tone="warning" label="Not sold online" %}
+              {% elif row.suggestions %}
+                <ul class="space-y-2">
+                  {% for suggestion in row.suggestions %}
+                    <li>
+                      <form method="post" action="{% url 'possync:confirm' row.pk %}" class="flex items-start gap-2">
+                        {% csrf_token %}
+                        <input type="hidden" name="variant_id" value="{{ suggestion.candidate.variant_id }}" />
+                        <input type="hidden" name="next" value="{{ request.get_full_path }}" />
+                        <button type="submit" class="inline-flex min-h-11 shrink-0 items-center rounded border border-border-interactive px-3 text-xs font-medium text-ink hover:bg-paper focus:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+                          Map
+                        </button>
+                        <span>
+                          <span class="text-ink">{{ suggestion.candidate.brand }} {{ suggestion.candidate.product_name }}</span>
+                          <span class="text-text-muted"> · {{ suggestion.candidate.label }}</span>
+                          <span class="block font-mono text-xs text-text-muted">{{ suggestion.candidate.sku }} · Rs. {{ suggestion.candidate.price }} · match {{ suggestion.score|floatformat:2 }}</span>
+                        </span>
+                      </form>
+                    </li>
+                  {% endfor %}
+                </ul>
+              {% else %}
+                <span class="text-text-muted">No close match found</span>
+              {% endif %}
+            </td>
+            <td class="px-4 py-3">
+              {% if row.mapped_variant %}
+                <form method="post" action="{% url 'possync:unmap' row.pk %}">
+                  {% csrf_token %}
+                  <input type="hidden" name="next" value="{{ request.get_full_path }}" />
+                  <button type="submit" class="inline-flex min-h-11 items-center rounded px-2 text-xs font-medium text-danger hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-accent">Remove mapping</button>
+                </form>
+              {% elif row.not_online %}
+                <form method="post" action="{% url 'possync:not_online' row.pk %}">
+                  {% csrf_token %}
+                  <input type="hidden" name="value" value="0" />
+                  <input type="hidden" name="next" value="{{ request.get_full_path }}" />
+                  <button type="submit" class="inline-flex min-h-11 items-center rounded px-2 text-xs font-medium text-accent hover:text-accent-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-accent">Sold online after all</button>
+                </form>
+              {% else %}
+                <form method="post" action="{% url 'possync:not_online' row.pk %}">
+                  {% csrf_token %}
+                  <input type="hidden" name="value" value="1" />
+                  <input type="hidden" name="next" value="{{ request.get_full_path }}" />
+                  <button type="submit" class="inline-flex min-h-11 items-center rounded px-2 text-xs font-medium text-text-muted hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent">Not sold online</button>
+                </form>
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="4" class="px-4 py-6 text-center text-text-muted">
+              {% if total_products %}No POS products match these filters.{% else %}No POS products yet — upload the POS product CSV above.{% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if is_paginated %}
+    <nav class="mt-4 flex items-center justify-between text-sm text-text-muted" aria-label="Pagination">
+      <span>Page {{ page_obj.number }} of {{ paginator.num_pages }}</span>
+      <div class="flex gap-2">
+        {% if page_obj.has_previous %}
+          <a href="?status={{ status }}&q={{ current_q|urlencode }}&page={{ page_obj.previous_page_number }}"
+             class="inline-flex min-h-11 items-center rounded border border-border-interactive px-3 hover:bg-paper focus:outline-none focus-visible:ring-2 focus-visible:ring-accent">Previous</a>
+        {% endif %}
+        {% if page_obj.has_next %}
+          <a href="?status={{ status }}&q={{ current_q|urlencode }}&page={{ page_obj.next_page_number }}"
+             class="inline-flex min-h-11 items-center rounded border border-border-interactive px-3 hover:bg-paper focus:outline-none focus-visible:ring-2 focus-visible:ring-accent">Next</a>
+        {% endif %}
+      </div>
+    </nav>
+  {% endif %}
+
+  {# --- audit ------------------------------------------------------------ #}
+  <section class="mt-8" aria-labelledby="pos-audit">
+    <h2 id="pos-audit" class="text-sm font-semibold uppercase tracking-wide text-text-muted">Recent changes</h2>
+    <ul class="mt-2 divide-y divide-border-subtle rounded-lg border border-border-subtle bg-surface text-sm">
+      {% for event in recent_events %}
+        <li class="px-4 py-2 text-text-muted">
+          <span class="text-ink">{{ event.get_action_display }}</span>
+          {% if event.pos_sku %}<span class="font-mono"> {{ event.pos_sku }}</span>{% endif %}
+          {% if event.variant_sku %} → <span class="font-mono">{{ event.variant_sku }}</span>{% endif %}
+          · {{ event.actor.get_username|default:"system" }} · {{ event.created_at|date:"d M Y H:i" }}
+          {% if event.note %}<span class="block text-xs">{{ event.note }}</span>{% endif %}
+        </li>
+      {% empty %}
+        <li class="px-4 py-3 text-text-muted">No changes recorded yet.</li>
+      {% endfor %}
+    </ul>
+  </section>
+{% endblock %}

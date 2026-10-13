@@ -35,6 +35,9 @@ PRODUCT_REVIEWS_ENABLED = False
 # never committed). An unset token fails closed: every private request is 401.
 NOOR_ORIGIN = env.str("NOOR_ORIGIN", default="https://noor.scentandstyle.pk")
 SCENT_SYNC_TOKEN = env.str("SCENT_SYNC_TOKEN", default="")
+# POS <-> website stock sync (possync/). A *different* secret from the tablets'
+# (>= 32 characters, from .env, never committed); unset fails closed: 401.
+SCENT_POS_TOKEN = env.str("SCENT_POS_TOKEN", default="")
 # Show the "Ask Noor" / "Find similar with Noor" buttons on the storefront.
 # Off by default so they never point at a Noor site that is not live yet; the
 # /api/noor/ and /api/kiosk/sync/ endpoints do not depend on it.
@@ -65,6 +68,7 @@ INSTALLED_APPS = [
     "notifications",
     "portal",
     "noor",
+    "possync",
 ]
 
 MIDDLEWARE = [
