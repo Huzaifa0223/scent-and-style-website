@@ -29,6 +29,13 @@ DEBUG = env.bool("DEBUG")
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=[])
 PRODUCT_REVIEWS_ENABLED = False
 
+# Noor integration (noor/). NOOR_ORIGIN is the single browser origin allowed
+# to read the public feeds cross-origin; SCENT_SYNC_TOKEN is the shared
+# secret for the tablets' /api/kiosk/sync/ API (>= 32 characters, from .env,
+# never committed). An unset token fails closed: every private request is 401.
+NOOR_ORIGIN = env.str("NOOR_ORIGIN", default="https://noor.scentandstyle.pk")
+SCENT_SYNC_TOKEN = env.str("SCENT_SYNC_TOKEN", default="")
+
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -53,6 +60,7 @@ INSTALLED_APPS = [
     "orders",
     "notifications",
     "portal",
+    "noor",
 ]
 
 MIDDLEWARE = [

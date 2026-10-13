@@ -32,6 +32,7 @@ urlpatterns: list[URLPattern | URLResolver] = [
     path("search/", include("search.urls")),
     path("cart/", include("cart.urls")),
     path("admin-portal/", include("portal.urls")),
+    path("api/", include("noor.urls")),
     path("", include("orders.urls")),
     path("", include("storefront.urls")),
 ]
