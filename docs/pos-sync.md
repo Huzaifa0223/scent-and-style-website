@@ -112,6 +112,11 @@ Requires the `possync.manage_pos_mapping` permission, which Staff do not have (4
 1. **Upload** the POS product CSV `sku,brand,name,category,price_rs,active` (UTF-8, case-insensitive
    headers, `Rs. 12,500` tolerated). Valid rows are upserted and bad rows reported by line number;
    re-uploading never changes "not sold online" or last-seen.
+   The page opens with a **"Do it in this order"** panel: 1 upload, 2 *Hide watches, sunglasses and
+   accessories* (one list, all ticked, you confirm), 3 *Confirm the clear matches* (the bulk review:
+   one candidate at 0.90+, a **Size** column, rows with an unusual POS size marked *Check size*,
+   nothing pre-ticked), 4 decide the rest one by one, 5 price differences. Tick boxes and bulk
+   buttons exist only on the **Unmapped** list.
 2. For each **unmapped** POS product the page shows the **top 3 suggestions** with a score
    (brand match after normalising spellings such as *Al Majeed* ↔ *Al Majed*; name-token overlap;
    ml size — a different size is penalised hard). **Nothing is confirmed automatically.** Click

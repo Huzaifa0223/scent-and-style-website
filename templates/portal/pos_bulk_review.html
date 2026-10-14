@@ -7,14 +7,18 @@
 {% block content %}
   <h1 class="mb-1 text-xl font-semibold text-ink">Review and confirm {{ min_score|floatformat:2 }} matches</h1>
   <p class="mb-4 text-sm text-text-muted">
-    Each row below is a POS product whose best website match scores {{ min_score|floatformat:2 }} or more,
-    with the same size and the same kind (bottle or gift set). Nothing is linked until you tick a row and
-    press <em>Confirm ticked</em>. Prices are shown side by side but never changed.
+    Each row below is a POS product with <strong>one</strong> clear website match (score {{ min_score|floatformat:2 }}
+    or more, same kind: bottle or gift set). Read each row, tick the ones that are the same perfume, then press
+    <em>Confirm ticked</em>. Nothing is linked until you tick it, and prices are never changed.
+  </p>
+  <p class="mb-4 text-sm text-text-muted">
+    The website usually does not state a size, so the <em>Size</em> column shows what the POS says.
+    {% if check_count %}<strong>{{ check_count }} row(s)</strong> are marked <strong>check size</strong>: the POS size is not the usual 100 ml, so look at those twice.{% endif %}
   </p>
   {% if left_out %}
     <p class="mb-4 rounded border border-border-interactive bg-paper px-3 py-2 text-sm text-ink" data-left-out>
       {{ left_out }} row(s) were left out because the match was not clear-cut (two equally good
-      candidates, or the same website variant proposed twice). They stay on the
+      candidates, the same website variant proposed twice, or a different size). They stay on the
       <a class="text-accent hover:text-accent-hover" href="{% url 'possync:mapping' %}">mapping page</a> for a one-by-one decision.
     </p>
   {% endif %}
@@ -24,6 +28,7 @@
       {% csrf_token %}
       <div class="mb-3 flex flex-wrap items-center gap-3 text-sm">
         <button type="submit" class="inline-flex min-h-11 items-center rounded bg-accent px-4 font-medium text-text-inverse hover:bg-accent-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2">Confirm ticked</button>
+        <span class="text-text-muted" data-match-count>{{ proposals|length }} match(es) to confirm</span>
         <a href="?tick=all" class="text-accent hover:text-accent-hover">Tick all {{ proposals|length }}</a>
         <a href="?" class="text-text-muted hover:text-ink">Untick all</a>
       </div>
@@ -36,6 +41,7 @@
               <th class="px-4 py-3">POS product</th>
               <th class="px-4 py-3">POS price</th>
               <th class="px-4 py-3">Website variant</th>
+              <th class="px-4 py-3">Size</th>
               <th class="px-4 py-3">Website price</th>
             </tr>
           </thead>
@@ -56,6 +62,10 @@
                   <span class="text-ink">{{ proposal.suggestion.candidate.brand }} {{ proposal.suggestion.candidate.product_name }}</span>
                   <span class="text-text-muted"> · {{ proposal.suggestion.candidate.label }}</span>
                   <span class="block font-mono text-xs text-text-muted">{{ proposal.suggestion.candidate.sku }} · match {{ proposal.suggestion.score|floatformat:2 }}</span>
+                </td>
+                <td class="px-4 py-3 text-xs text-text-muted" data-size-note>
+                  {{ proposal.size_note }}
+                  {% if proposal.check_size %}<span class="mt-1 block font-semibold text-warning" data-check-size>Check size</span>{% endif %}
                 </td>
                 <td class="px-4 py-3 font-mono text-ink">Rs. {{ proposal.suggestion.candidate.price }}</td>
               </tr>

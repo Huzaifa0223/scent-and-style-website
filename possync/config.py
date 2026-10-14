@@ -48,6 +48,10 @@ NOT_ONLINE_CATEGORY_KEYWORDS: Final[tuple[str, ...]] = (
     "accessor",
 )
 
+# The bottle size most of this shop's perfumes come in; a POS size that differs
+# from it is highlighted in the bulk review because the website cannot confirm it.
+USUAL_BOTTLE_ML: Final[float] = 100.0
+
 MAPPING_PAGE_SIZE: Final[int] = 50
 PRICE_MISMATCH_PAGE_SIZE: Final[int] = 50
 

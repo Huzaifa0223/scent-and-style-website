@@ -22,6 +22,11 @@ urlpatterns: list[URLPattern] = [
     ),
     path("bulk-review/", views.PosBulkReviewView.as_view(), name="bulk_review"),
     path("bulk-not-online/", views.PosBulkNotOnlineView.as_view(), name="bulk_not_online"),
+    path(
+        "hide-non-perfume/",
+        views.PosNotOnlineReviewView.as_view(),
+        name="not_online_review",
+    ),
     path("<int:pk>/map/", views.PosConfirmMappingView.as_view(), name="confirm"),
     path("<int:pk>/unmap/", views.PosUnmapView.as_view(), name="unmap"),
     path("<int:pk>/not-online/", views.PosNotOnlineView.as_view(), name="not_online"),

@@ -2973,3 +2973,30 @@ failed, and precisely what is needed to unblock. Clear the entry when resolved.
   gitignored and is built on the server (`docs/pos-sync.md`).
 - Proposed (not applied): show "On request" instead of a red "Out of stock" on listing cards and in
   the portal inventory list — see the prompt in the app repo; not part of this change.
+
+### 2026-10-14 (evening) — POS mapping: guided steps, size-unknown rows back in the bulk review
+
+Found on the LIVE data after the first deploy: only 2 of 163 website variants state a size anywhere
+in their label or SKU, so the stricter "leave out unknown sizes" rule from earlier today hid **every**
+one of the 104 clear-cut matches (56 with no size on either side, 48 where only the POS states one).
+Owner decided (2026-10-14): include them and make the size visible. This **replaces** the earlier
+bulk-review rule (and its test `test_review_leaves_out_a_row_when_either_size_is_unknown`, now
+`test_review_includes_rows_whose_size_is_not_stated_and_says_so`); a known, different size is still
+never proposed.
+
+- `possync.services.bulk_match_proposals`: only a known size mismatch / tie / duplicate leaves a row
+  out. `BulkProposal.size_note` ("POS: 100ml · website: not stated" / "No size stated on either
+  side") and `.check_size` (POS size other than `USUAL_BOTTLE_ML` = 100 while the website states
+  none). Rows are never pre-ticked.
+- New page **Hide watches, sunglasses and accessories** (`possync:not_online_review`,
+  `hide-non-perfume/`): every unlinked, still-online POS row whose category matches the keyword list,
+  all ticked, one button posting to the existing bulk "not sold online" action. GET changes nothing.
+- Mapping page: a "Do it in this order" panel (upload → hide → confirm clear matches → decide the
+  rest → price differences) with live counts and a button per step, and a hint on the Mapped / Not
+  online / All lists that the tick boxes only exist on **Unmapped** (that was why the bulk buttons
+  "were missing").
+- No migration. Counts on real data (local copy of the live catalogue): 104 clear matches, 11 with
+  "check size", 134 watches/sunglasses to hide.
+- Gate: ruff, format, mypy, `makemigrations --check` clean; pytest 1024 passed, 97% coverage on a
+  fresh DB (`--create-db`). New Tailwind utility classes are not expected, but rebuild + copy
+  `static/css/app.css` as before.

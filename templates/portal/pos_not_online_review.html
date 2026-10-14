@@ -1,0 +1,59 @@
+{% extends "portal/base.html" %}
+
+{% block title %}Hide watches and accessories — {{ store_settings.name }} Portal{% endblock %}
+
+{% block portal_breadcrumbs %}<a class="text-accent hover:text-accent-hover" href="{% url 'possync:mapping' %}">POS mapping</a> / Hide watches and accessories{% endblock %}
+
+{% block content %}
+  <h1 class="mb-1 text-xl font-semibold text-ink">Hide watches, sunglasses and accessories</h1>
+  <p class="mb-4 text-sm text-text-muted">
+    These POS products are in a category the website does not sell. Marking them <em>not sold online</em>
+    takes them out of the mapping list. Nothing else changes, and you can bring any of them back later with
+    <em>Sold online after all</em>. Untick anything that <strong>is</strong> sold on the website.
+  </p>
+
+  {% if rows %}
+    <form method="post" action="{% url 'possync:bulk_not_online' %}">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ next_url }}" />
+      <div class="mb-3 flex flex-wrap items-center gap-3 text-sm">
+        <button type="submit" class="inline-flex min-h-11 items-center rounded bg-accent px-4 font-medium text-text-inverse hover:bg-accent-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2">Mark the ticked items as not sold online</button>
+        <span class="text-text-muted" data-not-online-count>{{ rows|length }} item(s), all ticked</span>
+        <a href="{% url 'possync:mapping' %}" class="text-text-muted hover:text-ink">Cancel</a>
+      </div>
+      <div class="overflow-x-auto rounded-lg border border-border-subtle bg-surface shadow-card">
+        <table class="min-w-full divide-y divide-border-subtle text-sm">
+          <thead class="bg-paper text-left text-xs font-semibold uppercase tracking-wide text-text-muted">
+            <tr>
+              <th class="w-10 px-4 py-3"><span class="sr-only">Select</span></th>
+              <th class="px-4 py-3">POS product</th>
+              <th class="px-4 py-3">Category</th>
+              <th class="px-4 py-3">POS price</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-border-subtle">
+            {% for row in rows %}
+              <tr class="align-top" data-hide-row>
+                <td class="px-4 py-3">
+                  <input type="checkbox" name="pos_ids" value="{{ row.pk }}" checked
+                         aria-label="Hide {{ row.sku }}" class="h-5 w-5 rounded border-border-interactive" />
+                </td>
+                <td class="px-4 py-3">
+                  <div class="text-ink">{{ row.brand }} {{ row.name }}</div>
+                  <div class="font-mono text-xs text-text-muted">{{ row.sku }}</div>
+                </td>
+                <td class="px-4 py-3 text-text-muted">{{ row.category }}</td>
+                <td class="px-4 py-3 font-mono text-ink">{% if row.price is not None %}{{ row.price }}{% else %}—{% endif %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </form>
+  {% else %}
+    <p class="rounded-lg border border-border-subtle bg-surface p-4 text-sm text-text-muted">
+      Nothing is waiting: no unlinked watch, sunglasses or accessory is left.
+      <a class="text-accent hover:text-accent-hover" href="{% url 'possync:mapping' %}">Back to the steps</a>.
+    </p>
+  {% endif %}
+{% endblock %}

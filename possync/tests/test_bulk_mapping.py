@@ -129,19 +129,138 @@ def test_review_leaves_out_weak_gift_set_and_size_mismatched_rows(client, owner)
 
 
 @pytest.mark.django_db
-def test_review_leaves_out_a_row_when_either_size_is_unknown(client, owner) -> None:  # type: ignore[no-untyped-def]
-    # The POS says 50ml but the website variant has no readable size: it may be
-    # the 100ml bottle, so it stays on the one-by-one page.
-    mapped_variant(None, name="Khamrah", brand="Lattafa")
-    _pos("K-50", "Khamrah 50ml", brand="Lattafa")
-    # And the other way round: website size known, POS size unknown.
-    mapped_variant(None, name="Tres 100ml", brand="Armaf")
+def test_review_includes_rows_whose_size_is_not_stated_and_says_so(client, owner) -> None:  # type: ignore[no-untyped-def]
+    # Owner decision 2026-10-14: the website's variants almost never state a
+    # size (2 of 163 on the live catalogue), so "size unknown" must not hide a
+    # clear-cut match. The size is shown instead and nothing is pre-ticked.
+    web_plain = mapped_variant(None, name="Khamrah", brand="Lattafa")
+    pos_known = _pos("K-100", "Khamrah 100ml", brand="Lattafa")
+    mapped_variant(None, name="Tres", brand="Armaf")
     _pos("TRES", "Tres")
+    mapped_variant(None, name="Tres Sport 100ml", brand="Armaf")
+    _pos("TRES-S", "Tres Sport")
 
     html = client.get(BULK).content.decode()
 
+    assert html.count("data-proposal") >= 3
+    assert f'value="{pos_known.pk}:{web_plain.pk}"' in html
+    assert "POS: 100ml · website: not stated" in html
+    assert "No size stated on either side" in html
+    assert "POS: not stated · website: 100ml" in html
+    assert "checked" not in html.split("<tbody", 1)[1]  # never pre-ticked
+    assert "data-check-size" not in html  # 100 ml is the usual bottle
+
+
+@pytest.mark.django_db
+def test_review_flags_an_unusual_pos_size_for_a_second_look(client, owner) -> None:  # type: ignore[no-untyped-def]
+    mapped_variant(None, name="Zumar", brand="Ahmed Al Maghribi")
+    _pos("ZUM-60", "Zumar 60ml", brand="Ahmed Al Maghribi")
+
+    html = client.get(BULK).content.decode()
+
+    assert "data-check-size" in html
+    assert "Check size" in html
+    assert "marked <strong>check size</strong>" in html
+
+
+@pytest.mark.django_db
+def test_review_still_leaves_out_a_known_size_mismatch(client, owner) -> None:  # type: ignore[no-untyped-def]
+    mapped_variant(None, name="Khamrah 50ml", brand="Lattafa")
+    _pos("K-100", "Khamrah 100ml", brand="Lattafa")
+
+    html = client.get(BULK).content.decode()
+
+    # A known, different size drops the score below the threshold, so the row
+    # is never proposed at all (it stays on the one-by-one page with a warning).
     assert html.count("data-proposal") == 0
-    assert "data-left-out" in html
+    assert "No unmapped POS product has a clear-cut match" in html
+
+
+# --- guided steps and the "hide watches" page --------------------------------
+
+HIDE = MAPPING + "hide-non-perfume/"
+
+
+@pytest.mark.django_db
+def test_mapping_page_shows_the_steps_with_live_counts(client, owner) -> None:  # type: ignore[no-untyped-def]
+    mapped_variant(None, name="Khamrah", brand="Lattafa")
+    _pos("K-100", "Khamrah 100ml", brand="Lattafa", category="Perfume")
+    _pos("W-1", "Ladies Watch", brand="Casio", category="Watches")
+    _pos("W-2", "Mens Watch", brand="Casio", category="Watches")
+
+    html = client.get(MAPPING).content.decode()
+
+    assert "data-mapping-guide" in html
+    assert "Do it in this order" in html
+    assert "Review 2 item(s)" in html  # step 2: the two watches
+    assert "Review 1 match(es)" in html  # step 3: Khamrah
+    assert HIDE in html and BULK in html
+
+
+@pytest.mark.django_db
+def test_steps_say_done_when_nothing_is_left(client, owner) -> None:  # type: ignore[no-untyped-def]
+    html = client.get(MAPPING).content.decode()
+    assert "Upload the POS product CSV with the form below." in html
+    assert "Available after step 1." in html
+
+    _pos("W-1", "Ladies Watch", brand="Casio", category="Watches", not_online=True)
+    html = client.get(MAPPING).content.decode()
+
+    assert "POS products are loaded" in html
+    assert "Nothing left to hide." in html
+    assert "No clear matches waiting." in html
+
+
+@pytest.mark.django_db
+def test_hide_page_lists_only_unlinked_watches_all_ticked_and_changes_nothing(  # type: ignore[no-untyped-def]
+    client, owner
+) -> None:
+    watch = _pos("W-1", "Ladies Watch", brand="Casio", category="Watches")
+    _pos("P-1", "Khamrah 100ml", brand="Lattafa", category="Perfume")
+    _pos("W-OFF", "Old Watch", brand="Casio", category="Watches", not_online=True)
+
+    response = client.get(HIDE)
+    html = response.content.decode()
+
+    assert response.status_code == 200
+    assert html.count("data-hide-row") == 1
+    assert "Ladies Watch" in html and "Khamrah" not in html and "Old Watch" not in html
+    assert "checked" in html
+    watch.refresh_from_db()
+    assert watch.not_online is False
+
+
+@pytest.mark.django_db
+def test_hide_page_posts_to_the_bulk_action_and_returns_to_the_steps(client, owner) -> None:  # type: ignore[no-untyped-def]
+    watch = _pos("W-1", "Ladies Watch", brand="Casio", category="Watches")
+    html = client.get(HIDE).content.decode()
+    assert BULK_NOT_ONLINE in html
+
+    response = client.post(
+        BULK_NOT_ONLINE, {"pos_ids": [str(watch.pk)], "next": MAPPING}, follow=True
+    )
+
+    watch.refresh_from_db()
+    assert watch.not_online is True
+    assert response.redirect_chain[-1][0] == MAPPING
+
+
+@pytest.mark.django_db
+def test_hide_page_needs_the_mapping_permission(client, django_user_model) -> None:  # type: ignore[no-untyped-def]
+    staff = django_user_model.objects.create_user(
+        "staff", "s@example.com", "pw-not-used", is_staff=True
+    )
+    client.force_login(staff)
+
+    assert client.get(HIDE).status_code in (302, 403)
+
+
+@pytest.mark.django_db
+def test_hint_explains_where_the_tick_boxes_went_on_other_lists(client, owner) -> None:  # type: ignore[no-untyped-def]
+    _pos("A-1", "Anything", category="Perfume")
+
+    assert "data-bulk-hint" not in client.get(MAPPING).content.decode()
+    assert "data-bulk-hint" in client.get(MAPPING + "?status=all").content.decode()
 
 
 @pytest.mark.django_db

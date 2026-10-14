@@ -25,6 +25,53 @@
     prices are never changed automatically.
   </p>
 
+  {# --- guided steps: what to do next, in order ------------------------- #}
+  <section class="mb-6 rounded-lg border border-border-subtle bg-surface p-4 shadow-card" aria-labelledby="pos-guide" data-mapping-guide>
+    <h2 id="pos-guide" class="text-sm font-semibold uppercase tracking-wide text-text-muted">Do it in this order</h2>
+    <ol class="mt-3 divide-y divide-border-subtle text-sm">
+      <li class="flex flex-wrap items-center gap-3 py-3" data-step="upload">
+        <span class="w-6 font-semibold text-text-muted">1</span>
+        <div class="min-w-0 flex-1">
+          <p class="font-medium text-ink">Load the POS product list</p>
+          <p class="text-text-muted">{% if guide.uploaded %}{{ guide.uploaded }} POS products are loaded. Upload a newer file any time (form below).{% else %}Upload the POS product CSV with the form below.{% endif %}</p>
+        </div>
+        {% if guide.uploaded %}{% include "portal/_badge.html" with tone="success" label="Done" %}{% else %}<a href="#upload" class="inline-flex min-h-11 items-center rounded bg-accent px-4 font-medium text-text-inverse hover:bg-accent-hover">Upload CSV</a>{% endif %}
+      </li>
+      <li class="flex flex-wrap items-center gap-3 py-3" data-step="hide">
+        <span class="w-6 font-semibold text-text-muted">2</span>
+        <div class="min-w-0 flex-1">
+          <p class="font-medium text-ink">Hide watches, sunglasses and accessories</p>
+          <p class="text-text-muted">{% if guide.hide %}{{ guide.hide }} item(s) look like they are not sold on the website. You see the list before anything changes.{% elif guide.uploaded %}Nothing left to hide.{% else %}Available after step 1.{% endif %}</p>
+        </div>
+        {% if guide.hide %}<a href="{% url 'possync:not_online_review' %}" class="inline-flex min-h-11 items-center rounded bg-accent px-4 font-medium text-text-inverse hover:bg-accent-hover">Review {{ guide.hide }} item(s)</a>{% elif guide.uploaded %}{% include "portal/_badge.html" with tone="success" label="Done" %}{% endif %}
+      </li>
+      <li class="flex flex-wrap items-center gap-3 py-3" data-step="clear">
+        <span class="w-6 font-semibold text-text-muted">3</span>
+        <div class="min-w-0 flex-1">
+          <p class="font-medium text-ink">Confirm the clear matches</p>
+          <p class="text-text-muted">{% if guide.clear %}{{ guide.clear }} product(s) have one clear website match. You tick the ones that are right.{% elif guide.uploaded %}No clear matches waiting.{% else %}Available after step 1.{% endif %}</p>
+        </div>
+        {% if guide.clear %}<a href="{% url 'possync:bulk_review' %}" class="inline-flex min-h-11 items-center rounded bg-accent px-4 font-medium text-text-inverse hover:bg-accent-hover">Review {{ guide.clear }} match(es)</a>{% elif guide.uploaded %}{% include "portal/_badge.html" with tone="success" label="Done" %}{% endif %}
+      </li>
+      <li class="flex flex-wrap items-center gap-3 py-3" data-step="rest">
+        <span class="w-6 font-semibold text-text-muted">4</span>
+        <div class="min-w-0 flex-1">
+          <p class="font-medium text-ink">Decide the rest one by one</p>
+          <p class="text-text-muted">{% if guide.unmapped %}{{ guide.unmapped }} product(s) are still not linked. For each one press <em>Map</em> next to the right website product, or <em>Not sold online</em>.{% elif guide.uploaded %}Every POS product is linked or hidden.{% else %}Available after step 1.{% endif %}</p>
+        </div>
+        {% if guide.unmapped %}<a href="?status=unmapped#list" class="inline-flex min-h-11 items-center rounded border border-border-interactive px-4 font-medium text-ink hover:bg-paper">Show the list</a>{% elif guide.uploaded %}{% include "portal/_badge.html" with tone="success" label="Done" %}{% endif %}
+      </li>
+      <li class="flex flex-wrap items-center gap-3 py-3" data-step="prices">
+        <span class="w-6 font-semibold text-text-muted">5</span>
+        <div class="min-w-0 flex-1">
+          <p class="font-medium text-ink">Look at price differences (optional)</p>
+          <p class="text-text-muted">Nothing is changed for you. {{ mismatch_count }} linked product(s) have a different price in the POS.</p>
+        </div>
+        <a href="{% url 'possync:price_mismatches' %}" class="inline-flex min-h-11 items-center rounded border border-border-interactive px-4 font-medium text-ink hover:bg-paper">Open</a>
+      </li>
+    </ol>
+  </section>
+
   {# --- sync status ------------------------------------------------------ #}
   <section class="mb-6 rounded-lg border border-border-subtle bg-surface p-4 shadow-card" aria-labelledby="pos-sync-status">
     <h2 id="pos-sync-status" class="text-sm font-semibold uppercase tracking-wide text-text-muted">Sync status</h2>
@@ -72,7 +119,7 @@
 
   {# --- upload / export -------------------------------------------------- #}
   <div class="mb-6 flex flex-wrap items-end gap-4">
-    <form method="post" action="{% url 'possync:upload' %}" enctype="multipart/form-data" class="flex flex-wrap items-end gap-3 text-sm">
+    <form id="upload" method="post" action="{% url 'possync:upload' %}" enctype="multipart/form-data" class="flex flex-wrap items-end gap-3 text-sm">
       {% csrf_token %}
       <div>
         <label for="csv-file" class="block text-text-muted">POS product CSV <span class="font-mono text-xs">(sku,brand,name,category,price_rs,active)</span></label>
@@ -120,6 +167,10 @@
   {% endif %}
 
   {# --- products --------------------------------------------------------- #}
+  <h2 id="list" class="mb-2 text-sm font-semibold uppercase tracking-wide text-text-muted">POS products</h2>
+  {% if status != "unmapped" %}
+    <p class="mb-3 text-sm text-text-muted" data-bulk-hint>Showing the &ldquo;{{ status }}&rdquo; list. The tick boxes and bulk buttons appear when you choose <a class="text-accent hover:text-accent-hover" href="?status=unmapped">Unmapped</a>.</p>
+  {% endif %}
   <div class="overflow-x-auto rounded-lg border border-border-subtle bg-surface shadow-card">
     <table class="min-w-full divide-y divide-border-subtle text-sm">
       <thead class="bg-paper text-left text-xs font-semibold uppercase tracking-wide text-text-muted">

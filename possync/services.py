@@ -66,6 +66,7 @@ from .config import (
     MARK_RECORDED_MIN_REASON_LENGTH,
     NOT_ONLINE_CATEGORY_KEYWORDS,
     SNAPSHOT_LOCK_KEY,
+    USUAL_BOTTLE_ML,
 )
 from .matching import VariantCandidate
 from .models import PosMappingEvent, PosOrderAck, PosProduct, PosSyncState
@@ -393,6 +394,29 @@ class BulkProposal:
     display_name: str  # POS name with a repeated brand stripped
     suggestion: matching.Suggestion
 
+    @property
+    def size_note(self) -> str:
+        """Plain-language size line shown beside the row. Website variants
+        rarely state a size, so "not stated" is the normal case, not a fault."""
+        pos_size = self.suggestion.pos_size_ml
+        web_size = self.suggestion.candidate_size_ml
+        if pos_size is None and web_size is None:
+            return "No size stated on either side"
+        pos_text = matching.format_ml(pos_size) if pos_size is not None else "not stated"
+        web_text = matching.format_ml(web_size) if web_size is not None else "not stated"
+        return f"POS: {pos_text} · website: {web_text}"
+
+    @property
+    def check_size(self) -> bool:
+        """True when the POS names a size other than the usual bottle: the
+        website cannot confirm it, so the owner should look twice."""
+        pos_size = self.suggestion.pos_size_ml
+        return (
+            pos_size is not None
+            and self.suggestion.candidate_size_ml is None
+            and abs(pos_size - USUAL_BOTTLE_ML) >= matching.SIZE_EPSILON
+        )
+
 
 @dataclass(frozen=True)
 class BulkProposals:
@@ -407,11 +431,15 @@ def bulk_match_proposals(min_score: float = BULK_CONFIRM_MIN_SCORE) -> BulkPropo
     Deliberately conservative, because the owner ticks rows from a long
     list: a POS row is left out when its best two candidates both reach the
     threshold (the tie would be broken arbitrarily), when its size or
-    gift-set status disagrees with the candidate, when either side's size
-    is unknown (a 50 ml bottle must not be confirmed against a variant
-    whose size we cannot read), or when another POS row
+    gift-set status disagrees with the candidate, or when another POS row
     proposes the same variant (at most one can be right). Everything left
     out stays on the normal page for a one-by-one decision.
+
+    A size that one side does not state is NOT a reason to leave a row out:
+    the shop's variants almost never carry a size (2 of 163 on the live
+    catalogue), so excluding them hid every match. Those rows are listed
+    with a visible size note (``BulkProposal.size_note`` / ``check_size``)
+    and are never ticked for the owner.
     """
     candidates = unmapped_candidates()
     pos_products = list(
@@ -432,7 +460,7 @@ def bulk_match_proposals(min_score: float = BULK_CONFIRM_MIN_SCORE) -> BulkPropo
         )
         if not ranked:
             continue
-        if len(ranked) > 1 or ranked[0].size_mismatch or ranked[0].size_unknown:
+        if len(ranked) > 1 or ranked[0].size_mismatch:
             ambiguous += 1
             continue
         picked.append(
@@ -492,6 +520,19 @@ def set_not_online_many(*, pos_ids: list[int], actor: User | None) -> BulkResult
         else:
             result.done += 1
     return result
+
+
+def not_online_suggestions() -> list[PosProduct]:
+    """Unmapped, still-sold-online POS products whose category reads like a
+    watch, sunglasses or accessory — the list behind "Hide watches,
+    sunglasses and accessories"."""
+    mapped = ProductVariant.objects.filter(pos_sku=OuterRef("sku"))
+    rows = (
+        PosProduct.objects.annotate(is_mapped=Exists(mapped))
+        .filter(is_mapped=False, not_online=False)
+        .order_by("category", "brand", "name", "sku")
+    )
+    return [row for row in rows if looks_not_sold_online(row.category)]
 
 
 def looks_not_sold_online(category: str) -> bool:

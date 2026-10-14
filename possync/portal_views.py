@@ -18,6 +18,7 @@ from django.contrib.auth.models import User
 from django.db.models import Count, Exists, OuterRef, Q, QuerySet, Subquery
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.generic import ListView, View
@@ -140,8 +141,17 @@ class PosMappingView(PortalPermissionRequiredMixin, ListView[PosProduct]):
             total=Count("pk"), not_online=Count("pk", filter=Q(not_online=True))
         )
         mapped_count = ProductVariant.objects.filter(pos_sku__isnull=False).count()
+        unmapped_count = max(totals["total"] - mapped_count - totals["not_online"], 0)
+        bulk = services.bulk_match_proposals() if unmapped_count else None
         context.update(
             {
+                "guide": {
+                    "uploaded": totals["total"],
+                    "hide": len(services.not_online_suggestions()),
+                    "clear": len(bulk.proposals) if bulk else 0,
+                    "unmapped": unmapped_count,
+                    "mapped": mapped_count,
+                },
                 "rows": rows,
                 "tick": tick,
                 "next_url": next_url,
@@ -154,7 +164,7 @@ class PosMappingView(PortalPermissionRequiredMixin, ListView[PosProduct]):
                 "total_products": totals["total"],
                 "not_online_count": totals["not_online"],
                 "mapped_count": mapped_count,
-                "unmapped_count": max(totals["total"] - mapped_count - totals["not_online"], 0),
+                "unmapped_count": unmapped_count,
                 "mismatch_count": services.price_mismatches().count(),
                 "awaiting_orders_count": services.awaiting_ack_orders().count(),
                 "subtract_web_orders": services.subtract_web_orders_enabled(),
@@ -252,6 +262,7 @@ class PosBulkReviewView(PortalPermissionRequiredMixin, View):
             {
                 "proposals": found.proposals,
                 "left_out": found.ambiguous,
+                "check_count": sum(1 for p in found.proposals if p.check_size),
                 "min_score": BULK_CONFIRM_MIN_SCORE,
                 "tick_all": request.GET.get("tick") == "all",
             },
@@ -269,6 +280,21 @@ class PosBulkReviewView(PortalPermissionRequiredMixin, View):
         result = services.confirm_mappings(pairs=pairs, actor=_actor(request))
         _report(request, result, "POS product(s) mapped.")
         return redirect("possync:mapping")
+
+
+class PosNotOnlineReviewView(PortalPermissionRequiredMixin, View):
+    """One page listing every watch / sunglasses / accessory still waiting to
+    be hidden, all ticked. GET changes nothing; the button posts the ticked
+    rows to the existing bulk "not sold online" action."""
+
+    permission_required = MANAGE_PERMISSION
+
+    def get(self, request: HttpRequest) -> HttpResponse:
+        return render(
+            request,
+            "portal/pos_not_online_review.html",
+            {"rows": services.not_online_suggestions(), "next_url": reverse("possync:mapping")},
+        )
 
 
 class PosBulkNotOnlineView(PortalPermissionRequiredMixin, View):
