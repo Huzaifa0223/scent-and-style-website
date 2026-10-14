@@ -407,7 +407,9 @@ def bulk_match_proposals(min_score: float = BULK_CONFIRM_MIN_SCORE) -> BulkPropo
     Deliberately conservative, because the owner ticks rows from a long
     list: a POS row is left out when its best two candidates both reach the
     threshold (the tie would be broken arbitrarily), when its size or
-    gift-set status disagrees with the candidate, or when another POS row
+    gift-set status disagrees with the candidate, when either side's size
+    is unknown (a 50 ml bottle must not be confirmed against a variant
+    whose size we cannot read), or when another POS row
     proposes the same variant (at most one can be right). Everything left
     out stays on the normal page for a one-by-one decision.
     """
@@ -430,7 +432,7 @@ def bulk_match_proposals(min_score: float = BULK_CONFIRM_MIN_SCORE) -> BulkPropo
         )
         if not ranked:
             continue
-        if len(ranked) > 1 or ranked[0].size_mismatch:
+        if len(ranked) > 1 or ranked[0].size_mismatch or ranked[0].size_unknown:
             ambiguous += 1
             continue
         picked.append(

@@ -90,6 +90,12 @@ class Suggestion:
         )
 
     @property
+    def size_unknown(self) -> bool:
+        """At least one side has no readable size. Not a warning on the
+        one-by-one page, but too uncertain to confirm in bulk."""
+        return self.pos_size_ml is None or self.candidate_size_ml is None
+
+    @property
     def size_warning(self) -> str:
         """Text for the visible row warning; empty when the sizes agree or
         either is unknown (unknown is neutral, not a warning)."""

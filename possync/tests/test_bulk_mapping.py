@@ -96,8 +96,10 @@ def test_page_links_to_the_bulk_review(client, owner) -> None:  # type: ignore[n
 def test_review_lists_confident_matches_with_both_prices_and_maps_nothing(  # type: ignore[no-untyped-def]
     client, owner
 ) -> None:
-    variant = mapped_variant(None, name="Club De Nuit Intense", brand="Armaf", price="9500.00")
-    _pos("CDN", "Club De Nuit Intense", price=Decimal("9000.00"))
+    variant = mapped_variant(
+        None, name="Club De Nuit Intense 100ml", brand="Armaf", price="9500.00"
+    )
+    _pos("CDN", "Club De Nuit Intense 100ml", price=Decimal("9000.00"))
 
     response = client.get(BULK)
     html = response.content.decode()
@@ -127,6 +129,22 @@ def test_review_leaves_out_weak_gift_set_and_size_mismatched_rows(client, owner)
 
 
 @pytest.mark.django_db
+def test_review_leaves_out_a_row_when_either_size_is_unknown(client, owner) -> None:  # type: ignore[no-untyped-def]
+    # The POS says 50ml but the website variant has no readable size: it may be
+    # the 100ml bottle, so it stays on the one-by-one page.
+    mapped_variant(None, name="Khamrah", brand="Lattafa")
+    _pos("K-50", "Khamrah 50ml", brand="Lattafa")
+    # And the other way round: website size known, POS size unknown.
+    mapped_variant(None, name="Tres 100ml", brand="Armaf")
+    _pos("TRES", "Tres")
+
+    html = client.get(BULK).content.decode()
+
+    assert html.count("data-proposal") == 0
+    assert "data-left-out" in html
+
+
+@pytest.mark.django_db
 def test_review_skips_ties_and_a_variant_proposed_twice(client, owner) -> None:  # type: ignore[no-untyped-def]
     # Two identical website products: a tie for one POS row (which is right?).
     mapped_variant(None, name="Tres", brand="Armaf")
@@ -145,10 +163,10 @@ def test_review_skips_ties_and_a_variant_proposed_twice(client, owner) -> None: 
 
 @pytest.mark.django_db
 def test_confirm_maps_only_the_ticked_rows(client, owner) -> None:  # type: ignore[no-untyped-def]
-    first = mapped_variant(None, name="Club De Nuit Intense", brand="Armaf")
-    second = mapped_variant(None, name="Khamrah", brand="Lattafa")
-    pos_first = _pos("CDN", "Club De Nuit Intense")
-    _pos("KHM", "Khamrah", brand="Lattafa")
+    first = mapped_variant(None, name="Club De Nuit Intense 100ml", brand="Armaf")
+    second = mapped_variant(None, name="Khamrah 100ml", brand="Lattafa")
+    pos_first = _pos("CDN", "Club De Nuit Intense 100ml")
+    _pos("KHM", "Khamrah 100ml", brand="Lattafa")
     assert client.get(BULK).content.decode().count("data-proposal") == 2
 
     response = client.post(BULK, {"pair": [f"{pos_first.pk}:{first.pk}"]}, follow=True)
@@ -202,8 +220,8 @@ def test_garbage_pair_values_are_ignored(client, owner) -> None:  # type: ignore
 
 @pytest.mark.django_db
 def test_tick_all_link_pre_ticks_the_checkboxes_but_still_needs_confirm(client, owner) -> None:  # type: ignore[no-untyped-def]
-    mapped_variant(None, name="Khamrah", brand="Lattafa")
-    _pos("KHM", "Khamrah", brand="Lattafa")
+    mapped_variant(None, name="Khamrah 100ml", brand="Lattafa")
+    _pos("KHM", "Khamrah 100ml", brand="Lattafa")
 
     plain = client.get(BULK).content.decode()
     ticked = client.get(BULK, {"tick": "all"}).content.decode()
