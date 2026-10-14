@@ -3000,3 +3000,20 @@ never proposed.
 - Gate: ruff, format, mypy, `makemigrations --check` clean; pytest 1024 passed, 97% coverage on a
   fresh DB (`--create-db`). New Tailwind utility classes are not expected, but rebuild + copy
   `static/css/app.css` as before.
+
+### 2026-10-14 (night) — POS mapping: "probable matches" tier, junk suggestions hidden, price-gap warning
+
+After the first 102 clear matches were confirmed on the live site, the remaining 173 were mostly POS
+items that are not on the website at all, plus ~20 real pairs whose names differ by a word or two
+(POS "Club Bling" vs website "Club de Nuit Bling"; "Pride Eternal Oud" vs "Eternal Oud").
+
+- `possync.services.probable_match_proposals()` + `bulk-review/?level=probable`: best candidate scores
+  0.70–0.89 and beats the runner-up by 0.05; ties, size mismatches and a variant proposed twice are left
+  out (one POS SKU maps to one variant, so e.g. one "Ibraq Tobacco 100ml" for nine web flavours ties).
+  Same page, nothing pre-ticked. `BulkProposal.same_price` (green hint) and `.price_gap` (>25 %
+  apart: red "Price differs a lot", e.g. a body spray vs a perfume) are evidence cues only.
+- Mapping page no longer shows suggestions below 0.50 unless they carry a size warning
+  (`SUGGESTION_DISPLAY_MIN_SCORE`); at 0.35 a body spray was being offered a perfume with a Map button.
+- The steps panel links to the probable list when it has rows.
+- Known traps the owner must read (they pass the score test): Blue vs Black, Body Spray vs perfume.
+- No migration. Gate: ruff, format, mypy clean; pytest 1030 passed, 97% coverage on a fresh DB.

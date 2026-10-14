@@ -462,3 +462,86 @@ def test_staff_cannot_use_the_bulk_endpoints(client, django_user_model, path) ->
 def test_anonymous_is_sent_to_login(client) -> None:  # type: ignore[no-untyped-def]
     assert client.get(BULK).status_code == 302
     assert client.post(BULK_NOT_ONLINE, {}).status_code == 302
+
+
+# --- probable matches (names that differ by a word or two) -------------------
+
+PROBABLE = BULK + "?level=probable"
+
+
+@pytest.mark.django_db
+def test_probable_tier_offers_a_single_clearly_better_candidate_unticked(client, owner) -> None:  # type: ignore[no-untyped-def]
+    web = mapped_variant(None, name="Club de Nuit Bling", brand="Armaf", price="12000.00")
+    pos = _pos("CDN-BLING", "Club Bling", price=Decimal("12000.00"))
+
+    # Not clear enough for the first tier ...
+    assert client.get(BULK).content.decode().count("data-proposal ") == 0
+    html = client.get(PROBABLE).content.decode()
+
+    # ... but offered here, with the price clue, and never pre-ticked.
+    assert "data-probable-intro" in html
+    assert f'value="{pos.pk}:{web.pk}"' in html
+    assert "data-same-price" in html
+    assert "checked" not in html.split("<tbody", 1)[1]
+    web.refresh_from_db()
+    assert web.pos_sku is None
+
+
+@pytest.mark.django_db
+def test_probable_tier_skips_a_tie_between_website_products(client, owner) -> None:  # type: ignore[no-untyped-def]
+    # Nine website flavours, one POS item: one SKU can link to only one variant.
+    for flavour in ("Arabian", "Cuban", "French"):
+        mapped_variant(None, name=f"{flavour} Tobacco", brand="Ibraq")
+    _pos("IBRAQ-TOB", "Ibraq Tobacco 100ml", brand="Ibraq")
+
+    html = client.get(PROBABLE).content.decode()
+
+    assert html.count("data-proposal ") == 0
+
+
+@pytest.mark.django_db
+def test_steps_panel_links_to_probable_matches_when_there_are_some(client, owner) -> None:  # type: ignore[no-untyped-def]
+    mapped_variant(None, name="Club de Nuit Bling", brand="Armaf")
+    _pos("CDN-BLING", "Club Bling")
+
+    html = client.get(MAPPING).content.decode()
+
+    assert "data-probable-link" in html
+    assert PROBABLE.split("?")[1] in html
+
+
+@pytest.mark.django_db
+def test_probable_confirm_maps_only_the_ticked_row(client, owner) -> None:  # type: ignore[no-untyped-def]
+    web = mapped_variant(None, name="Club de Nuit Bling", brand="Armaf")
+    pos = _pos("CDN-BLING", "Club Bling")
+
+    client.post(BULK, {"pair": [f"{pos.pk}:{web.pk}"]}, follow=True)
+
+    web.refresh_from_db()
+    assert web.pos_sku == "CDN-BLING"
+
+
+@pytest.mark.django_db
+def test_low_score_suggestions_are_not_offered_with_a_map_button(client, owner) -> None:  # type: ignore[no-untyped-def]
+    # A body spray must not be offered the nearest perfume just because it
+    # shares a brand word.
+    mapped_variant(None, name="Club de Nuit Milestone", brand="Armaf")
+    _pos("ARMAF-SPRAY", "Armaf Body Spray", category="Deodorant")
+
+    html = client.get(MAPPING).content.decode()
+
+    assert "Armaf Body Spray" in html
+    assert "Club de Nuit Milestone" not in html
+    assert "No close match found" in html
+
+
+@pytest.mark.django_db
+def test_review_warns_when_the_prices_are_far_apart(client, owner) -> None:  # type: ignore[no-untyped-def]
+    mapped_variant(None, name="Yara", brand="Lattafa", price="6950.00")
+    _pos("YARA-SPRAY", "Lattafa Yara", brand="Lattafa", price=Decimal("850.00"))
+
+    html = client.get(BULK).content.decode()
+
+    assert "data-proposal" in html
+    assert "data-price-gap" in html
+    assert "data-same-price" not in html

@@ -49,7 +49,7 @@
         <span class="w-6 font-semibold text-text-muted">3</span>
         <div class="min-w-0 flex-1">
           <p class="font-medium text-ink">Confirm the clear matches</p>
-          <p class="text-text-muted">{% if guide.clear %}{{ guide.clear }} product(s) have one clear website match. You tick the ones that are right.{% elif guide.uploaded %}No clear matches waiting.{% else %}Available after step 1.{% endif %}</p>
+          <p class="text-text-muted">{% if guide.clear %}{{ guide.clear }} product(s) have one clear website match. You tick the ones that are right.{% elif guide.uploaded %}No clear matches waiting.{% else %}Available after step 1.{% endif %}{% if guide.probable %} <a class="text-accent hover:text-accent-hover" href="{% url 'possync:bulk_review' %}?level=probable" data-probable-link>{{ guide.probable }} more probable match(es) with slightly different names</a>.{% endif %}</p>
         </div>
         {% if guide.clear %}<a href="{% url 'possync:bulk_review' %}" class="inline-flex min-h-11 items-center rounded bg-accent px-4 font-medium text-text-inverse hover:bg-accent-hover">Review {{ guide.clear }} match(es)</a>{% elif guide.uploaded %}{% include "portal/_badge.html" with tone="success" label="Done" %}{% endif %}
       </li>

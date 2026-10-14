@@ -65,6 +65,9 @@ from .config import (
     MARK_RECORDED_MAX_REASON_LENGTH,
     MARK_RECORDED_MIN_REASON_LENGTH,
     NOT_ONLINE_CATEGORY_KEYWORDS,
+    PRICE_GAP_RATIO,
+    PROBABLE_MARGIN,
+    PROBABLE_MIN_SCORE,
     SNAPSHOT_LOCK_KEY,
     USUAL_BOTTLE_ML,
 )
@@ -407,6 +410,23 @@ class BulkProposal:
         return f"POS: {pos_text} · website: {web_text}"
 
     @property
+    def same_price(self) -> bool:
+        """POS and website state the same price: weak but useful evidence that
+        the two rows are the same bottle (never used to decide anything)."""
+        pos_price = self.pos_product.price
+        return pos_price is not None and pos_price == self.suggestion.candidate.price
+
+    @property
+    def price_gap(self) -> bool:
+        """The two prices differ by more than a quarter: a body spray offered
+        for a perfume, or a different edition. A warning, never a decision."""
+        pos_price = self.pos_product.price
+        web_price = self.suggestion.candidate.price
+        if pos_price is None or not pos_price or not web_price:
+            return False
+        return abs(pos_price - web_price) / max(pos_price, web_price) > PRICE_GAP_RATIO
+
+    @property
     def check_size(self) -> bool:
         """True when the POS names a size other than the usual bottle: the
         website cannot confirm it, so the owner should look twice."""
@@ -468,6 +488,59 @@ def bulk_match_proposals(min_score: float = BULK_CONFIRM_MIN_SCORE) -> BulkPropo
                 pos_product=pos_product,
                 display_name=matching.strip_leading_brand(pos_product.brand, pos_product.name),
                 suggestion=ranked[0],
+            )
+        )
+    by_variant = Counter(p.suggestion.candidate.variant_id for p in picked)
+    kept = [p for p in picked if by_variant[p.suggestion.candidate.variant_id] == 1]
+    return BulkProposals(proposals=kept, ambiguous=ambiguous + len(picked) - len(kept))
+
+
+def probable_match_proposals() -> BulkProposals:
+    """The second tier behind "Review probable matches": unmapped, sold-online
+    POS products whose best website candidate scores between
+    ``PROBABLE_MIN_SCORE`` and the bulk threshold, and clearly beats the next
+    one (``PROBABLE_MARGIN``). These are names that differ by a word or two.
+
+    Same safety rules as the first tier — a known size mismatch, a tie or a
+    website variant proposed by two POS rows is left out — and nothing is
+    ever pre-ticked. One POS SKU can only be linked to one variant, so a POS
+    item that several website products could be (e.g. one "Tobacco 100ml" for
+    nine flavours) ties and is left for a one-by-one decision.
+    """
+    candidates = unmapped_candidates()
+    pos_products = list(
+        PosProduct.objects.filter(not_online=False)
+        .exclude(sku__in=ProductVariant.objects.filter(pos_sku__isnull=False).values("pos_sku"))
+        .order_by("brand", "name", "sku")
+    )
+    ambiguous = 0
+    picked: list[BulkProposal] = []
+    for pos_product in pos_products:
+        if looks_not_sold_online(pos_product.category):
+            continue
+        ranked = matching.suggest(
+            pos_brand=pos_product.brand,
+            pos_name=pos_product.name,
+            pos_sku=pos_product.sku,
+            candidates=candidates,
+            limit=2,
+            min_score=PROBABLE_MIN_SCORE - PROBABLE_MARGIN,
+        )
+        if not ranked:
+            continue
+        best = ranked[0]
+        if best.score < PROBABLE_MIN_SCORE or best.score >= BULK_CONFIRM_MIN_SCORE:
+            continue  # too weak, or already offered (or tied) in the first tier
+        if best.size_mismatch or (
+            len(ranked) > 1 and best.score - ranked[1].score < PROBABLE_MARGIN
+        ):
+            ambiguous += 1
+            continue
+        picked.append(
+            BulkProposal(
+                pos_product=pos_product,
+                display_name=matching.strip_leading_brand(pos_product.brand, pos_product.name),
+                suggestion=best,
             )
         )
     by_variant = Counter(p.suggestion.candidate.variant_id for p in picked)

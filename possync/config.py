@@ -32,10 +32,24 @@ CSV_MAX_BYTES: Final[int] = 2 * 1024 * 1024
 # candidate is not worth showing at all.
 SUGGESTION_COUNT: Final[int] = 3
 SUGGESTION_MIN_SCORE: Final[float] = 0.30
+# What the mapping page actually shows: below this a suggestion was noise on the live
+# catalogue (a body spray 'matched' a perfume at 0.35) and each one came with a Map
+# button. A same-perfume candidate of a different size scores low but carries a visible
+# size warning, so those are still shown.
+SUGGESTION_DISPLAY_MIN_SCORE: Final[float] = 0.50
 
 # "Review and confirm all matches": only suggestions scoring at least this are
 # offered, and never ones with a size or gift-set mismatch or a tie.
 BULK_CONFIRM_MIN_SCORE: Final[float] = 0.90
+# "Probable matches": a lower tier for names that differ in a word or two (POS 'Club
+# Bling' vs website 'Club de Nuit Bling'). A row is offered only when its best candidate
+# scores at least PROBABLE_MIN_SCORE (and under BULK_CONFIRM_MIN_SCORE) and beats the
+# runner-up by at least PROBABLE_MARGIN; the owner still ticks every row.
+PROBABLE_MIN_SCORE: Final[float] = 0.70
+# A POS/website price pair further apart than this share of the larger price gets a
+# visible "price differs a lot" warning in the review.
+PRICE_GAP_RATIO: Final[float] = 0.25
+PROBABLE_MARGIN: Final[float] = 0.05
 # Most rows one bulk action will touch (the whole POS catalogue is ~400).
 BULK_MAX_ROWS: Final[int] = 1000
 

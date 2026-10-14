@@ -34,6 +34,8 @@ from .config import (
     CSV_MAX_BYTES,
     MAPPING_PAGE_SIZE,
     PRICE_MISMATCH_PAGE_SIZE,
+    PROBABLE_MIN_SCORE,
+    SUGGESTION_DISPLAY_MIN_SCORE,
 )
 from .models import PosMappingEvent, PosProduct
 from .services import MappingError
@@ -124,9 +126,16 @@ class PosMappingView(PortalPermissionRequiredMixin, ListView[PosProduct]):
             )
             row.ticked = tick == "all" or (tick == "suggested" and row.looks_not_online)
             row.suggestions = (
-                matching.suggest(
-                    pos_brand=row.brand, pos_name=row.name, pos_sku=row.sku, candidates=candidates
-                )
+                [
+                    suggestion
+                    for suggestion in matching.suggest(
+                        pos_brand=row.brand,
+                        pos_name=row.name,
+                        pos_sku=row.sku,
+                        candidates=candidates,
+                    )
+                    if suggestion.score >= SUGGESTION_DISPLAY_MIN_SCORE or suggestion.size_mismatch
+                ]
                 if not row.is_mapped and not row.not_online
                 else []
             )
@@ -143,12 +152,14 @@ class PosMappingView(PortalPermissionRequiredMixin, ListView[PosProduct]):
         mapped_count = ProductVariant.objects.filter(pos_sku__isnull=False).count()
         unmapped_count = max(totals["total"] - mapped_count - totals["not_online"], 0)
         bulk = services.bulk_match_proposals() if unmapped_count else None
+        probable = services.probable_match_proposals() if unmapped_count else None
         context.update(
             {
                 "guide": {
                     "uploaded": totals["total"],
                     "hide": len(services.not_online_suggestions()),
                     "clear": len(bulk.proposals) if bulk else 0,
+                    "probable": len(probable.proposals) if probable else 0,
                     "unmapped": unmapped_count,
                     "mapped": mapped_count,
                 },
@@ -255,15 +266,17 @@ class PosBulkReviewView(PortalPermissionRequiredMixin, View):
     permission_required = MANAGE_PERMISSION
 
     def get(self, request: HttpRequest) -> HttpResponse:
-        found = services.bulk_match_proposals()
+        probable = request.GET.get("level") == "probable"
+        found = services.probable_match_proposals() if probable else services.bulk_match_proposals()
         return render(
             request,
             "portal/pos_bulk_review.html",
             {
                 "proposals": found.proposals,
                 "left_out": found.ambiguous,
+                "probable": probable,
                 "check_count": sum(1 for p in found.proposals if p.check_size),
-                "min_score": BULK_CONFIRM_MIN_SCORE,
+                "min_score": PROBABLE_MIN_SCORE if probable else BULK_CONFIRM_MIN_SCORE,
                 "tick_all": request.GET.get("tick") == "all",
             },
         )
