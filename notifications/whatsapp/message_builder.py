@@ -143,3 +143,25 @@ def build_status_update_message(order: Order) -> str:
         tracking_url=_tracking_url(order),
     )
     return template.format_map(context)
+
+
+def build_order_request_message(
+    *, product_name: str, variant_label: str, lead_days: int, product_url: str
+) -> str:
+    """The message a *customer* sends the merchant to ask for a perfume that
+    is off the shelf (D-079 "order on request"). Nothing is reserved or
+    paid; the merchant confirms availability and the day on WhatsApp."""
+    item = f"{product_name} ({variant_label})" if variant_label else product_name
+    days = f"{lead_days} day" if lead_days == 1 else f"{lead_days} days"
+    return "\n".join(
+        [
+            "Hi! I'd like to order this perfume:",
+            "",
+            item,
+            "",
+            f"It shows as out of stock on the website. I understand it usually takes {days} to "
+            "arrive. Can you confirm?",
+            "",
+            product_url,
+        ]
+    )

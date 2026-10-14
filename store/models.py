@@ -45,6 +45,12 @@ class StoreSettings(TimeStampedModel):
     # available stock (§10.1). Merchant-configurable — how long a customer
     # gets before an uncontacted WhatsApp order stops locking inventory.
     reservation_ttl_hours = models.PositiveIntegerField(default=24)
+    # "Order on request": a perfume that is off the shelf can be ordered from
+    # the wholesaler. This is the usual wait, in days, shown to customers as
+    # "usually N day(s)"; a variant can override it (short-supply items).
+    order_lead_days_default = models.PositiveSmallIntegerField(
+        default=1, validators=[MinValueValidator(1)]
+    )
 
     # Delivery (§27) — which strategy shipping.calculators.
     # get_delivery_calculator() builds, and every rate/threshold all three

@@ -56,6 +56,7 @@ from core.ratelimit import (
     record_attempt,
 )
 from core.templatetags.money import money
+from notifications.whatsapp.order_request import build_order_request_url
 from orders.forms import ProductReviewForm
 from orders.models import Order, OrderItem, ProductReview
 from orders.reviews import submit_product_review
@@ -331,17 +332,38 @@ class ProductDetailView(DetailView[Product]):
         # template's json_script tag does its own serialization/escaping.
         # available_quantity is with_available_quantity()'s runtime
         # .annotate() field — django-stubs can't see it statically.
-        context["variants_data"] = [
-            {
-                "id": variant.pk,
-                "price": str(variant.price),
-                # Pre-formatted so the price the customer sees matches the
-                # cart and checkout ("Rs. 16,000.00", never "Rs. 16000.00").
-                "price_display": money(variant.price),
-                "available_quantity": variant.available_quantity,  # type: ignore[attr-defined]
-            }
-            for variant in variants
-        ]
+        # Order on request (D-079): a variant with nothing available can be
+        # ordered from the wholesaler. The link is a plain WhatsApp request —
+        # nothing is added to the cart, reserved or charged.
+        store_settings = StoreSettings.load()
+        default_lead_days = store_settings.order_lead_days_default
+        product_url = self.request.build_absolute_uri(product.get_absolute_url())
+        variants_data: list[dict[str, Any]] = []
+        for variant in variants:
+            available = variant.available_quantity  # type: ignore[attr-defined]
+            lead_days = variant.order_lead_days or default_lead_days
+            request_url = ""
+            if available <= 0 and variant.is_active:
+                request_url = build_order_request_url(
+                    whatsapp_number=store_settings.whatsapp_number,
+                    product_name=product.name,
+                    variant_label=variant.display_label if len(variants) > 1 else "",
+                    lead_days=lead_days,
+                    product_url=product_url,
+                )
+            variants_data.append(
+                {
+                    "id": variant.pk,
+                    "price": str(variant.price),
+                    # Pre-formatted so the price the customer sees matches the
+                    # cart and checkout ("Rs. 16,000.00", never "Rs. 16000.00").
+                    "price_display": money(variant.price),
+                    "available_quantity": available,
+                    "order_lead_days": lead_days,
+                    "request_url": request_url,
+                }
+            )
+        context["variants_data"] = variants_data
         if settings.PRODUCT_REVIEWS_ENABLED:
             review_summary = ProductReview.objects.filter(
                 product=product, is_approved=True

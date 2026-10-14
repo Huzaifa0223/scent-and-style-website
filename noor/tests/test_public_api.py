@@ -36,6 +36,7 @@ def test_catalog_has_exactly_the_documented_shape(client) -> None:  # type: igno
             "slug": product.slug,
             "price": 8500,
             "inStock": True,
+            "orderLeadDays": 1,
             "url": f"http://testserver/product/{product.slug}/",
         }
     ]
@@ -58,7 +59,7 @@ def test_products_feed_has_exactly_the_documented_shape(client) -> None:  # type
     assert ISO_Z.match(payload["generatedAt"])
     (item,) = payload["items"]
     assert set(item) == {
-        "slug", "name", "brand", "category", "price", "inStock",
+        "slug", "name", "brand", "category", "price", "inStock", "orderLeadDays",
         "description", "image", "url", "notes",
     }  # fmt: skip
     assert item["slug"] == product.slug

@@ -40,7 +40,13 @@ def _generated_at() -> str:
 
 
 def catalog_item(row: ProductRow) -> dict[str, Any]:
-    return {"slug": row.slug, "price": row.price, "inStock": row.in_stock, "url": row.url}
+    return {
+        "slug": row.slug,
+        "price": row.price,
+        "inStock": row.in_stock,
+        "orderLeadDays": row.order_lead_days,
+        "url": row.url,
+    }
 
 
 def product_item(row: ProductRow) -> dict[str, Any]:
@@ -51,6 +57,7 @@ def product_item(row: ProductRow) -> dict[str, Any]:
         "category": row.category,
         "price": row.price,
         "inStock": row.in_stock,
+        "orderLeadDays": row.order_lead_days,
         "description": row.description,
         "image": row.image,
         "url": row.url,

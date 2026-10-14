@@ -2941,3 +2941,35 @@ failed, and precisely what is needed to unblock. Clear the entry when resolved.
 - Not done / for the owner: `box` is not in the not-online keyword list (gift boxes may be sold
   online); Tailwind CSS was not rebuilt, so run the CSS build before deploying if the new
   checkbox/warning classes are not already in `app.css`.
+
+### 2026-10-14 — Order on request, WhatsApp number fix, stricter bulk review (local only)
+
+- **WhatsApp links** (`notifications/whatsapp/channel.py`): the store number is saved as
+  `0334 1172222`, so the live link was `wa.me/03341172222` (no country code) and may not open a
+  chat. `build_url` now converts a recognisable Pakistani mobile (`03…`, `3…`, `+92…`, `92…`) to
+  `92…` via `core.phone.normalize_pk_mobile`; any other number is passed digits-only as before. This
+  fixes the contact link, the checkout hand-off and the portal status links in one place.
+  **Owner: tap the WhatsApp button on the live shop from a phone before and after deploy.**
+- **Order on request (D-079 in the app repo)**: a perfume with nothing available is no longer a
+  dead end. New `StoreSettings.order_lead_days_default` (default 1) and nullable
+  `ProductVariant.order_lead_days` (e.g. 7 for short-supply items; editable on the variant form and,
+  for the default, in the Django admin). Product page: when `available_quantity <= 0` it shows "Not
+  on the shelf right now — we can order it for you. Usually N day(s); we confirm the exact day on
+  WhatsApp." and an "Order on request on WhatsApp" button (pre-filled with product, size, lead time
+  and link). Nothing is added to the cart, reserved or charged; the cart gate is untouched. With no
+  WhatsApp number configured the old "unavailable" text stays. Built in
+  `notifications/whatsapp/order_request.py` + `message_builder.build_order_request_message`.
+- **Feeds**: `catalog.json` and `products.json` gain `orderLeadDays` (variant override, else store
+  default). `inStock` is unchanged and stock counts are still never public.
+- **Bulk review**: rows where either the POS size or the website size is unknown are now left out
+  (`Suggestion.size_unknown`) so a 50 ml bottle cannot be bulk-confirmed against a variant whose size
+  cannot be read; they stay on the one-by-one page and are counted as left out.
+- Migrations: `catalog/0014_order_on_request`, `store/0007_order_on_request` (two nullable/default
+  columns, no data change). Deploy: migrate, then HUP.
+- Gate: ruff, format, mypy, `makemigrations --check`, `manage.py check` clean; pytest 1016 passed,
+  97% coverage on a freshly created test DB (`--create-db`). Note: with `--reuse-db` a stale test DB
+  fails with "Save with update_fields did not affect any rows"; the four `store/tests` failures
+  recorded above were that, and pass on a fresh DB. Tailwind builds cleanly; `static/css/app.css` is
+  gitignored and is built on the server (`docs/pos-sync.md`).
+- Proposed (not applied): show "On request" instead of a red "Out of stock" on listing cards and in
+  the portal inventory list — see the prompt in the app repo; not part of this change.

@@ -8,7 +8,7 @@ the public web app at `https://scentiq.scentandstyle.pk`). It reads the catalog,
 
 | URL | Auth | Purpose |
 |---|---|---|
-| `GET /api/noor/catalog.json` | none | `slug`, `price`, `inStock`, `url` per published product |
+| `GET /api/noor/catalog.json` | none | `slug`, `price`, `inStock`, `orderLeadDays`, `url` per published product |
 | `GET /api/noor/products.json` | none | full public product feed (name, brand, category, description, image, notes…) |
 | `GET /api/kiosk/sync/ping/` | Bearer | `{"ok": true}` |
 | `GET /api/kiosk/sync/catalog/` | Bearer | `slug`, `price`, `stockQty` per published product |
@@ -57,6 +57,7 @@ product with no active variant has no price and is omitted.
 | `category` | `Product.category.name` |
 | `price` | representative `ProductVariant.price`, whole rupees, half-up |
 | `inStock` | representative variant `available_quantity > 0` |
+| `orderLeadDays` | representative variant `order_lead_days`, else `StoreSettings.order_lead_days_default` (usual wait to order it from the wholesaler; not a promise) |
 | `stockQty` | representative variant `available_quantity` = `stock_quantity` − live reservations (≥ 0) |
 | `description` | `Product.short_description`, else `description` minus legacy "Top notes:" lines |
 | `image` | primary `ProductImage.card_jpeg` (else original), absolute URL; `""` if none |

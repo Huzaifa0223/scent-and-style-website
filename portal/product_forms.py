@@ -117,6 +117,7 @@ class ProductVariantForm(_StyledModelForm[ProductVariant]):
             "compare_at_price",
             "stock_quantity",
             "low_stock_threshold",
+            "order_lead_days",
             "is_default",
             "is_active",
             "position",

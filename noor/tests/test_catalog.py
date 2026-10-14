@@ -14,6 +14,7 @@ from inventory.models import StockReservation
 from noor.catalog import product_rows
 from noor.tests.support import published
 from orders.factories import OrderFactory
+from store.models import StoreSettings
 
 BASE = "https://scentandstyle.pk"
 
@@ -181,6 +182,7 @@ def test_product_without_an_image_has_an_empty_image_string() -> None:
 def test_query_count_does_not_grow_with_the_catalog(django_assert_max_num_queries) -> None:  # type: ignore[no-untyped-def]
     for index in range(12):
         published(f"Perfume {index}", brand=BrandFactory())
+    StoreSettings.load()  # warm up the cached singleton (the default lead time)
 
     with django_assert_max_num_queries(4):
         assert len(_rows()) == 12

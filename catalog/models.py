@@ -15,6 +15,7 @@ from django.apps import apps
 from django.contrib.postgres.indexes import GinIndex
 from django.contrib.postgres.search import SearchVector
 from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator
 from django.db import models
 from django.db.models import (
     BooleanField,
@@ -640,6 +641,15 @@ class ProductVariant(TimeStampedModel):
     is_default = models.BooleanField(default=False)
     position = models.PositiveIntegerField(default=0)
     is_active = models.BooleanField(default=True)
+    # "Order on request" lead time in days for this variant when it is off the
+    # shelf. NULL = use ``StoreSettings.order_lead_days_default`` (usually 1);
+    # set it (e.g. 7) for short-supply perfumes the wholesaler takes a week on.
+    order_lead_days = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(1)],
+        help_text="Days to get this from the wholesaler. Leave blank to use the store default.",
+    )
     # Sorted, comma-joined AttributeValue ids for this variant — the only
     # way to turn "two variants with an identical attribute set" into a real
     # database IntegrityError rather than an application-level check, since

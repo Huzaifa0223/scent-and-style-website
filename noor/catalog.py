@@ -46,6 +46,7 @@ from urllib.parse import urljoin
 from django.db.models import Prefetch
 
 from catalog.models import Product, ProductImage, ProductVariant
+from store.models import StoreSettings
 from storefront.views import _split_legacy_fragrance_notes
 
 _NOTE_SEPARATORS = re.compile(r"[,;\n]+")
@@ -75,6 +76,9 @@ class ProductRow:
     top_notes: tuple[str, ...]
     heart_notes: tuple[str, ...]
     base_notes: tuple[str, ...]
+    # Usual wait, in days, to order this from the wholesaler when it is off the
+    # shelf (variant override, else the store default). Not a promise.
+    order_lead_days: int = 1
 
 
 def product_rows(*, base_url: str) -> list[ProductRow]:
@@ -101,12 +105,15 @@ def product_rows(*, base_url: str) -> list[ProductRow]:
         )
         .order_by("slug")
     )
+    default_lead_days = StoreSettings.load().order_lead_days_default
     rows: list[ProductRow] = []
     for product in products:
         variant = _representative_variant(list(product.variants.all()))
         if variant is None:
             continue
-        rows.append(_build_row(product, variant, base_url=base_url))
+        rows.append(
+            _build_row(product, variant, base_url=base_url, default_lead_days=default_lead_days)
+        )
     return rows
 
 
@@ -125,7 +132,9 @@ def _representative_variant(variants: list[ProductVariant]) -> ProductVariant | 
     return next((v for v in variants if _available(v) > 0), default)
 
 
-def _build_row(product: Product, variant: ProductVariant, *, base_url: str) -> ProductRow:
+def _build_row(
+    product: Product, variant: ProductVariant, *, base_url: str, default_lead_days: int = 1
+) -> ProductRow:
     legacy_notes, description_without_notes = _split_legacy_fragrance_notes(product.description)
     available = _available(variant)
     return ProductRow(
@@ -142,6 +151,7 @@ def _build_row(product: Product, variant: ProductVariant, *, base_url: str) -> P
         top_notes=_note_list(product.top_notes or legacy_notes.get("top", "")),
         heart_notes=_note_list(product.heart_notes or legacy_notes.get("heart", "")),
         base_notes=_note_list(product.base_notes or legacy_notes.get("base", "")),
+        order_lead_days=variant.order_lead_days or default_lead_days,
     )
 
 

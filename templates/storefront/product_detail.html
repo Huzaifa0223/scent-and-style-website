@@ -202,7 +202,15 @@
           <template x-if="variant.available_quantity > 0">
             <p class="text-sf-sm text-sf-ok">In stock</p>
           </template>
-          <template x-if="variant.available_quantity <= 0">
+          <template x-if="variant.available_quantity <= 0 && variant.request_url">
+            <p class="text-sf-sm text-ajmal-ink" data-order-on-request>
+              Not on the shelf right now — we can order it for you. Usually
+              <span x-text="variant.order_lead_days"></span>
+              <span x-text="variant.order_lead_days === 1 ? 'day' : 'days'"></span>;
+              we confirm the exact day on WhatsApp.
+            </p>
+          </template>
+          <template x-if="variant.available_quantity <= 0 && !variant.request_url">
             <p class="text-sf-sm text-sf-danger">Out of stock — this option is currently unavailable.</p>
           </template>
         </div>
@@ -222,12 +230,26 @@
         <input type="hidden" id="add-to-cart-variant-id" name="variant_id" :value="variantId" />
         <button
           type="submit"
+          x-show="variant.available_quantity > 0 || !variant.request_url"
           :disabled="variant.available_quantity <= 0"
           class="btn-primary mt-6 w-full px-4"
         >
           <span x-show="variant.available_quantity > 0">Add to cart</span>
           <span x-show="variant.available_quantity <= 0">Out of stock</span>
         </button>
+        {% comment %}
+        Order on request: nothing is added to the cart, reserved or charged;
+        the customer asks the store on WhatsApp and the store confirms.
+        {% endcomment %}
+        <template x-if="variant.available_quantity <= 0 && variant.request_url">
+          <a
+            :href="variant.request_url"
+            target="_blank"
+            rel="noopener"
+            data-order-request
+            class="btn-primary mt-6 flex w-full items-center justify-center px-4"
+          >Order on request on WhatsApp<span class="sr-only"> (opens in a new tab)</span></a>
+        </template>
         <div id="pdp-add-error" class="text-sf-sm text-sf-danger"></div>
         {% comment %}
         Secondary action, styled like the page's other secondary buttons.
