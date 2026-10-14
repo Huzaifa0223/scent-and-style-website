@@ -10,6 +10,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from urllib.parse import quote
 
+from core.phone import normalize_pk_mobile
+
 
 @dataclass(frozen=True)
 class WhatsAppLinkChannel:
@@ -22,5 +24,10 @@ class WhatsAppLinkChannel:
         rather than producing a broken link when a merchant hasn't
         configured `StoreSettings.whatsapp_number` yet.
         """
-        digits = phone.lstrip("+")
+        # Merchants type the number the way they say it ("0334 1172222"),
+        # but wa.me needs the country code and no leading 0. A recognisable
+        # Pakistani mobile is converted; anything else is passed through
+        # digits-only.
+        normalised = normalize_pk_mobile(phone)
+        digits = normalised.lstrip("+") if normalised else "".join(c for c in phone if c.isdigit())
         return f"https://wa.me/{digits}?text={quote(message)}"

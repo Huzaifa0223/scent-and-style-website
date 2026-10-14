@@ -22,3 +22,16 @@ def test_build_url_encodes_newlines_and_special_characters() -> None:
     assert "%0A" in encoded  # newline
     assert "%20" in encoded  # space
     assert "\n" not in encoded
+
+
+def test_build_url_converts_a_local_pakistani_number_to_the_country_code() -> None:
+    for stored in ("03341172222", "0334 1172222", "0334-1172222", "3341172222", "923341172222"):
+        url = WhatsAppLinkChannel().build_url(phone=stored, message="Hi")
+
+        assert url == "https://wa.me/923341172222?text=Hi", stored
+
+
+def test_build_url_leaves_a_non_pakistani_number_as_digits() -> None:
+    url = WhatsAppLinkChannel().build_url(phone="+44 20 7946 0958", message="Hi")
+
+    assert url == "https://wa.me/442079460958?text=Hi"
